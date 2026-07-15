@@ -1,0 +1,34 @@
+{
+  "extends": "@react-native/typescript-config",
+  "compilerOptions": {
+    "types": ["jest"],
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@/api": ["src/api/index.ts"],
+      "@/screens/*": ["src/screens/*"],
+      "@/screens": ["src/screens/index.ts"],
+      "@/components": ["src/components/index.ts"],
+      "@/components/*": ["src/components/*"],
+      "@/navigation": ["src/navigation/index.ts"],
+      "@/navigation/*": ["src/navigation/*"],
+      "@/store": ["src/store/index.ts"],
+      "@/store/*": ["src/store/*"],
+      "@/api/*": ["src/api/*"],
+      "@/theme": ["src/theme/index.ts"],
+      "@/theme/*": ["src/theme/*"],
+      "@/theme/index": ["src/theme/index.ts"],
+      "@/hooks": ["src/hooks/index.ts"],
+      "@/hooks/*": ["src/hooks/*"],
+      "@/types": ["src/types/index.ts"],
+      "@/types/*": ["src/types/*"],
+      "@/utils": ["src/utils/index.ts"],
+      "@/utils/*": ["src/utils/*"],
+      "@/assets": ["src/assets/index.ts"],
+      "@/assets/*": ["src/assets/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["**/node_modules", "**/Pods"]
+}
