@@ -63,7 +63,9 @@ export async function loginWithCredentials({ identifier, password }: LoginInput)
 export async function signUpWithCredentials(input: SignupInput): Promise<AuthSession> {
   await delay();
 
-  const identifier = input.email.trim().length > 0 ? normalizeIdentifier(input.email) : input.phone.replace(/\D/g, '');
+  const email = input.email?.trim() ?? '';
+  const cleanedPhone = input.phone.replace(/\D/g, '');
+  const identifier = email.length > 0 ? normalizeIdentifier(email) : cleanedPhone;
 
   if (input.password.trim() !== input.confirmPassword.trim()) {
     throw new Error('Passwords do not match.');
@@ -71,15 +73,39 @@ export async function signUpWithCredentials(input: SignupInput): Promise<AuthSes
 
   const user: AuthUser = {
     fullName: input.fullName.trim(),
-    email: normalizeIdentifier(input.email),
-    phone: input.phone.replace(/\D/g, ''),
+    email: email.length > 0 ? normalizeIdentifier(email) : TEMP_AUTH_CONFIG.email,
+    phone: cleanedPhone,
     dob: input.dob.trim(),
-    method: input.email.trim().length > 0 ? 'email' : 'phone',
+    method: email.length > 0 ? 'email' : 'phone',
   };
 
   return {
     token: buildToken('signup', identifier),
     user,
+    onboardingComplete: false,
+  };
+}
+
+const TEMP_OTP = '123456';
+
+export async function verifyPhoneOtp(phone: string, otp: string): Promise<AuthSession | null> {
+  await delay();
+
+  const cleanedPhone = phone.replace(/\D/g, '');
+
+  if (!cleanedPhone || otp.trim() !== TEMP_OTP) {
+    throw new Error('Use a phone number and OTP 123456 for this temporary flow.');
+  }
+
+  const isExistingUser = cleanedPhone === TEMP_AUTH_CONFIG.phone;
+
+  if (!isExistingUser) {
+    return null;
+  }
+
+  return {
+    token: buildToken('phone', cleanedPhone),
+    user: buildUserFromLogin(cleanedPhone, 'phone'),
     onboardingComplete: false,
   };
 }
