@@ -6,18 +6,20 @@ type PrimaryButtonProps = {
   label: string;
   onPress?: () => void;
   style?: ViewStyle;
+  disabled?: boolean;
 };
 
-export function PrimaryButton({ label, onPress, style }: PrimaryButtonProps) {
+export function PrimaryButton({ label, onPress, style, disabled }: PrimaryButtonProps) {
   const theme = useTheme();
 
   return (
     <Pressable
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
         {
-          backgroundColor: pressed ? theme.state.hovered : theme.cta.primary.background,
+          backgroundColor: disabled ? theme.colors.teal100 : pressed ? theme.state.hovered : theme.cta.primary.background,
           borderColor: theme.cta.primary.border,
         },
         style,
