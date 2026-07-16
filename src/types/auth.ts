@@ -21,7 +21,7 @@ export type LoginInput = {
 
 export type SignupInput = {
   fullName: string;
-  email: string;
+  email?: string;
   phone: string;
   dob: string;
   password: string;
