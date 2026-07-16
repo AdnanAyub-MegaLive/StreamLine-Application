@@ -3,14 +3,12 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, type NavigationProp } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppStore } from '../../store';
-import { useTheme } from '../../theme';
 import { BrandMark, Screen } from '../../components';
 import { routes, type RootStackParamList } from '../../navigation';
 
 type SplashScreenProps = NativeStackScreenProps<RootStackParamList, 'Splash'>;
 
 export function SplashScreen(_: SplashScreenProps) {
-  const theme = useTheme();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const loadingProgress = React.useRef(new Animated.Value(0)).current;
   const hasHydrated = useAppStore(state => state.hasHydrated);
@@ -49,28 +47,15 @@ export function SplashScreen(_: SplashScreenProps) {
   });
 
   return (
-    <Screen>
-      <View style={styles.backdrop} pointerEvents="none">
-        <View style={[styles.glowOne, { backgroundColor: theme.state.soft }]} />
-        <View style={[styles.glowTwo, { backgroundColor: theme.colors.teal100 }]} />
-      </View>
-
+    <Screen transparent>
       <View style={styles.content}>
-        <BrandMark />
-        <Text style={[styles.title, { color: theme.text.primary }]}>Streamline</Text>
-        <Text style={[styles.subtitle, { color: theme.text.secondary }]}>Connecting players in a premium lounge experience.</Text>
+        <BrandMark size={144} />
+        <Text style={styles.title}>Streamline</Text>
+        <Text style={styles.subtitle}>Connecting players in a premium lounge experience.</Text>
 
         <View style={styles.loadingArea}>
-          <View style={[styles.loadingTrack, { backgroundColor: theme.colors.teal50, borderColor: theme.colors.cardBorder }]}>
-            <Animated.View
-              style={[
-                styles.loadingFill,
-                {
-                  backgroundColor: theme.colors.teal700,
-                  width: loadingWidth,
-                },
-              ]}
-            />
+          <View style={styles.loadingTrack}>
+            <Animated.View style={[styles.loadingFill, { width: loadingWidth }]} />
           </View>
         </View>
       </View>
@@ -79,39 +64,20 @@ export function SplashScreen(_: SplashScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-  },
-  glowOne: {
-    position: 'absolute',
-    top: -80,
-    left: -90,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    opacity: 0.45,
-  },
-  glowTwo: {
-    position: 'absolute',
-    right: -80,
-    bottom: 120,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    opacity: 0.28,
-  },
   content: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 28,
+    paddingTop: 40,
+    paddingBottom: 160,
   },
   title: {
-    marginTop: 24,
-    fontSize: 30,
-    lineHeight: 34,
+    marginTop: 18,
+    fontSize: 26,
     fontWeight: '800',
     letterSpacing: 0.2,
+    color: '#FFFFFF',
   },
   subtitle: {
     marginTop: 10,
@@ -119,6 +85,7 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     textAlign: 'center',
     maxWidth: 260,
+    color: 'rgba(255, 255, 255, 0.85)',
   },
   loadingArea: {
     alignItems: 'center',
@@ -131,12 +98,15 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 999,
     borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     overflow: 'hidden',
     alignSelf: 'center',
   },
   loadingFill: {
     height: '100%',
     borderRadius: 999,
+    backgroundColor: '#FFFFFF',
   },
 });
 
