@@ -24,6 +24,7 @@ export const colors = {
   liveBadge: '#E24B4A',
   giftAccent: '#D4537E',
   vipPurple: '#7C4DFF',
+  facebookBlue: '#1877F2',
 } as const;
 
 export const theme = {
