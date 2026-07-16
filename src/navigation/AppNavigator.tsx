@@ -1,9 +1,11 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { routes, type RootStackParamList } from './routes';
+import { MainTabNavigator } from './MainTabNavigator';
 import { SplashScreen } from '../screens/Splash';
-import { HomeScreen } from '../screens/Home';
 import { AuthScreen } from '../screens/Auth';
+import { PhoneAuthScreen } from '../screens/PhoneAuth';
+import { SignupDetailsScreen } from '../screens/SignupDetails';
 import { OnboardingScreen } from '../screens/Onboarding';
 import { TermsAndConditionsScreen } from '../screens/TermsAndConditions';
 import { RoomScreen } from '../screens/Room';
@@ -13,10 +15,15 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function AppNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={routes.splash}>
+    <Stack.Navigator
+      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
+      initialRouteName={routes.splash}
+    >
       <Stack.Screen name="Splash" component={SplashScreen} />
-      <Stack.Screen name="Home" component={HomeScreen} />
+      <Stack.Screen name="Home" component={MainTabNavigator} />
       <Stack.Screen name="Auth" component={AuthScreen} />
+      <Stack.Screen name="PhoneAuth" component={PhoneAuthScreen} />
+      <Stack.Screen name="SignupDetails" component={SignupDetailsScreen} />
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
       <Stack.Screen name="TermsAndConditions" component={TermsAndConditionsScreen} />
       <Stack.Screen name="Room" component={RoomScreen} />
