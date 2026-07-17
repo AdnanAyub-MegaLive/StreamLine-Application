@@ -10,6 +10,9 @@ import { OnboardingScreen } from '../screens/Onboarding';
 import { TermsAndConditionsScreen } from '../screens/TermsAndConditions';
 import { RoomScreen } from '../screens/Room';
 import { ProfileScreen } from '../screens/Profile';
+import { BannedScreen } from '../screens/Banned';
+import { SettingsScreen } from '../screens/Settings';
+import { EditProfileScreen } from '../screens/EditProfile';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -28,6 +31,9 @@ export function AppNavigator() {
       <Stack.Screen name="TermsAndConditions" component={TermsAndConditionsScreen} />
       <Stack.Screen name="Room" component={RoomScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="Banned" component={BannedScreen} />
+      <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} />
     </Stack.Navigator>
   );
 }
