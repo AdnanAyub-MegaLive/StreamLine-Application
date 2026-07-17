@@ -14,3 +14,4 @@ export * from './MessageIcon';
 export * from './LiveCameraIcon';
 export * from './SearchIcon';
 export * from './TrophyIcon';
+export * from './SettingsIcon';
