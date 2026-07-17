@@ -4,8 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme';
-import { AppNavigator } from './src/navigation';
-import { VideoBackground } from './src/components';
+import { AppNavigator, navigationRef } from './src/navigation';
+import { LocationGate, VideoBackground } from './src/components';
+import { useSessionGuard } from './src/hooks';
 
 const queryClient = new QueryClient();
 
@@ -17,18 +18,26 @@ const navigationTheme = {
   },
 };
 
+function SessionGuard() {
+  useSessionGuard();
+  return null;
+}
+
 function AppContent() {
   const theme = useTheme();
 
   return (
-    <View style={styles.root}>
-      <VideoBackground />
+    <LocationGate>
+      <View style={styles.root}>
+        <VideoBackground />
 
-      <NavigationContainer theme={navigationTheme}>
-        <StatusBar barStyle="dark-content" backgroundColor={theme.surfaces.page} translucent />
-        <AppNavigator />
-      </NavigationContainer>
-    </View>
+        <NavigationContainer ref={navigationRef} theme={navigationTheme}>
+          <StatusBar barStyle="dark-content" backgroundColor={theme.surfaces.page} translucent />
+          <AppNavigator />
+          <SessionGuard />
+        </NavigationContainer>
+      </View>
+    </LocationGate>
   );
 }
 
