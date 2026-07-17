@@ -73,3 +73,4 @@ Output: `android/app/build/outputs/apk/release/app-release.apk`
 
 - Auth/signup logic in `src/api/auth.ts` is a temporary mock (no real backend yet) — identifiers/passwords are checked against `src/config/env.ts`.
 - Colors must always come from `src/theme/theme.ts` — add new tokens there rather than hardcoding hex values in a screen.
+
