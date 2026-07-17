@@ -35,7 +35,7 @@
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>Streamline uses your location to personalize your experience and secure your account.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We use your photo library so you can pick an avatar image.</string>
 	<key>UILaunchStoryboardName</key>
