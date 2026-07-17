@@ -38,6 +38,9 @@ local.properties
 # node.js
 #
 node_modules/
+
+# build logs (overwritten every build, not meant to be committed)
+logs/
 npm-debug.log
 yarn-error.log
 
