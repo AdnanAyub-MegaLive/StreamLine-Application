@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(git status *)",
+      "Bash(bash scripts/push-files-individually.sh)"
+    ],
+    "additionalDirectories": [
+      "d:\\StreamLine-Portal\\src\\app\\api\\users\\profile"
+    ]
+  }
+}
