@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useNavigation, type NavigationProp } from '@react-navigation/native';
+import { useNavigation, useRoute, type NavigationProp, type RouteProp } from '@react-navigation/native';
 import { verifyPhoneOtp } from '../../api';
 import { appEnv } from '../../config';
 import { useAppStore } from '../../store';
@@ -8,11 +8,14 @@ import { useTheme } from '../../theme';
 import { FormField, PrimaryButton, Screen } from '../../components';
 import { routes, type RootStackParamList } from '../../navigation';
 
+type PhoneAuthRoute = RouteProp<RootStackParamList, 'PhoneAuth'>;
+
 export function PhoneAuthScreen() {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const route = useRoute<PhoneAuthRoute>();
   const setSession = useAppStore(state => state.setSession);
-  const [phone, setPhone] = React.useState<string>(appEnv.authPhone);
+  const [phone, setPhone] = React.useState<string>(route.params?.phone || appEnv.authPhone);
   const [otp, setOtp] = React.useState('123456');
   const [error, setError] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
