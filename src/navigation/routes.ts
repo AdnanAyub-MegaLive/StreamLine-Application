@@ -8,16 +8,22 @@ export const routes = {
   terms: 'TermsAndConditions',
   room: 'Room',
   profile: 'Profile',
+  banned: 'Banned',
+  settings: 'Settings',
+  editProfile: 'EditProfile',
 } as const;
 
 export type RootStackParamList = {
   Splash: undefined;
   Home: undefined;
   Auth: undefined;
-  PhoneAuth: undefined;
+  PhoneAuth: { phone?: string } | undefined;
   SignupDetails: { phone: string };
   Onboarding: undefined;
   TermsAndConditions: undefined;
   Room: { roomId?: string } | undefined;
   Profile: undefined;
+  Banned: undefined;
+  Settings: undefined;
+  EditProfile: undefined;
 };
