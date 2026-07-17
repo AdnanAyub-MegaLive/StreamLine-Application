@@ -10,3 +10,5 @@ export * from './Onboarding';
 export * from './Profile';
 export * from './Room';
 export * from './TermsAndConditions';
+export * from './Banned';
+export * from './Settings';
