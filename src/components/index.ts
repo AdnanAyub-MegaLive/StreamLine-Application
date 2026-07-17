@@ -4,3 +4,4 @@ export * from './PrimaryButton';
 export * from './FormField';
 export * from './TermsCheckbox';
 export * from './VideoBackground';
+export * from './LocationGate';
