@@ -11,7 +11,7 @@ Streamline is a voice-chat and live-streaming social app built with React Native
 - **react-hook-form** + **zod** (available for form validation)
 - **react-native-svg** for all custom icons
 - **react-native-video** for background video (Splash/Auth screens)
-- TypeScript throughout
+- JavaScript throughout
 
 ## Getting started
 
@@ -39,15 +39,15 @@ npm run android
 
 ```
 src/
-  api/            Mock/temporary auth API (src/api/auth.ts) — swap for real backend calls
+  api/            Mock/temporary auth API (src/api/auth.js) — swap for real backend calls
   assets/         Icons (SVG), logo image, background video
   components/      Shared UI: Screen, FormField, PrimaryButton, TermsCheckbox, VideoBackground, BrandMark
-  config/         Environment/demo config (src/config/env.ts)
+  config/         Environment/demo config (src/config/env.js)
   navigation/     Root stack (AppNavigator), bottom tabs (MainTabNavigator), custom tab bar (CustomTabBar)
   screens/        One folder per screen (Splash, Auth, PhoneAuth, SignupDetails, Onboarding, Home, Discover, Family, Message, Profile, Room, TermsAndConditions)
   store/          Zustand store + MMKV persistence
-  theme/          Central theme tokens (src/theme/theme.ts) — always pull colors from here, never hardcode hex in screens
-  types/          Shared TypeScript types
+  theme/          Central theme tokens (src/theme/theme.js) — always pull colors from here, never hardcode hex in screens
+  utils/          Shared helper functions
 ```
 
 ## Current flow
@@ -71,6 +71,6 @@ Output: `android/app/build/outputs/apk/release/app-release.apk`
 
 ## Notes
 
-- Auth/signup logic in `src/api/auth.ts` is a temporary mock (no real backend yet) — identifiers/passwords are checked against `src/config/env.ts`.
-- Colors must always come from `src/theme/theme.ts` — add new tokens there rather than hardcoding hex values in a screen.
+- Auth/signup logic in `src/api/auth.js` is a temporary mock (no real backend yet) — identifiers/passwords are checked against `src/config/env.js`.
+- Colors must always come from `src/theme/theme.js` — add new tokens there rather than hardcoding hex values in a screen.
 
