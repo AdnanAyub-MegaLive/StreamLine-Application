@@ -15,3 +15,4 @@ export * from './LiveCameraIcon';
 export * from './SearchIcon';
 export * from './TrophyIcon';
 export * from './SettingsIcon';
+export * from './PlusIcon';
