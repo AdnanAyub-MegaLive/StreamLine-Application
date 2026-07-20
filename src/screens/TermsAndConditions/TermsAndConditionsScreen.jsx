@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme';
 import { Screen } from '../../components';
+import { scaleFont, scaleModerate } from '../../utils';
 import '../../navigation';
 export function TermsAndConditionsScreen() {
   const theme = useTheme();
@@ -50,59 +51,59 @@ export function TermsAndConditionsScreen() {
 }
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 28
+    paddingHorizontal: scaleModerate(20),
+    paddingTop: scaleModerate(18),
+    paddingBottom: scaleModerate(28)
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12
+    gap: scaleModerate(12)
   },
   headerSpacer: {
-    width: 40
+    width: scaleModerate(40)
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: scaleModerate(40),
+    height: scaleModerate(40),
+    borderRadius: scaleModerate(20),
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center'
   },
   backText: {
-    fontSize: 22,
+    fontSize: scaleFont(22),
     fontWeight: '700',
     lineHeight: 24
   },
   title: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 20,
+    fontSize: scaleFont(20),
     fontWeight: '800'
   },
   subtitle: {
-    marginTop: 14,
-    fontSize: 14,
+    marginTop: scaleModerate(14),
+    fontSize: scaleFont(14),
     lineHeight: 20,
     textAlign: 'center'
   },
   card: {
-    marginTop: 20,
+    marginTop: scaleModerate(20),
     borderWidth: 1,
-    borderRadius: 24,
-    padding: 18
+    borderRadius: scaleModerate(24),
+    padding: scaleModerate(18)
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '800',
-    marginBottom: 10
+    marginBottom: scaleModerate(10)
   },
   body: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     lineHeight: 20,
-    marginTop: 8
+    marginTop: scaleModerate(8)
   }
 });
 export default TermsAndConditionsScreen;

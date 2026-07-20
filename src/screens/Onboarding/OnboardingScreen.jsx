@@ -7,6 +7,7 @@ import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { Screen } from '../../components';
 import { routes } from '../../navigation';
+import { scaleFont, scaleModerate } from '../../utils';
 const avatars = [{
   id: 'a1',
   label: 'Ranger',
@@ -244,9 +245,9 @@ export function OnboardingScreen() {
 }
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 28
+    paddingHorizontal: scaleModerate(20),
+    paddingTop: scaleModerate(18),
+    paddingBottom: scaleModerate(28)
   },
   topBar: {
     flexDirection: 'row',
@@ -254,56 +255,56 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between'
   },
   topBarSpacer: {
-    width: 24
+    width: scaleModerate(24)
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: scaleModerate(40),
+    height: scaleModerate(40),
+    borderRadius: scaleModerate(20),
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center'
   },
   backButtonText: {
-    fontSize: 22,
+    fontSize: scaleFont(22),
     fontWeight: '700',
     lineHeight: 24
   },
   stepWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6
+    gap: scaleModerate(6)
   },
   stepDot: {
-    width: 7,
-    height: 7,
+    width: scaleModerate(7),
+    height: scaleModerate(7),
     borderRadius: 999
   },
   stepPill: {
-    width: 28,
-    height: 8,
+    width: scaleModerate(28),
+    height: scaleModerate(8),
     borderRadius: 999
   },
   title: {
-    marginTop: 34,
+    marginTop: scaleModerate(34),
     textAlign: 'center',
-    fontSize: 26,
+    fontSize: scaleFont(26),
     fontWeight: '800',
     letterSpacing: -0.3
   },
   subtitle: {
-    marginTop: 8,
+    marginTop: scaleModerate(8),
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: scaleFont(14),
     lineHeight: 20,
     maxWidth: 280,
     alignSelf: 'center'
   },
   avatarPanel: {
-    marginTop: 34,
-    borderRadius: 24,
+    marginTop: scaleModerate(34),
+    borderRadius: scaleModerate(24),
     borderWidth: 1,
-    padding: 16,
+    padding: scaleModerate(16),
     shadowOpacity: 0.04,
     shadowRadius: 14,
     shadowOffset: {
@@ -313,25 +314,25 @@ const styles = StyleSheet.create({
     elevation: 3
   },
   sectionLabel: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    marginBottom: 12
+    marginBottom: scaleModerate(12)
   },
   sectionLabelSpacing: {
-    marginTop: 18
+    marginTop: scaleModerate(18)
   },
   avatarRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 10
+    gap: scaleModerate(10)
   },
   avatarCard: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: 20,
-    paddingVertical: 14,
+    borderRadius: scaleModerate(20),
+    paddingVertical: scaleModerate(14),
     alignItems: 'center',
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -347,75 +348,75 @@ const styles = StyleSheet.create({
     }]
   },
   avatarCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: scaleModerate(54),
+    height: scaleModerate(54),
+    borderRadius: scaleModerate(27),
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8
+    marginBottom: scaleModerate(8)
   },
   avatarEmoji: {
-    fontSize: 24
+    fontSize: scaleFont(24)
   },
   avatarLabel: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '800'
   },
   avatarSelected: {
-    marginTop: 2,
-    fontSize: 11,
+    marginTop: scaleModerate(2),
+    fontSize: scaleFont(11),
     fontWeight: '700'
   },
   deviceAvatarSection: {
-    marginTop: 18,
+    marginTop: scaleModerate(18),
     alignItems: 'center'
   },
   deviceAvatarHeading: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '800',
     textAlign: 'center'
   },
   deviceAvatarCopy: {
-    marginTop: 4,
-    fontSize: 12,
+    marginTop: scaleModerate(4),
+    fontSize: scaleFont(12),
     textAlign: 'center'
   },
   deviceAvatarButton: {
-    marginTop: 14,
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    marginTop: scaleModerate(14),
+    width: scaleModerate(140),
+    height: scaleModerate(140),
+    borderRadius: scaleModerate(70),
     borderWidth: 2,
-    padding: 8,
+    padding: scaleModerate(8),
     alignItems: 'center',
     justifyContent: 'center'
   },
   deviceAvatarImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 62
+    borderRadius: scaleModerate(62)
   },
   deviceAvatarPlaceholder: {
     width: '100%',
     height: '100%',
-    borderRadius: 62,
+    borderRadius: scaleModerate(62),
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16
+    paddingHorizontal: scaleModerate(16)
   },
   deviceAvatarPlaceholderText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '700',
     textAlign: 'center'
   },
   deviceAvatarAddBadge: {
     position: 'absolute',
-    right: 6,
-    bottom: 6,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    right: scaleModerate(6),
+    bottom: scaleModerate(6),
+    width: scaleModerate(34),
+    height: scaleModerate(34),
+    borderRadius: scaleModerate(17),
     alignItems: 'center',
     justifyContent: 'center',
     shadowOpacity: 0.18,
@@ -427,33 +428,33 @@ const styles = StyleSheet.create({
     elevation: 4
   },
   deviceAvatarAddBadgeText: {
-    fontSize: 24,
+    fontSize: scaleFont(24),
     lineHeight: 26,
     fontWeight: '700',
-    marginTop: -2
+    marginTop: scaleModerate(-2)
   },
   genderSection: {
-    marginTop: 22
+    marginTop: scaleModerate(22)
   },
   genderHeading: {
-    fontSize: 18,
+    fontSize: scaleFont(18),
     fontWeight: '800'
   },
   genderCopy: {
-    marginTop: 4,
-    fontSize: 13
+    marginTop: scaleModerate(4),
+    fontSize: scaleFont(13)
   },
   genderRow: {
-    marginTop: 14,
+    marginTop: scaleModerate(14),
     flexDirection: 'row',
-    gap: 12
+    gap: scaleModerate(12)
   },
   genderChoice: {
     flex: 1,
-    minHeight: 112,
-    borderRadius: 22,
+    minHeight: scaleModerate(112),
+    borderRadius: scaleModerate(22),
     borderWidth: 1,
-    padding: 16,
+    padding: scaleModerate(16),
     justifyContent: 'space-between',
     shadowOpacity: 0.04,
     shadowRadius: 10,
@@ -464,36 +465,36 @@ const styles = StyleSheet.create({
     elevation: 2
   },
   genderTitle: {
-    fontSize: 20,
+    fontSize: scaleFont(20),
     fontWeight: '800'
   },
   genderTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8
+    gap: scaleModerate(8)
   },
   genderSubtitle: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '600'
   },
   genderBadge: {
     alignSelf: 'flex-end',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: scaleModerate(30),
+    height: scaleModerate(30),
+    borderRadius: scaleModerate(15),
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center'
   },
   nextButton: {
-    marginTop: 28,
-    minHeight: 52,
+    marginTop: scaleModerate(28),
+    minHeight: scaleModerate(52),
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center'
   },
   nextButtonText: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '800'
   }
 });

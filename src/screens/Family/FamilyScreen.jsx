@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme';
 import { Screen } from '../../components';
+import { scaleFont, scaleModerate } from '../../utils';
 export function FamilyScreen() {
   const theme = useTheme();
   return <Screen>
@@ -20,15 +21,15 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24
+    padding: scaleModerate(24)
   },
   title: {
-    fontSize: 28,
+    fontSize: scaleFont(28),
     fontWeight: '800'
   },
   subtitle: {
-    marginTop: 10,
-    fontSize: 15,
+    marginTop: scaleModerate(10),
+    fontSize: scaleFont(15),
     textAlign: 'center'
   }
 });

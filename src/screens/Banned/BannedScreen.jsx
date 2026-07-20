@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme';
 import { Screen } from '../../components';
 import { useAppStore } from '../../store';
+import { scaleFont, scaleModerate } from '../../utils';
 function formatRemaining(msRemaining) {
   if (msRemaining <= 0) {
     return null;
@@ -58,21 +59,21 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32
+    padding: scaleModerate(32)
   },
   title: {
-    fontSize: 24,
+    fontSize: scaleFont(24),
     fontWeight: '800'
   },
   reason: {
-    marginTop: 16,
-    fontSize: 15,
+    marginTop: scaleModerate(16),
+    fontSize: scaleFont(15),
     lineHeight: 22,
     textAlign: 'center'
   },
   remaining: {
-    marginTop: 20,
-    fontSize: 14,
+    marginTop: scaleModerate(20),
+    fontSize: scaleFont(14),
     fontWeight: '700',
     textAlign: 'center'
   }

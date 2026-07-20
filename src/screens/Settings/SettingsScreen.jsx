@@ -5,6 +5,7 @@ import { useTheme } from '../../theme';
 import { Screen } from '../../components';
 import { useAppStore } from '../../store';
 import { routes } from '../../navigation/routes';
+import { scaleFont, scaleModerate } from '../../utils';
 function SectionLabel({
   label
 }) {
@@ -115,48 +116,48 @@ export function SettingsScreen() {
 }
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 40
+    paddingHorizontal: scaleModerate(20),
+    paddingTop: scaleModerate(20),
+    paddingBottom: scaleModerate(40)
   },
   title: {
-    fontSize: 26,
+    fontSize: scaleFont(26),
     fontWeight: '800',
-    marginBottom: 8
+    marginBottom: scaleModerate(8)
   },
   sectionLabel: {
-    marginTop: 20,
-    marginBottom: 8,
-    paddingLeft: 4,
-    fontSize: 12,
+    marginTop: scaleModerate(20),
+    marginBottom: scaleModerate(8),
+    paddingLeft: scaleModerate(4),
+    fontSize: scaleFont(12),
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.6
   },
   card: {
-    borderRadius: 18,
+    borderRadius: scaleModerate(18),
     borderWidth: 1,
-    paddingHorizontal: 16
+    paddingHorizontal: scaleModerate(16)
   },
   row: {
-    minHeight: 52,
+    minHeight: scaleModerate(52),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 12
+    gap: scaleModerate(12)
   },
   rowLabel: {
-    fontSize: 15,
+    fontSize: scaleFont(15),
     fontWeight: '600'
   },
   rowValue: {
     flex: 1,
     textAlign: 'right',
-    fontSize: 14
+    fontSize: scaleFont(14)
   },
   rowChevron: {
-    fontSize: 20,
+    fontSize: scaleFont(20),
     fontWeight: '700'
   }
 });

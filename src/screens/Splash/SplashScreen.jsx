@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useAppStore } from '../../store';
 import { BrandMark, Screen } from '../../components';
 import { routes } from '../../navigation';
+import { scaleFont, scaleModerate } from '../../utils';
 export function SplashScreen(_) {
   const navigation = useNavigation();
   const loadingProgress = React.useRef(new Animated.Value(0)).current;
@@ -58,20 +59,20 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 28,
-    paddingTop: 40,
-    paddingBottom: 160
+    paddingHorizontal: scaleModerate(28),
+    paddingTop: scaleModerate(40),
+    paddingBottom: scaleModerate(160)
   },
   title: {
-    marginTop: 18,
-    fontSize: 26,
+    marginTop: scaleModerate(18),
+    fontSize: scaleFont(26),
     fontWeight: '800',
     letterSpacing: 0.2,
     color: '#FFFFFF'
   },
   subtitle: {
-    marginTop: 10,
-    fontSize: 15,
+    marginTop: scaleModerate(10),
+    fontSize: scaleFont(15),
     lineHeight: 21,
     textAlign: 'center',
     maxWidth: 260,
@@ -80,12 +81,12 @@ const styles = StyleSheet.create({
   loadingArea: {
     alignItems: 'center',
     width: '100%',
-    marginTop: 32,
-    paddingHorizontal: 24
+    marginTop: scaleModerate(32),
+    paddingHorizontal: scaleModerate(24)
   },
   loadingTrack: {
     width: '60%',
-    height: 8,
+    height: scaleModerate(8),
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
