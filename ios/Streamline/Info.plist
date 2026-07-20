@@ -38,6 +38,10 @@
 	<string>Streamline uses your location to personalize your experience and secure your account.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We use your photo library so you can pick an avatar image.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Streamline uses your camera for live video streaming and profile photos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Streamline uses your microphone for audio and video rooms.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>
