@@ -4,7 +4,17 @@
       "Bash(npx tsc *)",
       "Bash(npx eslint *)",
       "Bash(git status *)",
-      "Bash(bash scripts/push-files-individually.sh)"
+      "Bash(bash scripts/push-files-individually.sh)",
+      "Bash(npm run *)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(npm uninstall *)",
+      "Bash(npm pack *)",
+      "Bash(curl -s https://unpkg.com/@react-native-masked-view/masked-view@0.3.2/package.json)",
+      "Bash(xargs grep -li \"fabric\\\\|ViewManagerOnDemand\")",
+      "Bash(xargs grep -li \"fabric\")",
+      "WebFetch(domain:mgadm.liveenjoy.live)",
+      "Bash(curl -s -m 5 -o /dev/null -w \"%{http_code}\\\\n\" http://192.168.88.13:3000/api/users/register -X OPTIONS)",
+      "Bash(node -e ' *)"
     ],
     "additionalDirectories": [
       "d:\\StreamLine-Portal\\src\\app\\api\\users\\profile"
