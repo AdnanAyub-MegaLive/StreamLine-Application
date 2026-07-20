@@ -5,8 +5,24 @@ require Pod::Executable.execute_command('node', ['-p',
     {paths: [process.argv[1]]},
   )', __dir__]).strip
 
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native-permissions/scripts/setup.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
+
+# react-native-permissions: only enable the specific permission pods this
+# app actually asks for (Camera, Microphone, Notifications, PhotoLibrary —
+# Location is handled separately via @react-native-community/geolocation).
+setup_permissions([
+  'Camera',
+  'Microphone',
+  'Notifications',
+  'PhotoLibrary',
+])
 
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
