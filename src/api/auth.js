@@ -85,7 +85,7 @@ export async function registerUser(input) {
       } = error.response.data.error;
       throw new RegisterUserError(message, code, fields);
     }
-    throw new RegisterUserError('Unable to reach the server. Check your network and the backend address in src/config/env.ts.', 'NETWORK_ERROR');
+    throw new RegisterUserError('Unable to reach the server. Check your network and the backend address in .env (STREAMLINE_API_BASE_URL).', 'NETWORK_ERROR');
   }
 }
 export class LoginUserError extends Error {
@@ -136,7 +136,7 @@ export async function loginWithPassword(input) {
       } = error.response.data.error;
       throw new LoginUserError(message, code);
     }
-    throw new LoginUserError('Unable to reach the server. Check your network and the backend address in src/config/env.ts.', 'NETWORK_ERROR');
+    throw new LoginUserError('Unable to reach the server. Check your network and the backend address in .env (STREAMLINE_API_BASE_URL).', 'NETWORK_ERROR');
   }
 }
 export class UpdateProfileError extends Error {
@@ -191,7 +191,7 @@ export async function updateProfile(sessionToken, input) {
       } = error.response.data.error;
       throw new UpdateProfileError(message, code, fields);
     }
-    throw new UpdateProfileError('Unable to reach the server. Check your network and the backend address in src/config/env.ts.', 'NETWORK_ERROR');
+    throw new UpdateProfileError('Unable to reach the server. Check your network and the backend address in .env (STREAMLINE_API_BASE_URL).', 'NETWORK_ERROR');
   }
 }
 // Fallback status check for cold start / foreground resume (the socket
