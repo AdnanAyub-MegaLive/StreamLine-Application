@@ -1,7 +1,7 @@
 import React from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme';
-import { checkLocationPermission, getCurrentLocation, openLocationSettings, requestLocationPermission } from '../utils';
+import { checkLocationPermission, getCurrentLocation, openLocationSettings, requestLocationPermission, scaleFont, scaleModerate } from '../utils';
 import { PrimaryButton } from './PrimaryButton';
 // Blocks the whole app behind a location-permission wall on launch/resume —
 // nothing else renders until the user grants location access. Once granted,
@@ -72,22 +72,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   padded: {
-    paddingHorizontal: 24
+    paddingHorizontal: scaleModerate(24)
   },
   title: {
-    fontSize: 22,
+    fontSize: scaleFont(22),
     fontWeight: '800',
-    marginBottom: 12,
+    marginBottom: scaleModerate(12),
     textAlign: 'center'
   },
   body: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     lineHeight: 20,
     textAlign: 'center',
-    marginBottom: 24
+    marginBottom: scaleModerate(24)
   },
   button: {
-    marginTop: 12,
+    marginTop: scaleModerate(12),
     alignSelf: 'stretch'
   }
 });

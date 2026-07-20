@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { DiscoverIcon, FamilyIcon, HomeIcon, LiveCameraIcon, MessageIcon, UserIcon } from '../assets';
 import { useTheme } from '../theme';
+import { scaleModerate } from '../utils';
 const ICONS = {
   HomeTab: HomeIcon,
   DiscoverTab: DiscoverIcon,
@@ -11,14 +12,14 @@ const ICONS = {
   MeTab: UserIcon
 };
 const CENTER_ROUTE = 'FamilyTab';
-const BAR_HEIGHT = 78;
-const NOTCH_RADIUS = 47;
-const CORNER_RADIUS = 32;
+const BAR_HEIGHT = scaleModerate(78);
+const NOTCH_RADIUS = scaleModerate(47);
+const CORNER_RADIUS = scaleModerate(32);
 function buildBarPath(width) {
   const cx = width / 2;
   const r = NOTCH_RADIUS;
-  const margin = 10;
-  const dip = r + 10;
+  const margin = scaleModerate(10);
+  const dip = r + scaleModerate(10);
   return `
     M${CORNER_RADIUS},0
     H${cx - r - margin}
@@ -90,8 +91,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     alignItems: 'center',
-    paddingBottom: 22,
-    paddingHorizontal: 16
+    paddingBottom: scaleModerate(22),
+    paddingHorizontal: scaleModerate(16)
   },
   barContainer: {
     width: '100%',
@@ -107,26 +108,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 26
+    paddingHorizontal: scaleModerate(26)
   },
   item: {
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 44,
-    minHeight: 44
+    minWidth: scaleModerate(44),
+    minHeight: scaleModerate(44)
   },
   dot: {
     position: 'absolute',
-    bottom: -8,
-    width: 6,
-    height: 6,
-    borderRadius: 3
+    bottom: scaleModerate(-8),
+    width: scaleModerate(6),
+    height: scaleModerate(6),
+    borderRadius: scaleModerate(3)
   },
   centerButton: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    marginTop: -57,
+    width: scaleModerate(66),
+    height: scaleModerate(66),
+    borderRadius: scaleModerate(33),
+    marginTop: scaleModerate(-57),
     alignItems: 'center',
     justifyContent: 'center'
   }

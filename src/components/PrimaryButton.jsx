@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { useTheme } from '../theme';
+import { scaleFont, scaleModerate } from '../utils';
 export function PrimaryButton({
   label,
   onPress,
@@ -21,15 +22,15 @@ export function PrimaryButton({
 }
 const styles = StyleSheet.create({
   button: {
-    minHeight: 52,
-    borderRadius: 16,
+    minHeight: scaleModerate(52),
+    borderRadius: scaleModerate(16),
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 18
+    paddingHorizontal: scaleModerate(18)
   },
   label: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '700'
   }
 });

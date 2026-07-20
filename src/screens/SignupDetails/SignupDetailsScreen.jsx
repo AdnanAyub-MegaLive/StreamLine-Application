@@ -7,7 +7,7 @@ import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { FormField, PrimaryButton, Screen, TermsCheckbox } from '../../components';
 import { routes } from '../../navigation';
-import { getDeviceCountryName } from '../../utils';
+import { getDeviceCountryName, scaleFont, scaleModerate } from '../../utils';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[0-9]{7,15}$/;
 const MIN_PASSWORD_LENGTH = 8;
@@ -143,26 +143,26 @@ export function SignupDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: 36,
-    paddingBottom: 28
+    paddingHorizontal: scaleModerate(20),
+    paddingTop: scaleModerate(36),
+    paddingBottom: scaleModerate(28)
   },
   title: {
-    fontSize: 28,
+    fontSize: scaleFont(28),
     fontWeight: '800',
     textAlign: 'center'
   },
   subtitle: {
-    marginTop: 8,
-    fontSize: 14,
+    marginTop: scaleModerate(8),
+    fontSize: scaleFont(14),
     lineHeight: 20,
     textAlign: 'center'
   },
   card: {
-    marginTop: 20,
-    borderRadius: 28,
+    marginTop: scaleModerate(20),
+    borderRadius: scaleModerate(28),
     borderWidth: 1,
-    padding: 18,
+    padding: scaleModerate(18),
     shadowOpacity: 0.05,
     shadowRadius: 18,
     shadowOffset: {
@@ -172,25 +172,25 @@ const styles = StyleSheet.create({
     elevation: 4
   },
   termsWrap: {
-    marginTop: 4,
-    marginBottom: 14,
+    marginTop: scaleModerate(4),
+    marginBottom: scaleModerate(14),
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10
+    gap: scaleModerate(10)
   },
   button: {
-    marginTop: 4
+    marginTop: scaleModerate(4)
   },
   fieldErrorText: {
-    marginTop: -8,
-    marginBottom: 10,
-    paddingLeft: 4,
-    fontSize: 11,
+    marginTop: scaleModerate(-8),
+    marginBottom: scaleModerate(10),
+    paddingLeft: scaleModerate(4),
+    fontSize: scaleFont(11),
     fontWeight: '600'
   },
   errorText: {
-    marginTop: 10,
-    fontSize: 12,
+    marginTop: scaleModerate(10),
+    fontSize: scaleFont(12),
     fontWeight: '600',
     textAlign: 'center'
   }

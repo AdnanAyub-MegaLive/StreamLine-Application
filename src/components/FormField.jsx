@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { EmailIcon, LockIcon, PhoneIcon, UserIcon } from '../assets';
 import { useTheme } from '../theme';
+import { scaleFont, scaleModerate } from '../utils';
 const ICONS = {
   user: UserIcon,
   email: EmailIcon,
@@ -39,30 +40,30 @@ export function FormField({
 }
 const styles = StyleSheet.create({
   fieldWrap: {
-    marginBottom: 14
+    marginBottom: scaleModerate(14)
   },
   label: {
-    marginBottom: 6,
-    paddingLeft: 4,
-    fontSize: 12,
+    marginBottom: scaleModerate(6),
+    paddingLeft: scaleModerate(4),
+    fontSize: scaleFont(12),
     fontWeight: '700'
   },
   field: {
-    minHeight: 48,
+    minHeight: scaleModerate(48),
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: scaleModerate(16),
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8
+    gap: scaleModerate(8)
   },
   input: {
     flex: 1,
-    fontSize: 15,
+    fontSize: scaleFont(15),
     paddingVertical: 0
   },
   fieldAction: {
-    marginLeft: 8
+    marginLeft: scaleModerate(8)
   }
 });
 export default FormField;

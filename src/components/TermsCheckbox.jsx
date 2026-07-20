@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme';
+import { scaleFont, scaleModerate } from '../utils';
 export function TermsCheckbox({
   accepted,
   onToggle,
@@ -34,23 +35,23 @@ const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10
+    gap: scaleModerate(10)
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: scaleModerate(22),
+    height: scaleModerate(22),
+    borderRadius: scaleModerate(6),
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center'
   },
   checkboxText: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     fontWeight: '800'
   },
   text: {
     flex: 1,
-    fontSize: 12,
+    fontSize: scaleFont(12),
     lineHeight: 18,
     fontWeight: '600'
   },

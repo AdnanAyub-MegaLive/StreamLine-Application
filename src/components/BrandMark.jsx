@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet } from 'react-native';
 import { streamlineLogo } from '../assets';
+import { scaleModerate } from '../utils';
 export function BrandMark({
   size = 118
 }) {
@@ -11,7 +12,7 @@ export function BrandMark({
 }
 const styles = StyleSheet.create({
   logo: {
-    borderRadius: 30
+    borderRadius: scaleModerate(30)
   }
 });
 export default BrandMark;

@@ -7,6 +7,7 @@ import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { BrandMark, FormField, PrimaryButton, Screen, TermsCheckbox } from '../../components';
 import { routes } from '../../navigation';
+import { scaleFont, scaleModerate } from '../../utils';
 function createDummySocialSession(provider) {
   return {
     token: `${provider}-${Date.now()}`,
@@ -92,6 +93,17 @@ export function AuthScreen() {
   const [rememberMe, setRememberMe] = React.useState(true);
   const [error, setError] = React.useState(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  // TEMPORARY: lets QA reach Home while no backend is running. Remove once
+  // the real backend is available.
+  const handleSkipLogin = () => {
+    setSession(createDummySocialSession('skip'));
+    navigation.reset({
+      index: 0,
+      routes: [{
+        name: routes.home
+      }]
+    });
+  };
   const handleSocialLogin = provider => {
     if (!termsAccepted) {
       return;
@@ -200,6 +212,10 @@ export function AuthScreen() {
           <SocialButton provider="facebook" disabled={!termsAccepted} onPress={() => handleSocialLogin('facebook')} />
 
           <TermsCheckbox accepted={termsAccepted} onToggle={() => setTermsAccepted(value => !value)} onOpenTerms={() => navigation.navigate(routes.terms)} style={styles.termsWrap} />
+
+          <Pressable onPress={handleSkipLogin} style={styles.skipButton}>
+            <Text style={styles.skipButtonText}>Skip Login (Dev/No Backend)</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </Screen>;
@@ -207,33 +223,33 @@ export function AuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: 40,
-    paddingBottom: 34
+    paddingHorizontal: scaleModerate(20),
+    paddingTop: scaleModerate(40),
+    paddingBottom: scaleModerate(34)
   },
   hero: {
-    paddingTop: 20,
-    paddingBottom: 18,
+    paddingTop: scaleModerate(20),
+    paddingBottom: scaleModerate(18),
     alignItems: 'center'
   },
   title: {
-    marginTop: 16,
-    fontSize: 28,
+    marginTop: scaleModerate(16),
+    fontSize: scaleFont(28),
     fontWeight: '800',
     color: '#FFFFFF'
   },
   subtitle: {
-    marginTop: 8,
-    fontSize: 14,
+    marginTop: scaleModerate(8),
+    fontSize: scaleFont(14),
     lineHeight: 20,
     textAlign: 'center',
     color: 'rgba(255, 255, 255, 0.85)'
   },
   card: {
-    marginTop: 70,
+    marginTop: scaleModerate(70),
     borderWidth: 1,
-    borderRadius: 28,
-    padding: 18,
+    borderRadius: scaleModerate(28),
+    padding: scaleModerate(18),
     shadowOpacity: 0.05,
     shadowRadius: 18,
     shadowOffset: {
@@ -241,31 +257,31 @@ const styles = StyleSheet.create({
       height: 10
     },
     elevation: 4,
-    gap: 13
+    gap: scaleModerate(13)
   },
   tabSwitcher: {
     flexDirection: 'row',
     borderWidth: 1,
     borderRadius: 999,
-    padding: 4,
-    gap: 4
+    padding: scaleModerate(4),
+    gap: scaleModerate(4)
   },
   tabButton: {
     flex: 1,
-    minHeight: 40,
+    minHeight: scaleModerate(40),
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center'
   },
   tabButtonText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontWeight: '700'
   },
   tabContent: {
-    gap: 13
+    gap: scaleModerate(13)
   },
   actionButton: {
-    marginTop: 2
+    marginTop: scaleModerate(2)
   },
   optionsRow: {
     flexDirection: 'row',
@@ -275,70 +291,81 @@ const styles = StyleSheet.create({
   rememberMeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8
+    gap: scaleModerate(8)
   },
   rememberMeBox: {
-    width: 18,
-    height: 18,
-    borderRadius: 5,
+    width: scaleModerate(18),
+    height: scaleModerate(18),
+    borderRadius: scaleModerate(5),
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center'
   },
   rememberMeCheck: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     fontWeight: '800'
   },
   rememberMeText: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '600'
   },
   forgotPasswordText: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '700'
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 2
+    gap: scaleModerate(10),
+    marginTop: scaleModerate(2)
   },
   dividerLine: {
     flex: 1,
     height: 1
   },
   dividerText: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     fontWeight: '600'
   },
   socialButton: {
-    minHeight: 48,
-    borderRadius: 14,
+    minHeight: scaleModerate(48),
+    borderRadius: scaleModerate(14),
     borderWidth: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: scaleModerate(16),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10
+    gap: scaleModerate(10)
   },
   socialButtonDisabled: {
     opacity: 0.45
   },
   socialButtonText: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     fontWeight: '700'
   },
   termsWrap: {
-    marginTop: 4,
+    marginTop: scaleModerate(4),
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10
+    gap: scaleModerate(10)
   },
   errorText: {
-    marginTop: -6,
-    fontSize: 12,
+    marginTop: scaleModerate(-6),
+    fontSize: scaleFont(12),
     fontWeight: '600',
     textAlign: 'center'
+  },
+  skipButton: {
+    marginTop: scaleModerate(4),
+    alignItems: 'center',
+    paddingVertical: scaleModerate(8)
+  },
+  skipButtonText: {
+    fontSize: scaleFont(12),
+    fontWeight: '700',
+    color: '#EA4335',
+    textDecorationLine: 'underline'
   }
 });
 export default AuthScreen;

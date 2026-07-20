@@ -5,7 +5,7 @@ import { SettingsIcon } from '../../assets';
 import { useTheme } from '../../theme';
 import { Screen } from '../../components';
 import { useAppStore } from '../../store';
-import { isNewUser } from '../../utils';
+import { isNewUser, scaleFont, scaleModerate } from '../../utils';
 import { routes } from '../../navigation/routes';
 export function ProfileScreen() {
   const theme = useTheme();
@@ -53,53 +53,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 14
+    paddingHorizontal: scaleModerate(20),
+    paddingTop: scaleModerate(14)
   },
   headerSpacer: {
-    width: 22
+    width: scaleModerate(22)
   },
   container: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24
+    padding: scaleModerate(24)
   },
   avatar: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+    width: scaleModerate(84),
+    height: scaleModerate(84),
+    borderRadius: scaleModerate(42),
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16
+    marginBottom: scaleModerate(16)
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: scaleFont(32),
     fontWeight: '800'
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8
+    gap: scaleModerate(8)
   },
   title: {
-    fontSize: 22,
+    fontSize: scaleFont(22),
     fontWeight: '800'
   },
   newBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: scaleModerate(8),
+    paddingVertical: scaleModerate(3),
     borderRadius: 999
   },
   newBadgeText: {
-    fontSize: 10,
+    fontSize: scaleFont(10),
     fontWeight: '800',
     letterSpacing: 0.4
   },
   subtitle: {
-    marginTop: 6,
-    fontSize: 14,
+    marginTop: scaleModerate(6),
+    fontSize: scaleFont(14),
     textAlign: 'center'
   }
 });
