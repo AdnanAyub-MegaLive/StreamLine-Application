@@ -1,9 +1,11 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { DiscoverIcon, FamilyIcon, HomeIcon, LiveCameraIcon, MessageIcon, UserIcon } from '../assets';
+import { DiscoverIcon, FamilyIcon, HomeIcon, MessageIcon, PlusIcon, UserIcon } from '../assets';
+import { SeatLayoutModal, StreamOptionModal } from '../components';
 import { useTheme } from '../theme';
 import { scaleModerate } from '../utils';
+import { routes } from './routes';
 const ICONS = {
   HomeTab: HomeIcon,
   DiscoverTab: DiscoverIcon,
@@ -40,10 +42,33 @@ export function CustomTabBar({
 }) {
   const theme = useTheme();
   const [barWidth, setBarWidth] = React.useState(0);
+  const [streamOptionsVisible, setStreamOptionsVisible] = React.useState(false);
+  const [seatLayoutVisible, setSeatLayoutVisible] = React.useState(false);
   const handleLayout = event => {
     setBarWidth(event.nativeEvent.layout.width);
   };
+  const closeStreamOptions = () => setStreamOptionsVisible(false);
+  const closeSeatLayout = () => setSeatLayoutVisible(false);
+  const handleSelectAudio = () => {
+    closeStreamOptions();
+    setSeatLayoutVisible(true);
+  };
+  const handleSelectVideo = () => {
+    closeStreamOptions();
+    navigation.navigate(routes.room, { mode: 'video' });
+  };
+  const handleConfirmSeatLayout = seatGroups => {
+    closeSeatLayout();
+    navigation.navigate(routes.room, { mode: 'audio', seatGroups });
+  };
   return <View style={styles.wrapper} pointerEvents="box-none">
+      <StreamOptionModal
+        visible={streamOptionsVisible}
+        onClose={closeStreamOptions}
+        onSelectAudio={handleSelectAudio}
+        onSelectVideo={handleSelectVideo}
+      />
+      <SeatLayoutModal visible={seatLayoutVisible} onClose={closeSeatLayout} onConfirm={handleConfirmSeatLayout} />
       <View style={styles.barContainer} onLayout={handleLayout}>
         {barWidth > 0 ? <Svg width={barWidth} height={BAR_HEIGHT} style={styles.barSvg}>
             <Path d={buildBarPath(barWidth)} fill={theme.surfaces.card} />
@@ -65,11 +90,11 @@ export function CustomTabBar({
             }
           };
           if (isCenter) {
-            return <Pressable key={route.key} onPress={onPress} style={styles.item}>
+            return <Pressable key={route.key} onPress={() => setStreamOptionsVisible(true)} style={styles.item}>
                   <View style={[styles.centerButton, {
                 backgroundColor: theme.colors.teal700
               }]}>
-                    <LiveCameraIcon size={34} color="#FFFFFF" />
+                    <PlusIcon size={30} color={theme.cta.primary.text} />
                   </View>
                 </Pressable>;
           }
