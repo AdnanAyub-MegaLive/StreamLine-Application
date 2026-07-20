@@ -96,6 +96,12 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            // AndroidManifest.xml references ${usesCleartextTraffic}. The
+            // backend is a plain-HTTP LAN dev server (see .env), so debug
+            // builds must allow cleartext traffic or every API/socket call
+            // silently fails with "unable to reach the server" — Android 9+
+            // blocks cleartext HTTP by default otherwise.
+            manifestPlaceholders = [usesCleartextTraffic: "true"]
         }
         release {
             // Caution! In production, you need to generate your own keystore file.
@@ -103,6 +109,10 @@ android {
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            // Release should talk to a real HTTPS backend before shipping;
+            // flip this to "false" once STREAMLINE_API_BASE_URL points at
+            // an https:// URL.
+            manifestPlaceholders = [usesCleartextTraffic: "true"]
         }
     }
 }
