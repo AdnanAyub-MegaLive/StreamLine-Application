@@ -43,3 +43,29 @@ export function disconnectSessionSocket() {
   socket?.disconnect();
   socket = null;
 }
+
+// The audio-room channel (join/blocked/terminated/deleted) rides the same
+// authenticated socket connected above — rooms are joined on the existing
+// per-user connection rather than opening a second socket. Returns null if
+// there's no active session socket (e.g. still connecting).
+export function getSessionSocket() {
+  return socket;
+}
+
+// See StreamLine-Portal/docs/mobile-audio-room-api.md — ack callback
+// receives { success, error: { code } } from the server on failure, so the
+// synthetic "not connected yet" case below is shaped the same way.
+export function joinAudioRoom(roomId, callback) {
+  if (!socket) {
+    callback?.({ success: false, error: { code: 'NOT_CONNECTED' } });
+    return;
+  }
+  socket.emit('audio-room:join', { roomId }, callback);
+}
+
+// Tells the server to stop broadcasting this room's events to us — call
+// when backgrounding a live room (it keeps running, we just stop listening
+// until the user taps back in and re-joins).
+export function leaveAudioRoom(roomId) {
+  socket?.emit('audio-room:leave', { roomId });
+}
