@@ -4,9 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme';
-import { AppNavigator, navigationRef } from './src/navigation';
-import { LocationGate, VideoBackground } from './src/components';
+import { AppNavigator, consumePendingRoomNavigation, navigateToRoom, navigationRef } from './src/navigation';
+import { PermissionsGate, VideoBackground } from './src/components';
 import { useSessionGuard } from './src/hooks';
+import { registerLiveRoomNotificationTapHandler } from './src/utils';
 const queryClient = new QueryClient();
 const navigationTheme = {
   ...DefaultTheme,
@@ -21,17 +22,23 @@ function SessionGuard() {
 }
 function AppContent() {
   const theme = useTheme();
-  return <LocationGate>
+
+  React.useEffect(() => {
+    const unsubscribe = registerLiveRoomNotificationTapHandler(navigateToRoom);
+    return unsubscribe;
+  }, []);
+
+  return <PermissionsGate>
       <View style={styles.root}>
         <VideoBackground />
 
-        <NavigationContainer ref={navigationRef} theme={navigationTheme}>
+        <NavigationContainer ref={navigationRef} theme={navigationTheme} onReady={consumePendingRoomNavigation}>
           <StatusBar barStyle="dark-content" backgroundColor={theme.surfaces.page} translucent />
           <AppNavigator />
           <SessionGuard />
         </NavigationContainer>
       </View>
-    </LocationGate>;
+    </PermissionsGate>;
 }
 const styles = StyleSheet.create({
   root: {
