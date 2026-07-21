@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { EyeIcon, FacebookIcon, GoogleIcon } from '../../assets';
 import { loginWithPassword, LoginUserError } from '../../api';
@@ -145,7 +145,18 @@ export function AuthScreen() {
         }]
       });
     } catch (loginError) {
-      if (loginError instanceof LoginUserError) {
+      if (loginError instanceof LoginUserError && loginError.code === 'LOCATION_UNAVAILABLE') {
+        Alert.alert('Turn On Location', 'Please turn on location services to log in, then try again.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() }
+        ]);
+      } else if (loginError instanceof LoginUserError && loginError.code === 'DEVICE_BANNED') {
+        const reason = loginError.details?.reason;
+        Alert.alert(
+          'Device Banned',
+          reason ? `This device has been banned.\nReason: ${reason}` : 'This device has been banned.'
+        );
+      } else if (loginError instanceof LoginUserError) {
         setError(loginError.message);
       } else {
         setError('Unable to log in.');
@@ -154,7 +165,7 @@ export function AuthScreen() {
       setIsSubmitting(false);
     }
   };
-  return <Screen transparent>
+  return <Screen transparent avoidKeyboard>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <BrandMark size={96} />
