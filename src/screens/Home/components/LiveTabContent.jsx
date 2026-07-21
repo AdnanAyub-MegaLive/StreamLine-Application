@@ -6,31 +6,10 @@ import { useTheme } from '../../../theme';
 import { routes } from '../../../navigation/routes';
 import { scaleFont, scaleModerate } from '../../../utils';
 
-const liveRooms = [{
-  id: 'l1',
-  hostName: 'AhmedGa...',
-  hostTag: 'PUBG Mobile',
-  viewers: '1.2k',
-  accent: theme => theme.colors.teal700
-}, {
-  id: 'l2',
-  hostName: 'SaraPlayz',
-  hostTag: 'Valorant',
-  viewers: '854',
-  accent: theme => theme.colors.teal200
-}, {
-  id: 'l3',
-  hostName: 'NightOwl',
-  hostTag: 'Just Chatting',
-  viewers: '612',
-  accent: theme => theme.colors.vipPurple
-}, {
-  id: 'l4',
-  hostName: 'KingTariq',
-  hostTag: 'Free Fire',
-  viewers: '441',
-  accent: theme => theme.colors.giftAccent
-}];
+// No public "browse all live rooms" API exists on the backend yet — only
+// GET /api/audio-rooms (the current user's own rooms). This stays empty
+// until that listing endpoint exists, instead of showing fake rooms.
+const liveRooms = [];
 
 const countryFilters = ['All', 'SA KSA', 'AE UAE', 'EG Egypt', 'KW Kuwait'];
 
@@ -115,9 +94,18 @@ function CountryFilterRow({
     </ScrollView>;
 }
 
+function LiveEmptyState() {
+  const theme = useTheme();
+  return <View style={styles.emptyState}>
+      <Text style={[styles.emptyStateText, {
+      color: theme.text.secondary
+    }]}>No live rooms right now. Be the first to go live!</Text>
+    </View>;
+}
+
 export function LiveTabContent() {
   const [activeFilter, setActiveFilter] = React.useState('All');
-  return <FlatList data={liveRooms} keyExtractor={item => item.id} numColumns={2} columnWrapperStyle={styles.liveRow} contentContainerStyle={styles.liveList} ListHeaderComponent={<CountryFilterRow activeFilter={activeFilter} onSelect={setActiveFilter} />} renderItem={({
+  return <FlatList data={liveRooms} keyExtractor={item => item.id} numColumns={2} columnWrapperStyle={liveRooms.length ? styles.liveRow : undefined} contentContainerStyle={styles.liveList} ListHeaderComponent={<CountryFilterRow activeFilter={activeFilter} onSelect={setActiveFilter} />} ListEmptyComponent={<LiveEmptyState />} renderItem={({
     item
   }) => <LiveRoomCard item={item} />} />;
 }
@@ -201,6 +189,16 @@ const styles = StyleSheet.create({
   liveHostTag: {
     fontSize: scaleFont(11),
     marginTop: scaleModerate(1)
+  },
+  emptyState: {
+    paddingVertical: scaleModerate(48),
+    paddingHorizontal: scaleModerate(24),
+    alignItems: 'center'
+  },
+  emptyStateText: {
+    fontSize: scaleFont(13),
+    fontWeight: '600',
+    textAlign: 'center'
   }
 });
 
