@@ -7,7 +7,7 @@ import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { FormField, PrimaryButton, Screen, TermsCheckbox } from '../../components';
 import { routes } from '../../navigation';
-import { getDeviceCountryName, scaleFont, scaleModerate } from '../../utils';
+import { getCachedLocation, getCurrentLocation, getDeviceCountryName, reverseGeocodeCountry, scaleFont, scaleModerate } from '../../utils';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[0-9]{7,15}$/;
 const MIN_PASSWORD_LENGTH = 8;
@@ -24,6 +24,25 @@ export function SignupDetailsScreen() {
     password: '',
     confirmPassword: ''
   });
+  const hasEditedCountryRef = React.useRef(false);
+  React.useEffect(() => {
+    // The device-locale-based guess (getDeviceCountryName) can be wrong —
+    // it's the phone's Region *setting*, not its physical location. Once
+    // location permission is granted, override it with the real country
+    // from GPS coordinates, but only if the user hasn't already typed their
+    // own value into the field in the meantime.
+    const applyGpsCountry = async () => {
+      const location = getCachedLocation() ?? (await getCurrentLocation());
+      if (!location) {
+        return;
+      }
+      const country = await reverseGeocodeCountry(location);
+      if (country && !hasEditedCountryRef.current) {
+        setSignup(current => ({ ...current, country }));
+      }
+    };
+    applyGpsCountry();
+  }, []);
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
   const [termsAccepted, setTermsAccepted] = React.useState(true);
@@ -69,7 +88,7 @@ export function SignupDetailsScreen() {
       setIsSubmitting(false);
     }
   };
-  return <Screen>
+  return <Screen avoidKeyboard>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={[styles.title, {
         color: theme.text.primary
@@ -104,10 +123,13 @@ export function SignupDetailsScreen() {
           color: theme.colors.giftAccent
         }]}>{fieldErrors.email}</Text> : null}
 
-          <FormField label="Country (optional)" placeholder="Country" value={signup.country} onChangeText={text => setSignup(current => ({
-          ...current,
-          country: text
-        }))} icon="user" />
+          <FormField label="Country (optional)" placeholder="Country" value={signup.country} onChangeText={text => {
+          hasEditedCountryRef.current = true;
+          setSignup(current => ({
+            ...current,
+            country: text
+          }));
+        }} icon="user" />
 
           <FormField label="Set a Password" placeholder="Password" value={signup.password} onChangeText={text => setSignup(current => ({
           ...current,
