@@ -74,6 +74,7 @@ export function SettingsScreen() {
         backgroundColor: theme.surfaces.card,
         borderColor: theme.colors.cardBorder
       }]}>
+          <SettingsRow label="User ID" value={user?.displayId || user?.publicId || '—'} />
           <SettingsRow label="Full Name" value={user?.fullName || '—'} onPress={() => navigation.navigate(routes.editProfile)} />
           <SettingsRow label="Phone" value={user?.phone || '—'} onPress={() => navigation.navigate(routes.editProfile)} />
           <SettingsRow label="Email" value={user?.email || 'Not provided'} onPress={() => navigation.navigate(routes.editProfile)} />
