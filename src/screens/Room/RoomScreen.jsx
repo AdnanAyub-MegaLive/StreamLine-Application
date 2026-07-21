@@ -22,11 +22,18 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../theme';
 import { LockIcon, UserIcon, roomBackgroundImage } from '../../assets';
-import { upsertAudioRoom } from '../../api';
+import { endAudioRoom as endAudioRoomRecord, startAudioRoom, updateAudioRoom } from '../../api';
 import { getSessionSocket, joinAudioRoom, leaveAudioRoom } from '../../services/socket';
 import { useAppStore } from '../../store';
-import { dismissLiveRoomNotification, scaleFont, scaleModerate, showLiveRoomNotification } from '../../utils';
-import { clearCachedSeatState, getCachedSeatState, setCachedSeatState } from './roomSeatCache';
+import {
+  clearCachedSeatState,
+  dismissLiveRoomNotification,
+  getCachedSeatState,
+  scaleFont,
+  scaleModerate,
+  setCachedSeatState,
+  showLiveRoomNotification
+} from '../../utils';
 
 function MicIcon({ size = 12, color, muted = false }) {
   return (
@@ -376,20 +383,23 @@ export function RoomScreen() {
   const session = useAppStore(state => state.session);
   const ownerName = session?.user?.fullName || 'You';
   const ownerAvatarSeed = session?.user?.publicId || ownerName;
-  // Backend enforces a globally-unique roomId (max 80 chars) across every
-  // user's rooms — a plain 6-digit random number collides often enough in
-  // practice to matter (~900k possible values), so derive it from the
-  // owner's publicId plus the current time instead.
-  const generatedRoomId = React.useMemo(() => {
-    const ownerPart = (ownerAvatarSeed || 'guest').replace(/[^a-zA-Z0-9]/g, '').slice(0, 20) || 'guest';
-    return `${ownerPart}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1296).toString(36)}`.toUpperCase();
-  }, [ownerAvatarSeed]);
-  const roomId = route.params?.roomId ?? generatedRoomId;
+  // Shows the active Special ID (e.g. "VIP55") in place of the plain user
+  // ID once one is assigned — same displayId field already used on
+  // Profile/Settings, kept live via useSessionGuard's special-id socket
+  // handling. See docs/mobile-special-id.md.
+  const ownerDisplayId = session?.user?.displayId || session?.user?.publicId;
+  // The backend now owns room identity — each user has exactly one
+  // persistent, system-assigned room ID (see
+  // StreamLine-Portal/docs/mobile-audio-room-api.md). route.params.roomId is
+  // only present when returning to an already-started room (notification
+  // tap or a backgrounded-room resume); a brand-new room has no ID until the
+  // START call below responds.
+  const [roomId, setRoomId] = React.useState(route.params?.roomId ?? null);
   const roomName = route.params?.roomName ?? `${ownerName}'s Room`;
   const mode = route.params?.mode ?? 'video';
   const seatGroups = route.params?.seatGroups;
   // Rehydrate seat occupancy/notes if we're returning to a room that was
-  // only backgrounded (not ended) — see src/screens/Room/roomSeatCache.js.
+  // only backgrounded (not ended) — see src/utils/roomSeatCache.js.
   const cachedSeatStateRef = React.useRef(getCachedSeatState(roomId));
   const [seatRows, setSeatRows] = React.useState(() => {
     if (cachedSeatStateRef.current) {
@@ -500,35 +510,33 @@ export function RoomScreen() {
   }, [viewerCount]);
 
   React.useEffect(() => {
-    if (!isAudioRoom) {
+    if (!isAudioRoom || !roomId) {
       return;
     }
     setCachedSeatState(roomId, { seatRows, mySeatId, seatNotes });
   }, [isAudioRoom, roomId, seatRows, mySeatId, seatNotes]);
 
+  // Explicit "End Room" — the room ID is retained server-side (IDLE, not
+  // deleted), same as the auto-release below, but this also lets the owner
+  // attach a recording URL and records a clean END action in the audit log.
   const endAudioRoom = React.useCallback(() => {
-    if (!isAudioRoom || roomEndedRef.current || !session?.token) {
+    if (!isAudioRoom || roomEndedRef.current || !session?.token || !roomId) {
       return;
     }
     roomEndedRef.current = true;
     leaveAudioRoom(roomId);
     clearCachedSeatState(roomId);
-    upsertAudioRoom(session.token, {
-      roomId,
-      title: roomName,
-      status: 'ENDED',
-      participantCount: viewerCountRef.current,
-      startedAt: startedAtRef.current ?? new Date().toISOString(),
-      endedAt: new Date().toISOString()
-    }).catch(() => {});
-  }, [isAudioRoom, roomId, roomName, session?.token]);
+    endAudioRoomRecord(session.token).catch(() => {});
+  }, [isAudioRoom, roomId, session?.token]);
 
   // Leaving the room screen (back gesture or the header close button) no
   // longer ends the room — it keeps running on the backend, and a
   // persistent notification lets the owner tap back in. Only the explicit
-  // "End Room" long-press (below) actually ends it.
+  // "End Room" long-press (below) actually ends it. Leaving the Socket.IO
+  // room here is enough — the server auto-releases the room (IDLE, ID
+  // retained) once the last participant's socket leaves, see server.js.
   const backgroundLiveRoom = React.useCallback(() => {
-    if (!isAudioRoom || roomEndedRef.current) {
+    if (!isAudioRoom || roomEndedRef.current || !roomId) {
       return;
     }
     leaveAudioRoom(roomId);
@@ -565,13 +573,38 @@ export function RoomScreen() {
 
     let cancelled = false;
     let retryTimer = null;
+    // The room ID may not exist yet (brand-new room) when this effect
+    // starts — startAudioRoom() below resolves it. Track it locally instead
+    // of the `roomId` state, since these closures are only created once per
+    // effect run and wouldn't see a state update from within the same run.
+    let activeRoomId = roomId;
+
+    // Blocked/terminated/deleted (or a failed join) all mean the room is
+    // already gone on the backend — mark it ended right away so the unmount
+    // cleanup treats it that way too, instead of falling through to
+    // backgroundLiveRoom() and showing a "still live, tap to return"
+    // notification for a room that no longer exists. It also stops the
+    // participant-count-sync effect from upserting (and accidentally
+    // re-creating) a deleted room.
+    const handleRoomEndedExternally = () => {
+      if (roomEndedRef.current) {
+        return;
+      }
+      roomEndedRef.current = true;
+      if (activeRoomId) {
+        leaveAudioRoom(activeRoomId);
+        clearCachedSeatState(activeRoomId);
+      }
+      dismissLiveRoomNotification().catch(() => {});
+      setIsRoomBlocked(true);
+    };
 
     // Join attempts only count as "blocked" when the server itself answers
     // with success:false — a socket that hasn't connected yet is a timing
     // issue, not a moderation action, so it gets retried instead of
     // immediately showing the "removed by an administrator" alert.
     const attemptJoin = retriesLeft => {
-      if (cancelled) {
+      if (cancelled || !activeRoomId) {
         return;
       }
       const socket = getSessionSocket();
@@ -581,9 +614,9 @@ export function RoomScreen() {
         }
         return;
       }
-      joinAudioRoom(roomId, result => {
+      joinAudioRoom(activeRoomId, result => {
         if (!cancelled && result && result.success === false) {
-          setIsRoomBlocked(true);
+          handleRoomEndedExternally();
         }
       });
     };
@@ -593,16 +626,24 @@ export function RoomScreen() {
       startedAtRef.current = startedAt;
 
       try {
-        await upsertAudioRoom(session.token, {
-          roomId,
+        // Reusing an already-assigned room (returning from background)
+        // still goes through START — the backend treats it as a restart of
+        // the same persistent ID (reused: true) rather than issuing a new
+        // one.
+        const result = await startAudioRoom(session.token, {
           title: roomName,
-          status: 'LIVE',
-          participantCount: viewerCountRef.current,
-          startedAt
+          participantCount: viewerCountRef.current
         });
+        if (result?.roomId) {
+          activeRoomId = result.roomId;
+          if (!cancelled) {
+            setRoomId(result.roomId);
+          }
+        }
       } catch {
-        // Best-effort — still attempt to join even if the create/update
-        // call failed, in case the room record already exists server-side.
+        // Best-effort — still attempt to join with whatever ID we already
+        // have (e.g. returning to a backgrounded room) even if this call
+        // failed.
       }
 
       if (!cancelled) {
@@ -614,9 +655,9 @@ export function RoomScreen() {
 
     const socket = getSessionSocket();
     const handleJoiningDisabled = () => setJoiningDisabled(true);
-    const handleBlocked = () => setIsRoomBlocked(true);
-    const handleTerminated = () => setIsRoomBlocked(true);
-    const handleDeleted = () => setIsRoomBlocked(true);
+    const handleBlocked = handleRoomEndedExternally;
+    const handleTerminated = handleRoomEndedExternally;
+    const handleDeleted = handleRoomEndedExternally;
 
     socket?.on('audio-room:joining-disabled', handleJoiningDisabled);
     socket?.on('audio-room:blocked', handleBlocked);
@@ -634,29 +675,27 @@ export function RoomScreen() {
       socket?.off('audio-room:deleted', handleDeleted);
       backgroundLiveRoom();
     };
-    // Only run once per room visit — roomId/roomName/session are stable for
-    // the screen's lifetime, and re-running this on every viewerCount change
+    // Only run once per room visit — roomName/session are stable for the
+    // screen's lifetime, and re-running this on every viewerCount change
     // would re-create/rejoin the room instead of just syncing the count
-    // (handled by the separate effect below).
+    // (handled by the separate effect below). roomId is intentionally
+    // excluded too — this effect is what sets it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAudioRoom]);
 
   const isFirstParticipantSyncRef = React.useRef(true);
 
   React.useEffect(() => {
-    if (!isAudioRoom || !session?.token) {
+    if (!isAudioRoom || !session?.token || !roomId || roomEndedRef.current) {
       return;
     }
     if (isFirstParticipantSyncRef.current) {
       isFirstParticipantSyncRef.current = false;
       return;
     }
-    upsertAudioRoom(session.token, {
-      roomId,
+    updateAudioRoom(session.token, {
       title: roomName,
-      status: 'LIVE',
-      participantCount: viewerCount,
-      startedAt: startedAtRef.current ?? new Date().toISOString()
+      participantCount: viewerCount
     }).catch(() => {});
   }, [viewerCount, isAudioRoom, roomId, roomName, session?.token]);
 
@@ -738,11 +777,11 @@ export function RoomScreen() {
                 <Text style={[styles.roomName, { color: theme.text.primary }]} numberOfLines={1}>
                   {roomName}
                 </Text>
-                <View style={styles.roomIdRow}>
+                {ownerDisplayId ? (
                   <Text style={[styles.roomIdText, { color: theme.text.secondary }]} numberOfLines={1}>
-                    ID: {roomId}
+                    Your ID: {ownerDisplayId}
                   </Text>
-                </View>
+                ) : null}
               </View>
             </View>
           </View>
@@ -922,9 +961,6 @@ const styles = StyleSheet.create({
   roomName: {
     fontSize: scaleFont(13),
     fontWeight: '700'
-  },
-  roomIdRow: {
-    marginTop: scaleModerate(2)
   },
   roomIdText: {
     fontSize: scaleFont(10),
