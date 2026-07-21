@@ -54,7 +54,7 @@ export function PhoneAuthScreen() {
       setIsSubmitting(false);
     }
   };
-  return <Screen>
+  return <Screen avoidKeyboard>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={[styles.title, {
         color: theme.text.primary
