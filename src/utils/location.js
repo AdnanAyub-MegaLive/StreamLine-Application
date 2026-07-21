@@ -65,3 +65,49 @@ export function getCachedLocation() {
 export function formatLocationString(location) {
   return `${location.latitude.toFixed(4)},${location.longitude.toFixed(4)}`;
 }
+
+// Reverse-geocodes GPS coordinates into a country name using OpenStreetMap's
+// free Nominatim API (no key required). This is deliberately separate from
+// getDeviceCountryName() in deviceCountry.js, which only reads the phone's
+// Region *setting* — that can say "United States" even while the device is
+// physically in Pakistan, since it's a locale preference, not a location.
+export async function reverseGeocodeCountry(location) {
+  const address = await reverseGeocodeAddress(location);
+  return address?.country ?? null;
+}
+
+async function reverseGeocodeAddress(location) {
+  try {
+    // accept-language=en forces English place names — without it Nominatim
+    // localizes to the device/region's language (e.g. Urdu for Pakistan).
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}&zoom=10&addressdetails=1&accept-language=en`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'StreamlineApp/1.0', 'Accept-Language': 'en' }
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    return data?.address ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Turns GPS coordinates into a human-readable "City, Country" label (e.g.
+// "Lahore, Pakistan") for sending as device.location on register/login —
+// matches the backend's documented example instead of sending raw
+// coordinates. Falls back to the "lat,lng" string (never empty) if reverse
+// geocoding fails, since the backend requires this field to be present.
+export async function reverseGeocodeLocationLabel(location) {
+  const address = await reverseGeocodeAddress(location);
+  const city = address?.city || address?.town || address?.village || address?.county;
+  const country = address?.country;
+  if (city && country) {
+    return `${city}, ${country}`;
+  }
+  if (country) {
+    return country;
+  }
+  return formatLocationString(location);
+}
