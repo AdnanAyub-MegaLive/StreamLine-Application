@@ -22,19 +22,9 @@ const bannerSlides = [{
   subtitle: 'Send gifts today to earn double reward points.'
 }];
 
-const trendingParties = [{
-  id: 'p1',
-  title: 'Late Night Ludo & Vibes',
-  hostName: 'KingTariq',
-  members: '116',
-  accent: theme => theme.colors.teal700
-}, {
-  id: 'p2',
-  title: 'Music Chill Zone',
-  hostName: 'DJ_Sara',
-  members: '84',
-  accent: theme => theme.colors.vipPurple
-}];
+// No public "browse all parties" API exists on the backend yet — stays
+// empty until that listing endpoint exists, instead of showing fake rooms.
+const trendingParties = [];
 
 function PartyBanner() {
   const theme = useTheme();
@@ -163,9 +153,13 @@ export function PartyTabContent() {
         </Pressable>
       </View>
 
-      <View style={styles.partyRow}>
-        {trendingParties.map(item => <PartyCard key={item.id} item={item} />)}
-      </View>
+      {trendingParties.length > 0 ? <View style={styles.partyRow}>
+          {trendingParties.map(item => <PartyCard key={item.id} item={item} />)}
+        </View> : <View style={styles.emptyState}>
+          <Text style={[styles.emptyStateText, {
+        color: theme.text.secondary
+      }]}>No trending parties right now. Start one from the + button!</Text>
+        </View>}
     </ScrollView>;
 }
 
@@ -272,6 +266,16 @@ const styles = StyleSheet.create({
   partyMeta: {
     fontSize: scaleFont(11),
     flex: 1
+  },
+  emptyState: {
+    paddingVertical: scaleModerate(40),
+    paddingHorizontal: scaleModerate(12),
+    alignItems: 'center'
+  },
+  emptyStateText: {
+    fontSize: scaleFont(13),
+    fontWeight: '600',
+    textAlign: 'center'
   }
 });
 
