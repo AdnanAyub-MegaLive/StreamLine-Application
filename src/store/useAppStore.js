@@ -29,6 +29,14 @@ export const useAppStore = create()(persist(set => ({
       onboardingComplete: true
     } : state.session
   })),
+  // Merges a partial user update (e.g. a Special ID assignment/revocation
+  // pushed over the socket) without touching anything else on the session.
+  updateSessionUser: userPatch => set(state => ({
+    session: state.session ? {
+      ...state.session,
+      user: { ...state.session.user, ...userPatch }
+    } : state.session
+  })),
   setHydrated: value => set({
     hasHydrated: value
   }),
