@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 import { appEnv } from '@/config/env';
 import { getStableDeviceId } from '@/utils/deviceId';
-import { formatLocationString, getCachedLocation } from '@/utils/location';
+import { getCachedLocation, getCurrentLocation, reverseGeocodeLocationLabel } from '@/utils/location';
 import { apiClient } from './client';
 const TEMP_AUTH_CONFIG = {
   email: appEnv.authEmail,
@@ -38,6 +38,9 @@ export class RegisterUserError extends Error {
 export async function registerUser(input) {
   const email = input.email?.trim();
   const cachedLocation = getCachedLocation();
+  // Send a human-readable "City, Country" label (matches the backend's
+  // documented example) instead of raw coordinates.
+  const locationLabel = cachedLocation ? await reverseGeocodeLocationLabel(cachedLocation) : undefined;
   const body = {
     name: input.fullName.trim(),
     phone: input.phone,
@@ -48,7 +51,7 @@ export async function registerUser(input) {
     device: {
       macAddress: getStableDeviceId(),
       platform: Platform.OS === 'ios' ? 'iOS' : 'Android',
-      location: cachedLocation ? formatLocationString(cachedLocation) : undefined
+      location: locationLabel
     }
   };
   try {
@@ -57,12 +60,20 @@ export async function registerUser(input) {
       user,
       sessionToken
     } = response.data.data;
+    // The backend's `id` can be a cosmetic VIP/SVIP "Special ID" (e.g.
+    // "VIP55") instead of the real account key once one is assigned — the
+    // permanent key is always `normalId`. Store that as publicId (used for
+    // socket rooms, avatar seeds, etc.) and keep the display-only id
+    // separately. See docs/mobile-special-id.md.
     const authUser = {
       fullName: user.name,
       email: user.email ?? undefined,
       phone: user.phone,
       method: 'phone',
-      publicId: user.id,
+      publicId: user.normalId ?? user.id,
+      displayId: user.id,
+      specialId: user.specialId ?? null,
+      specialIdExpiresAt: user.specialIdExpiresAt ?? null,
       role: user.role,
       status: user.status,
       vipLevel: user.vipLevel,
@@ -90,21 +101,37 @@ export async function registerUser(input) {
 }
 export class LoginUserError extends Error {
   code;
-  constructor(message, code) {
+  details;
+  constructor(message, code, details) {
     super(message);
     this.name = 'LoginUserError';
     this.code = code;
+    this.details = details;
   }
 }
 
-// POST /api/users/login — phone + password only (matches the backend
-// team's login route, which looks up by phone alone).
+// POST /api/users/login — phone + password, plus device info (now
+// mandatory: the backend requires device.macAddress and device.location,
+// returning 422 without them — see docs/mobile-login-api.md).
 export async function loginWithPassword(input) {
   const cleanedPhone = input.phone.trim().replace(/[\s().-]/g, '');
+  const location = getCachedLocation() ?? (await getCurrentLocation());
+  if (!location) {
+    throw new LoginUserError('Unable to determine your location. Please check location permission and try again.', 'LOCATION_UNAVAILABLE');
+  }
+  // Human-readable "City, Country" label (matches the backend's documented
+  // example), not raw coordinates. Falls back to "lat,lng" internally if
+  // reverse geocoding fails, so this field is never left empty.
+  const locationLabel = await reverseGeocodeLocationLabel(location);
   try {
     const response = await apiClient.post('/api/users/login', {
       phone: cleanedPhone,
-      password: input.password
+      password: input.password,
+      device: {
+        macAddress: getStableDeviceId(),
+        location: locationLabel,
+        platform: Platform.OS === 'ios' ? 'iOS' : 'Android'
+      }
     });
     const {
       data
@@ -112,12 +139,23 @@ export async function loginWithPassword(input) {
     if (data.isBanned || !data.user || !data.sessionToken) {
       throw new LoginUserError(data.banReason ? `Account banned: ${data.banReason}` : 'This account is banned.', 'ACCOUNT_BANNED');
     }
+    // Same Special ID caveat as registerUser() below — data.user.id can be a
+    // cosmetic VIP/SVIP display ID, the real account key is normalId.
     const authUser = {
       fullName: data.user.name,
       email: data.user.email ?? undefined,
       phone: data.user.phone,
       method: 'phone',
-      publicId: data.user.id,
+      publicId: data.user.normalId ?? data.user.id,
+      displayId: data.user.id,
+      specialId: data.user.specialId ?? null,
+      specialIdExpiresAt: data.user.specialIdExpiresAt ?? null,
+      country: data.user.country ?? undefined,
+      profileImage: data.user.profileImage ?? undefined,
+      role: data.user.role,
+      status: data.user.status,
+      vipLevel: data.user.vipLevel,
+      createdAt: data.user.createdAt,
       sessionVersion: data.sessionVersion
     };
     return {
@@ -132,9 +170,10 @@ export async function loginWithPassword(input) {
     if (axios.isAxiosError(error) && error.response?.data?.error) {
       const {
         code,
-        message
+        message,
+        details
       } = error.response.data.error;
-      throw new LoginUserError(message, code);
+      throw new LoginUserError(message, code, details);
     }
     throw new LoginUserError('Unable to reach the server. Check your network and the backend address in .env (STREAMLINE_API_BASE_URL).', 'NETWORK_ERROR');
   }
@@ -198,10 +237,14 @@ export async function updateProfile(sessionToken, input) {
 // connection in src/services/socket.ts handles live push updates while the
 // app is running). Fails silently (returns null) if the token is missing,
 // invalid, or the backend is unreachable — callers should treat null as
-// "no change, nothing to act on" rather than an error.
-export async function checkUserStatus(sessionToken) {
+// "no change, nothing to act on" rather than an error. macAddress is now
+// mandatory — the backend uses it to report this specific device's ban
+// status (deviceBanned/deviceBanReason/deviceBanExpiresAt) alongside the
+// account-level ban fields.
+export async function checkUserStatus(sessionToken, macAddress) {
   try {
     const response = await apiClient.get('/api/users/session/status', {
+      params: { macAddress },
       headers: {
         Authorization: `Bearer ${sessionToken}`
       }
