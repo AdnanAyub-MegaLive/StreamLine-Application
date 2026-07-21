@@ -45,6 +45,9 @@ export function ProfileScreen() {
         <Text style={[styles.subtitle, {
         color: theme.text.secondary
       }]}>{session?.user.phone || session?.user.email || 'Account details belong here.'}</Text>
+        {session?.user.displayId || session?.user.publicId ? <Text style={[styles.idText, {
+        color: theme.text.mutedIcon
+      }]}>ID: {session?.user.displayId || session?.user.publicId}</Text> : null}
       </View>
     </Screen>;
 }
@@ -100,6 +103,12 @@ const styles = StyleSheet.create({
   subtitle: {
     marginTop: scaleModerate(6),
     fontSize: scaleFont(14),
+    textAlign: 'center'
+  },
+  idText: {
+    marginTop: scaleModerate(4),
+    fontSize: scaleFont(11),
+    fontWeight: '600',
     textAlign: 'center'
   }
 });
