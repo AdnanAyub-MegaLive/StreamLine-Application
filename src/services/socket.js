@@ -17,6 +17,31 @@ export function connectSessionSocket(sessionToken, handlers) {
   socket.on('account:banned', payload => handlers.onBanned(payload.data));
   socket.on('account:unbanned', payload => handlers.onUnbanned(payload.data));
   socket.on('session:force-logout', payload => handlers.onForceLogout(payload.data));
+  // See docs/mobile-special-id.md — optional handlers so existing callers
+  // that don't care about Special IDs keep working unchanged.
+  socket.on('special-id:assigned', payload => handlers.onSpecialIdAssigned?.(payload.data));
+  socket.on('special-id:revoked', payload => handlers.onSpecialIdRevoked?.(payload.data));
+  // See docs/mobile-login-api.md — these fire for ANY of the user's devices
+  // getting banned/unbanned, so the caller must compare payload.data.macAddress
+  // against this device's own id and only act if it matches.
+  socket.on('device:banned', payload => handlers.onDeviceBanned?.(payload.data));
+  socket.on('device:unbanned', payload => handlers.onDeviceUnbanned?.(payload.data));
+  // The backend emits these to BOTH the room channel (audio-room:${roomId})
+  // AND the owner's personal user channel (database-actions.js's
+  // controlAudioRoom always calls emitToUser too) — so they still arrive
+  // here even after we've left the room channel via leaveAudioRoom() while
+  // a room is only backgrounded. Without this, a room terminated/blocked/
+  // deleted by an admin while backgrounded would leave the "still live"
+  // notification showing forever, since RoomScreen's own listeners for
+  // these events are torn down as soon as it unmounts.
+  socket.on('audio-room:blocked', payload => handlers.onAudioRoomEnded?.(payload.data));
+  socket.on('audio-room:terminated', payload => handlers.onAudioRoomEnded?.(payload.data));
+  socket.on('audio-room:deleted', payload => handlers.onAudioRoomEnded?.(payload.data));
+  // Server auto-releases the room (frees live resources, keeps the
+  // persistent ID) once the last participant's socket leaves/disconnects —
+  // fires even if the owner isn't the one who triggered it, so the "still
+  // live" notification must be dismissed the same as a moderation event.
+  socket.on('audio-room:idle', payload => handlers.onAudioRoomIdle?.(payload.data));
   socket.on('connect_error', error => {
     const data = error.data;
     if (error.message === 'ACCOUNT_BANNED') {
