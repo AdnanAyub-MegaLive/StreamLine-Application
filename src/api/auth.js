@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 import { appEnv } from '@/config/env';
 import { getStableDeviceId } from '@/utils/deviceId';
-import { getCachedLocation, getCurrentLocation, reverseGeocodeLocationLabel } from '@/utils/location';
+import { getCurrentLocation, reverseGeocodeLocationLabel } from '@/utils/location';
 import { apiClient } from './client';
 const TEMP_AUTH_CONFIG = {
   email: appEnv.authEmail,
@@ -37,10 +37,16 @@ export class RegisterUserError extends Error {
 }
 export async function registerUser(input) {
   const email = input.email?.trim();
-  const cachedLocation = getCachedLocation();
+  // Same rule as loginWithPassword — require location to actually be on
+  // right now (not a stale cached fix from earlier), so sign-up is blocked
+  // with the same "Turn On Location" prompt until it is.
+  const location = await getCurrentLocation();
+  if (!location) {
+    throw new RegisterUserError('Unable to determine your location. Please check location permission and try again.', 'LOCATION_UNAVAILABLE');
+  }
   // Send a human-readable "City, Country" label (matches the backend's
   // documented example) instead of raw coordinates.
-  const locationLabel = cachedLocation ? await reverseGeocodeLocationLabel(cachedLocation) : undefined;
+  const locationLabel = await reverseGeocodeLocationLabel(location);
   const body = {
     name: input.fullName.trim(),
     phone: input.phone,
@@ -115,7 +121,12 @@ export class LoginUserError extends Error {
 // returning 422 without them — see docs/mobile-login-api.md).
 export async function loginWithPassword(input) {
   const cleanedPhone = input.phone.trim().replace(/[\s().-]/g, '');
-  const location = getCachedLocation() ?? (await getCurrentLocation());
+  // Deliberately NOT falling back to getCachedLocation() here — login must
+  // block until location services are actually on right now, not whenever
+  // they were last on (e.g. permission was granted with GPS enabled, then
+  // the user turned it off before logging in; a stale cache would silently
+  // let that through).
+  const location = await getCurrentLocation();
   if (!location) {
     throw new LoginUserError('Unable to determine your location. Please check location permission and try again.', 'LOCATION_UNAVAILABLE');
   }

@@ -21,6 +21,10 @@ export function connectSessionSocket(sessionToken, handlers) {
   // that don't care about Special IDs keep working unchanged.
   socket.on('special-id:assigned', payload => handlers.onSpecialIdAssigned?.(payload.data));
   socket.on('special-id:revoked', payload => handlers.onSpecialIdRevoked?.(payload.data));
+  // Timed Special ID assignments expire on their own schedule (tracked
+  // server-side, survives a server restart) — same shape as revoked
+  // (data.normalId), plus data.expiredSpecialId naming which one lapsed.
+  socket.on('special-id:expired', payload => handlers.onSpecialIdExpired?.(payload.data));
   // See docs/mobile-login-api.md — these fire for ANY of the user's devices
   // getting banned/unbanned, so the caller must compare payload.data.macAddress
   // against this device's own id and only act if it matches.
@@ -42,6 +46,16 @@ export function connectSessionSocket(sessionToken, handlers) {
   // fires even if the owner isn't the one who triggered it, so the "still
   // live" notification must be dismissed the same as a moderation event.
   socket.on('audio-room:idle', payload => handlers.onAudioRoomIdle?.(payload.data));
+  // Timed room restrictions (owner-only mode, block, termination) now lift
+  // automatically when their expiry passes — mirror image of
+  // joining-disabled/blocked/terminated above. joining-enabled only matters
+  // while a viewer is actively in the room (lets them take a seat again);
+  // unblocked/restored matter for the "+"-start-room flow, which already
+  // re-checks live server state on every attempt so no action is required
+  // there — both are still surfaced for any screen that wants them.
+  socket.on('audio-room:joining-enabled', payload => handlers.onAudioRoomJoiningEnabled?.(payload.data));
+  socket.on('audio-room:unblocked', payload => handlers.onAudioRoomRestored?.(payload.data));
+  socket.on('audio-room:restored', payload => handlers.onAudioRoomRestored?.(payload.data));
   socket.on('connect_error', error => {
     const data = error.data;
     if (error.message === 'ACCOUNT_BANNED') {

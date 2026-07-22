@@ -122,6 +122,7 @@ desktop.ini
 dist/
 android/app/build/
 ios/build/
+.claude/settings.json
 
 # Watchman config (machine specific, optional to ignore)
 .watchmanconfig

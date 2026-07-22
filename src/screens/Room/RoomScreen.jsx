@@ -1,7 +1,7 @@
 import React from 'react';
 import {
-  Alert,
   Animated,
+  AppState,
   FlatList,
   Image,
   ImageBackground,
@@ -22,13 +22,15 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../theme';
 import { LockIcon, UserIcon, roomBackgroundImage } from '../../assets';
-import { endAudioRoom as endAudioRoomRecord, startAudioRoom, updateAudioRoom } from '../../api';
+import { showAlert } from '../../components';
+import { AudioRoomError, endAudioRoom as endAudioRoomRecord, startAudioRoom, updateAudioRoom } from '../../api';
 import { getSessionSocket, joinAudioRoom, leaveAudioRoom } from '../../services/socket';
 import { useAppStore } from '../../store';
 import {
   clearCachedSeatState,
   dismissLiveRoomNotification,
   getCachedSeatState,
+  registerLiveRoomActionHandler,
   scaleFont,
   scaleModerate,
   setCachedSeatState,
@@ -416,6 +418,20 @@ export function RoomScreen() {
   const isOwner = true;
   const hasMicAccess = mode !== 'audio' || isOwner || mySeatId !== null;
   const [isMicMuted, setIsMicMuted] = React.useState(false);
+  // Mirrors isMicMuted for the setup effect's unmount cleanup below, which
+  // intentionally only depends on [isAudioRoom] (see its own comment) and
+  // so would otherwise always see the mute state from when the room first
+  // opened, not whatever it actually is by the time the user leaves.
+  const isMicMutedRef = React.useRef(isMicMuted);
+  React.useEffect(() => {
+    isMicMutedRef.current = isMicMuted;
+  }, [isMicMuted]);
+  // Tracks whether the app is currently backgrounded (set by the AppState
+  // effect below) so handleToggleMic knows whether the "still live"
+  // notification is actually on screen and needs its Pause/Unmute label
+  // refreshed — calling showLiveRoomNotification while the app is in the
+  // foreground would otherwise pop the notification up unnecessarily.
+  const isBackgroundedRef = React.useRef(false);
 
   const handleToggleMic = () => {
     setIsMicMuted(current => {
@@ -424,6 +440,9 @@ export function RoomScreen() {
         setSeatRows(rows =>
           rows.map(row => row.map(seat => (seat.id === mySeatId ? { ...seat, muted: next } : seat)))
         );
+      }
+      if (isAudioRoom && roomId && isBackgroundedRef.current) {
+        showLiveRoomNotification({ roomId, roomName, mode, seatGroups, micMuted: next }).catch(() => {});
       }
       return next;
     });
@@ -529,20 +548,6 @@ export function RoomScreen() {
     endAudioRoomRecord(session.token).catch(() => {});
   }, [isAudioRoom, roomId, session?.token]);
 
-  // Leaving the room screen (back gesture or the header close button) no
-  // longer ends the room — it keeps running on the backend, and a
-  // persistent notification lets the owner tap back in. Only the explicit
-  // "End Room" long-press (below) actually ends it. Leaving the Socket.IO
-  // room here is enough — the server auto-releases the room (IDLE, ID
-  // retained) once the last participant's socket leaves, see server.js.
-  const backgroundLiveRoom = React.useCallback(() => {
-    if (!isAudioRoom || roomEndedRef.current || !roomId) {
-      return;
-    }
-    leaveAudioRoom(roomId);
-    showLiveRoomNotification({ roomId, roomName, mode, seatGroups }).catch(() => {});
-  }, [isAudioRoom, roomId, roomName, mode, seatGroups]);
-
   // Tapping the close button always asks first — "Yes" ends the room for
   // everyone, "No" just dismisses the popup and stays in the room. Video
   // mode has no room to end, so it closes immediately without asking.
@@ -551,7 +556,7 @@ export function RoomScreen() {
       navigation.goBack();
       return;
     }
-    Alert.alert('End Room', 'Do you want to end this room?', [
+    showAlert('End Room', 'Do you want to end this room?', [
       { text: 'No', style: 'cancel' },
       {
         text: 'Yes',
@@ -615,9 +620,17 @@ export function RoomScreen() {
         return;
       }
       joinAudioRoom(activeRoomId, result => {
-        if (!cancelled && result && result.success === false) {
-          handleRoomEndedExternally();
+        if (cancelled || !result || result.success !== false) {
+          return;
         }
+        // ROOM_OWNER_ONLY means the room is still live, just temporarily
+        // owner-only — not gone. Everything else (blocked/terminated/
+        // deleted/not-found) means the room is no longer available.
+        if (result.error?.code === 'ROOM_OWNER_ONLY') {
+          setJoiningDisabled(true);
+          return;
+        }
+        handleRoomEndedExternally();
       });
     };
 
@@ -640,10 +653,29 @@ export function RoomScreen() {
             setRoomId(result.roomId);
           }
         }
-      } catch {
-        // Best-effort — still attempt to join with whatever ID we already
-        // have (e.g. returning to a backgrounded room) even if this call
-        // failed.
+      } catch (startError) {
+        // A blocked/terminated room means there's nothing to join at all —
+        // surface it and back out instead of silently leaving the screen
+        // stuck with no seats and no explanation. Anything else (network
+        // blip, etc.) stays best-effort: still attempt to join with
+        // whatever ID we already have (e.g. returning to a backgrounded
+        // room) even though this call failed.
+        if (
+          startError instanceof AudioRoomError &&
+          (startError.code === 'ROOM_BLOCKED' || startError.code === 'ROOM_TERMINATED')
+        ) {
+          if (!cancelled) {
+            roomEndedRef.current = true;
+            showAlert(
+              startError.code === 'ROOM_BLOCKED' ? 'Room Blocked' : 'Room Terminated',
+              startError.details?.reason
+                ? `${startError.message}\nReason: ${startError.details.reason}`
+                : startError.message,
+              [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+          }
+          return;
+        }
       }
 
       if (!cancelled) {
@@ -655,11 +687,17 @@ export function RoomScreen() {
 
     const socket = getSessionSocket();
     const handleJoiningDisabled = () => setJoiningDisabled(true);
+    // Owner-only mode lifting (manually or its timer expiring) is the only
+    // one of these that matters while still inside a live room — blocked/
+    // terminated/deleted rooms are already handled by
+    // handleRoomEndedExternally kicking the viewer out entirely.
+    const handleJoiningEnabled = () => setJoiningDisabled(false);
     const handleBlocked = handleRoomEndedExternally;
     const handleTerminated = handleRoomEndedExternally;
     const handleDeleted = handleRoomEndedExternally;
 
     socket?.on('audio-room:joining-disabled', handleJoiningDisabled);
+    socket?.on('audio-room:joining-enabled', handleJoiningEnabled);
     socket?.on('audio-room:blocked', handleBlocked);
     socket?.on('audio-room:terminated', handleTerminated);
     socket?.on('audio-room:deleted', handleDeleted);
@@ -670,10 +708,27 @@ export function RoomScreen() {
         clearTimeout(retryTimer);
       }
       socket?.off('audio-room:joining-disabled', handleJoiningDisabled);
+      socket?.off('audio-room:joining-enabled', handleJoiningEnabled);
       socket?.off('audio-room:blocked', handleBlocked);
       socket?.off('audio-room:terminated', handleTerminated);
       socket?.off('audio-room:deleted', handleDeleted);
-      backgroundLiveRoom();
+      // Use activeRoomId (kept current within this effect run), not the
+      // backgroundLiveRoom callback — that callback is recreated whenever
+      // the `roomId` state changes, but this effect only reruns on
+      // isAudioRoom, so the version captured in this closure would still
+      // have the null roomId from before startAudioRoom() resolved, and the
+      // "still live" notification would silently never show.
+      if (!roomEndedRef.current && activeRoomId) {
+        leaveAudioRoom(activeRoomId);
+        isBackgroundedRef.current = true;
+        showLiveRoomNotification({
+          roomId: activeRoomId,
+          roomName,
+          mode,
+          seatGroups,
+          micMuted: isMicMutedRef.current
+        }).catch(() => {});
+      }
     };
     // Only run once per room visit — roomName/session are stable for the
     // screen's lifetime, and re-running this on every viewerCount change
@@ -699,9 +754,65 @@ export function RoomScreen() {
     }).catch(() => {});
   }, [viewerCount, isAudioRoom, roomId, roomName, session?.token]);
 
+  // Backgrounding the whole app (home button) does NOT unmount this screen
+  // — React Navigation only unmounts on an actual back/navigate-away, which
+  // is the only place the "still live" notification used to fire. So
+  // putting the app in the background while still on this screen showed no
+  // notification at all, and once the OS eventually suspended the socket
+  // connection the backend's own auto-release (server.js) would quietly
+  // end the room with no warning shown here. This mirrors that same
+  // notification for the background/inactive transition too, without
+  // touching the socket — leaveAudioRoom() is intentionally NOT called
+  // here, since simply backgrounding the app should keep the room (and this
+  // device's participation in it) alive for as long as the OS allows.
+  React.useEffect(() => {
+    if (!isAudioRoom || !roomId) {
+      return undefined;
+    }
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (roomEndedRef.current) {
+        return;
+      }
+      if (nextState === 'active') {
+        isBackgroundedRef.current = false;
+        dismissLiveRoomNotification().catch(() => {});
+      } else {
+        isBackgroundedRef.current = true;
+        showLiveRoomNotification({ roomId, roomName, mode, seatGroups, micMuted: isMicMutedRef.current }).catch(() => {});
+      }
+    });
+    return () => subscription.remove();
+  }, [isAudioRoom, roomId, roomName, mode, seatGroups]);
+
+  // Always call the latest handleToggleMic/endAudioRoom — they close over
+  // per-render values (mySeatId, etc.), but the registration effect below
+  // only re-runs on [isAudioRoom, roomId], so calling them directly from
+  // that effect would freeze whatever closure existed when it first ran.
+  const handleToggleMicRef = React.useRef(handleToggleMic);
+  handleToggleMicRef.current = handleToggleMic;
+  const endAudioRoomRef = React.useRef(endAudioRoom);
+  endAudioRoomRef.current = endAudioRoom;
+
+  // Wires the notification's "Pause"/"Unmute" and "End" action buttons to
+  // this screen's real mic/end logic while it's mounted (app process
+  // alive, room just backgrounded) — see registerLiveRoomActionHandler in
+  // src/utils/liveRoomNotifications.js for the fully-killed-app fallback.
+  React.useEffect(() => {
+    if (!isAudioRoom || !roomId) {
+      return undefined;
+    }
+    return registerLiveRoomActionHandler({
+      onToggleMic: () => handleToggleMicRef.current(),
+      onEndRoom: () => {
+        endAudioRoomRef.current();
+        navigation.goBack();
+      }
+    });
+  }, [isAudioRoom, roomId, navigation]);
+
   React.useEffect(() => {
     if (isRoomBlocked) {
-      Alert.alert('Room unavailable', 'This room was blocked, ended, or removed by an administrator.', [
+      showAlert('Room unavailable', 'This room was blocked, ended, or removed by an administrator.', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     }

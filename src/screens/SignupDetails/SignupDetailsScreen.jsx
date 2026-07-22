@@ -5,9 +5,17 @@ import { EyeIcon } from '../../assets';
 import { registerUser, RegisterUserError } from '../../api';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
-import { FormField, PrimaryButton, Screen, TermsCheckbox } from '../../components';
+import { FormField, PrimaryButton, Screen, showAlert, TermsCheckbox } from '../../components';
 import { routes } from '../../navigation';
-import { getCachedLocation, getCurrentLocation, getDeviceCountryName, reverseGeocodeCountry, scaleFont, scaleModerate } from '../../utils';
+import {
+  getCachedLocation,
+  getCurrentLocation,
+  getDeviceCountryName,
+  openLocationSettings,
+  reverseGeocodeCountry,
+  scaleFont,
+  scaleModerate
+} from '../../utils';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[0-9]{7,15}$/;
 const MIN_PASSWORD_LENGTH = 8;
@@ -78,7 +86,12 @@ export function SignupDetailsScreen() {
         }]
       });
     } catch (signupError) {
-      if (signupError instanceof RegisterUserError) {
+      if (signupError instanceof RegisterUserError && signupError.code === 'LOCATION_UNAVAILABLE') {
+        showAlert('Turn On Location', 'Please turn on location services to create your account, then try again.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => openLocationSettings() }
+        ]);
+      } else if (signupError instanceof RegisterUserError) {
         setFieldErrors(signupError.fields ?? {});
         setError(signupError.message);
       } else {

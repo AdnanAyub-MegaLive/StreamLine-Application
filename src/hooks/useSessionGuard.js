@@ -116,6 +116,15 @@ export function useSessionGuard() {
         specialIdExpiresAt: null
       });
     };
+    // Timed assignments expire on the backend's own schedule (not tied to
+    // this app polling anything) — same reset as a manual revoke.
+    const handleSpecialIdExpired = data => {
+      updateSessionUser({
+        displayId: data.normalId,
+        specialId: null,
+        specialIdExpiresAt: null
+      });
+    };
     // Fires even when the room screen isn't open (backgrounded room) — see
     // src/services/socket.js for why this still reaches us. Clears the
     // "still live" notification and the local seat cache so re-opening the
@@ -142,6 +151,7 @@ export function useSessionGuard() {
       onForceLogout: handleForceLogout,
       onSpecialIdAssigned: handleSpecialIdAssigned,
       onSpecialIdRevoked: handleSpecialIdRevoked,
+      onSpecialIdExpired: handleSpecialIdExpired,
       onAudioRoomEnded: handleAudioRoomEnded,
       // Room went IDLE (auto-released when it emptied, or ended elsewhere)
       // — same cleanup as a moderation event; the room ID itself is

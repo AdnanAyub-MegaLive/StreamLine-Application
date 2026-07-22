@@ -32,7 +32,17 @@ export async function requestLocationPermission() {
   }
   return checkLocationPermission();
 }
+// On Android this opens the system-wide "Location" toggle page directly
+// (not the app's own info page) — that's what actually needs changing when
+// device location services are off, not an app-level permission. iOS has no
+// public API to deep-link into Settings > Privacy > Location Services, so
+// Linking.openSettings() (this app's own settings page, which still shows
+// its Location permission row) is the closest available option there.
 export function openLocationSettings() {
+  if (Platform.OS === 'android') {
+    Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS').catch(() => Linking.openSettings());
+    return;
+  }
   Linking.openSettings();
 }
 export function getCurrentLocation() {

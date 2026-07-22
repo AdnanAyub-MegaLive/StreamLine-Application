@@ -3,10 +3,12 @@ import { apiClient } from './client';
 
 export class AudioRoomError extends Error {
   code;
-  constructor(message, code) {
+  details;
+  constructor(message, code, details) {
     super(message);
     this.name = 'AudioRoomError';
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -22,8 +24,11 @@ async function audioRoomAction(sessionToken, body) {
     return response.data.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.data?.error) {
-      const { code, message } = error.response.data.error;
-      throw new AudioRoomError(message, code);
+      // ROOM_BLOCKED / ROOM_TERMINATED now carry a `details.reason` and/or
+      // `details.expiresAt` — see docs/mobile-audio-room-api.md's timed
+      // moderation section.
+      const { code, message, details } = error.response.data.error;
+      throw new AudioRoomError(message, code, details);
     }
     throw new AudioRoomError('Unable to reach the server. Check your network and the backend address.', 'NETWORK_ERROR');
   }
@@ -59,5 +64,21 @@ export async function fetchAudioRoom(sessionToken) {
     return response.data.data.room;
   } catch {
     return null;
+  }
+}
+
+// GET /api/audio-rooms/discover — up to 50 other users' currently-LIVE
+// rooms (blocked/joining-disabled/deleted-owner rooms and the caller's own
+// room are excluded server-side already), for the Home > Party tab's
+// "Trending Parties" list. Returns [] on any failure so a network blip or
+// an invalid session just shows the existing empty state, not an error.
+export async function fetchDiscoverRooms(sessionToken) {
+  try {
+    const response = await apiClient.get('/api/audio-rooms/discover', {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+    return response.data.data.rooms ?? [];
+  } catch {
+    return [];
   }
 }

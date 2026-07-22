@@ -7,3 +7,4 @@ export * from './VideoBackground';
 export * from './PermissionsGate';
 export * from './StreamOptionModal';
 export * from './SeatLayoutModal';
+export * from './ThemedAlert';

@@ -5,7 +5,7 @@ import { StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme';
 import { AppNavigator, consumePendingRoomNavigation, navigateToRoom, navigationRef } from './src/navigation';
-import { PermissionsGate, VideoBackground } from './src/components';
+import { PermissionsGate, ThemedAlertHost, VideoBackground } from './src/components';
 import { useSessionGuard } from './src/hooks';
 import { registerLiveRoomNotificationTapHandler } from './src/utils';
 const queryClient = new QueryClient();
@@ -37,6 +37,7 @@ function AppContent() {
           <AppNavigator />
           <SessionGuard />
         </NavigationContainer>
+        <ThemedAlertHost />
       </View>
     </PermissionsGate>;
 }

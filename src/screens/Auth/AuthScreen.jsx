@@ -1,13 +1,13 @@
 import React from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { EyeIcon, FacebookIcon, GoogleIcon } from '../../assets';
 import { loginWithPassword, LoginUserError } from '../../api';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
-import { BrandMark, FormField, PrimaryButton, Screen, TermsCheckbox } from '../../components';
+import { BrandMark, FormField, PrimaryButton, Screen, showAlert, TermsCheckbox } from '../../components';
 import { routes } from '../../navigation';
-import { scaleFont, scaleModerate } from '../../utils';
+import { openLocationSettings, scaleFont, scaleModerate } from '../../utils';
 function createDummySocialSession(provider) {
   return {
     token: `${provider}-${Date.now()}`,
@@ -146,13 +146,13 @@ export function AuthScreen() {
       });
     } catch (loginError) {
       if (loginError instanceof LoginUserError && loginError.code === 'LOCATION_UNAVAILABLE') {
-        Alert.alert('Turn On Location', 'Please turn on location services to log in, then try again.', [
+        showAlert('Turn On Location', 'Please turn on location services to log in, then try again.', [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => Linking.openSettings() }
+          { text: 'Open Settings', onPress: () => openLocationSettings() }
         ]);
       } else if (loginError instanceof LoginUserError && loginError.code === 'DEVICE_BANNED') {
         const reason = loginError.details?.reason;
-        Alert.alert(
+        showAlert(
           'Device Banned',
           reason ? `This device has been banned.\nReason: ${reason}` : 'This device has been banned.'
         );

@@ -1,9 +1,31 @@
 import React from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { fetchDiscoverRooms } from '../../../api';
+import { useAppStore } from '../../../store';
 import { useTheme } from '../../../theme';
 import { routes } from '../../../navigation/routes';
 import { scaleFont, scaleModerate } from '../../../utils';
+
+// Cycled by card index — the backend doesn't return a color, this is purely
+// a local visual accent so cards aren't all one flat color.
+const ACCENT_KEYS = ['teal700', 'giftAccent', 'vipPurple', 'facebookBlue'];
+function accentForIndex(index) {
+  return theme => theme.colors[ACCENT_KEYS[index % ACCENT_KEYS.length]];
+}
+
+// See StreamLine-Portal/docs/mobile-audio-room-api.md's "Discover live
+// rooms" section — maps the backend's room shape onto what PartyCard
+// expects.
+function toPartyItem(room, index) {
+  return {
+    id: room.roomId,
+    title: room.title,
+    members: room.participantCount,
+    hostName: room.owner?.name ?? 'Unknown host',
+    accent: accentForIndex(index)
+  };
+}
 
 const bannerSlides = [{
   id: 'b1',
@@ -21,10 +43,6 @@ const bannerSlides = [{
   title: 'Double Gift Points',
   subtitle: 'Send gifts today to earn double reward points.'
 }];
-
-// No public "browse all parties" API exists on the backend yet — stays
-// empty until that listing endpoint exists, instead of showing fake rooms.
-const trendingParties = [];
 
 function PartyBanner() {
   const theme = useTheme();
@@ -106,7 +124,9 @@ function PartyCard({
     backgroundColor: theme.surfaces.card,
     borderColor: theme.colors.cardBorder
   }]} onPress={() => navigation.navigate(routes.room, {
-    roomId: item.id
+    roomId: item.id,
+    roomName: item.title,
+    mode: 'audio'
   })}>
       <View style={[styles.partyThumb, {
       backgroundColor: accent
@@ -139,6 +159,26 @@ function PartyCard({
 
 export function PartyTabContent() {
   const theme = useTheme();
+  const sessionToken = useAppStore(store => store.session?.token);
+  const [trendingParties, setTrendingParties] = React.useState([]);
+
+  const loadTrending = React.useCallback(async () => {
+    if (!sessionToken) {
+      return;
+    }
+    const rooms = await fetchDiscoverRooms(sessionToken);
+    setTrendingParties(rooms.map(toPartyItem));
+  }, [sessionToken]);
+
+  // Refetch every time the Party tab is focused (not just on first mount),
+  // so a room started by someone else since the last visit shows up without
+  // needing a full app restart.
+  useFocusEffect(
+    React.useCallback(() => {
+      loadTrending();
+    }, [loadTrending])
+  );
+
   return <ScrollView contentContainerStyle={styles.partyList} showsVerticalScrollIndicator={false}>
       <PartyBanner />
 
@@ -146,7 +186,7 @@ export function PartyTabContent() {
         <Text style={[styles.sectionLabel, {
         color: theme.text.primary
       }]}>Trending Parties</Text>
-        <Pressable>
+        <Pressable onPress={loadTrending}>
           <Text style={[styles.sectionSeeAll, {
           color: theme.colors.teal700
         }]}>See All ›</Text>

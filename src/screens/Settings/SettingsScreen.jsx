@@ -1,8 +1,8 @@
 import React from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme';
-import { Screen } from '../../components';
+import { Screen, showAlert } from '../../components';
 import { useAppStore } from '../../store';
 import { routes } from '../../navigation/routes';
 import { scaleFont, scaleModerate } from '../../utils';
@@ -46,7 +46,7 @@ export function SettingsScreen() {
   const [soundsEnabled, setSoundsEnabled] = React.useState(true);
   const user = session?.user;
   const handleLogout = () => {
-    Alert.alert('Log out', 'Are you sure you want to log out?', [{
+    showAlert('Log out', 'Are you sure you want to log out?', [{
       text: 'Cancel',
       style: 'cancel'
     }, {

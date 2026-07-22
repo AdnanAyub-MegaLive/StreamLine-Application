@@ -1,11 +1,11 @@
 import React from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { FemaleIcon, MaleIcon } from '../../assets';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
-import { Screen } from '../../components';
+import { Screen, showAlert } from '../../components';
 import { routes } from '../../navigation';
 import { scaleFont, scaleModerate } from '../../utils';
 const avatars = [{
@@ -159,7 +159,7 @@ export function OnboardingScreen() {
     }
     const pickedUri = response.assets?.[0]?.uri;
     if (!pickedUri) {
-      Alert.alert('Photo not selected', 'Please choose a photo from your device.');
+      showAlert('Photo not selected', 'Please choose a photo from your device.');
       return;
     }
     setDeviceAvatarUri(pickedUri);

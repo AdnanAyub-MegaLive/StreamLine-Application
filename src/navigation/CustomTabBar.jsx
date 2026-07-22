@@ -2,7 +2,9 @@ import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { DiscoverIcon, FamilyIcon, HomeIcon, MessageIcon, PlusIcon, UserIcon } from '../assets';
-import { SeatLayoutModal, StreamOptionModal } from '../components';
+import { fetchAudioRoom } from '../api';
+import { SEAT_LAYOUT_OPTIONS, SeatLayoutModal, StreamOptionModal } from '../components';
+import { useAppStore } from '../store';
 import { useTheme } from '../theme';
 import { scaleModerate } from '../utils';
 import { routes } from './routes';
@@ -41,14 +43,49 @@ export function CustomTabBar({
   navigation
 }) {
   const theme = useTheme();
+  const sessionToken = useAppStore(store => store.session?.token);
   const [barWidth, setBarWidth] = React.useState(0);
   const [streamOptionsVisible, setStreamOptionsVisible] = React.useState(false);
   const [seatLayoutVisible, setSeatLayoutVisible] = React.useState(false);
+  const [isCheckingRoom, setIsCheckingRoom] = React.useState(false);
   const handleLayout = event => {
     setBarWidth(event.nativeEvent.layout.width);
   };
   const closeStreamOptions = () => setStreamOptionsVisible(false);
   const closeSeatLayout = () => setSeatLayoutVisible(false);
+  // Each user only ever owns one persistent, backend-assigned room — see
+  // StreamLine-Portal/docs/mobile-audio-room-api.md and the AudioRoom
+  // model's @@unique([ownerId]). If it's already LIVE (started from this
+  // device or another one, then backgrounded), tapping "+" must resume that
+  // exact room instead of walking through the create flow again, which
+  // would otherwise restart the same room with a brand-new seat layout and
+  // silently drop whoever's already in it.
+  const handleCenterPress = async () => {
+    if (isCheckingRoom) {
+      return;
+    }
+    if (!sessionToken) {
+      setStreamOptionsVisible(true);
+      return;
+    }
+    setIsCheckingRoom(true);
+    const existingRoom = await fetchAudioRoom(sessionToken);
+    setIsCheckingRoom(false);
+    if (existingRoom?.status === 'LIVE') {
+      // Only audio rooms are ever persisted backend-side today (video mode
+      // doesn't call the audio-room API yet). No seatGroups are sent here —
+      // RoomScreen resumes the real layout from its local seat cache when
+      // present, falling back to the smallest layout only if that cache
+      // was cleared (e.g. the app was killed and relaunched).
+      navigation.navigate(routes.room, {
+        roomId: existingRoom.roomId,
+        mode: 'audio',
+        seatGroups: SEAT_LAYOUT_OPTIONS[0].groups
+      });
+      return;
+    }
+    setStreamOptionsVisible(true);
+  };
   const handleSelectAudio = () => {
     closeStreamOptions();
     setSeatLayoutVisible(true);
@@ -90,7 +127,7 @@ export function CustomTabBar({
             }
           };
           if (isCenter) {
-            return <Pressable key={route.key} onPress={() => setStreamOptionsVisible(true)} style={styles.item}>
+            return <Pressable key={route.key} onPress={handleCenterPress} style={styles.item}>
                   <View style={[styles.centerButton, {
                 backgroundColor: theme.colors.teal700
               }]}>
