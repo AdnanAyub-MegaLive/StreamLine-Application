@@ -1,3 +1,4 @@
+export * from './Avatar';
 export * from './Screen';
 export * from './BrandMark';
 export * from './PrimaryButton';
