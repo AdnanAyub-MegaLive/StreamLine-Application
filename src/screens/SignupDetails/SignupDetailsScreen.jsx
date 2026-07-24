@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { EyeIcon } from '../../assets';
 import { registerUser, RegisterUserError } from '../../api';
 import { useAppStore } from '../../store';
@@ -19,6 +20,18 @@ import {
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[0-9]{7,15}$/;
 const MIN_PASSWORD_LENGTH = 8;
+const DEFAULT_DOB_AGE_YEARS = 18;
+function formatDobIso(date) {
+  return date.toISOString().slice(0, 10);
+}
+function formatDobDisplay(date) {
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+}
+function defaultDobDate() {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - DEFAULT_DOB_AGE_YEARS);
+  return date;
+}
 export function SignupDetailsScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -51,6 +64,12 @@ export function SignupDetailsScreen() {
     };
     applyGpsCountry();
   }, []);
+  // Optional — a user who skips it gets DEFAULT_DOB_AGE_YEARS at submit time
+  // (see handleCreateAccount). Like gender, date of birth can only be set
+  // once (EditProfile locks it after this), so this is worth getting right
+  // even though it isn't required.
+  const [dob, setDob] = React.useState(null);
+  const [isDobPickerVisible, setIsDobPickerVisible] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
   const [termsAccepted, setTermsAccepted] = React.useState(true);
@@ -76,7 +95,8 @@ export function SignupDetailsScreen() {
         phone: signup.phone,
         password: signup.password,
         email: trimmedEmail.length > 0 ? trimmedEmail : undefined,
-        country: signup.country.trim().length > 0 ? signup.country.trim() : undefined
+        country: signup.country.trim().length > 0 ? signup.country.trim() : undefined,
+        dob: formatDobIso(dob ?? defaultDobDate())
       });
       setSession(session);
       navigation.reset({
@@ -144,6 +164,36 @@ export function SignupDetailsScreen() {
           }));
         }} icon="user" />
 
+          <View style={styles.fieldWrap}>
+            <Text style={[styles.dobLabel, { color: theme.text.secondary }]}>Date of Birth (optional)</Text>
+            <Pressable
+              onPress={() => setIsDobPickerVisible(true)}
+              style={[styles.dobField, { backgroundColor: theme.surfaces.card, borderColor: theme.colors.cardBorder }]}
+            >
+              <Text style={[styles.dobFieldText, { color: dob ? theme.text.primary : theme.text.mutedIcon }]}>
+                {dob ? formatDobDisplay(dob) : `Not set — defaults to age ${DEFAULT_DOB_AGE_YEARS}`}
+              </Text>
+            </Pressable>
+            <Text style={[styles.dobHint, { color: theme.text.mutedIcon }]}>
+              Can only be set once — you won't be able to change it later.
+            </Text>
+            {fieldErrors.dob ? <Text style={[styles.fieldErrorText, { color: theme.colors.giftAccent }]}>{fieldErrors.dob}</Text> : null}
+          </View>
+          {isDobPickerVisible ? (
+            <DateTimePicker
+              value={dob ?? defaultDobDate()}
+              mode="date"
+              display="default"
+              maximumDate={new Date()}
+              onChange={(event, selectedDate) => {
+                setIsDobPickerVisible(false);
+                if (event.type === 'set' && selectedDate) {
+                  setDob(selectedDate);
+                }
+              }}
+            />
+          ) : null}
+
           <FormField label="Set a Password" placeholder="Password" value={signup.password} onChangeText={text => setSignup(current => ({
           ...current,
           password: text
@@ -176,6 +226,30 @@ export function SignupDetailsScreen() {
     </Screen>;
 }
 const styles = StyleSheet.create({
+  fieldWrap: {
+    marginBottom: scaleModerate(14)
+  },
+  dobLabel: {
+    marginBottom: scaleModerate(6),
+    paddingLeft: scaleModerate(4),
+    fontSize: scaleFont(12),
+    fontWeight: '700'
+  },
+  dobField: {
+    minHeight: scaleModerate(48),
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: scaleModerate(16),
+    justifyContent: 'center'
+  },
+  dobFieldText: {
+    fontSize: scaleFont(15)
+  },
+  dobHint: {
+    marginTop: scaleModerate(6),
+    paddingLeft: scaleModerate(4),
+    fontSize: scaleFont(10.5)
+  },
   container: {
     flexGrow: 1,
     paddingHorizontal: scaleModerate(20),
