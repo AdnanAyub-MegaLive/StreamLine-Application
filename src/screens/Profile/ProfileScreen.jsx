@@ -1,9 +1,10 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SettingsIcon } from '../../assets';
 import { useTheme } from '../../theme';
-import { Screen } from '../../components';
+import { Avatar, Screen } from '../../components';
+import { useAssignedRoomBackground } from '../../hooks';
 import { useAppStore } from '../../store';
 import { isNewUser, scaleFont, scaleModerate } from '../../utils';
 import { routes } from '../../navigation/routes';
@@ -12,7 +13,21 @@ export function ProfileScreen() {
   const navigation = useNavigation();
   const session = useAppStore(state => state.session);
   const showNewBadge = isNewUser(session?.user.createdAt);
-  return <Screen>
+  // Same perk-based background used in the Room screen (see
+  // useAssignedRoomBackground) — just showing it here for now, ahead of a
+  // full profile redesign. Falls back to the screen's normal plain
+  // background when nothing's assigned.
+  const { source: assignedBackgroundSource } = useAssignedRoomBackground();
+  const [backgroundFailed, setBackgroundFailed] = React.useState(false);
+  // Reset whenever the source itself changes — otherwise a stale failure
+  // from a previous asset would keep this screen falling back forever even
+  // after a working background comes through.
+  React.useEffect(() => {
+    setBackgroundFailed(false);
+  }, [assignedBackgroundSource]);
+  const showCustomBackground = Boolean(assignedBackgroundSource) && !backgroundFailed;
+
+  const content = <>
       <View style={styles.header}>
         <View style={styles.headerSpacer} />
         <Pressable onPress={() => navigation.navigate(routes.settings)} hitSlop={10}>
@@ -21,14 +36,7 @@ export function ProfileScreen() {
       </View>
 
       <View style={styles.container}>
-        <View style={[styles.avatar, {
-        backgroundColor: theme.state.soft,
-        borderColor: theme.colors.cardBorder
-      }]}>
-          <Text style={[styles.avatarText, {
-          color: theme.colors.teal700
-        }]}>{(session?.user.fullName || 'S').slice(0, 1).toUpperCase()}</Text>
-        </View>
+        <Avatar value={session?.user.profileImage} fullName={session?.user.fullName} size={scaleModerate(84)} style={styles.avatar} />
 
         <View style={styles.nameRow}>
           <Text style={[styles.title, {
@@ -49,9 +57,27 @@ export function ProfileScreen() {
         color: theme.text.mutedIcon
       }]}>ID: {session?.user.displayId || session?.user.publicId}</Text> : null}
       </View>
-    </Screen>;
+    </>;
+
+  if (showCustomBackground) {
+    return (
+      <ImageBackground
+        source={assignedBackgroundSource}
+        resizeMode="cover"
+        style={[styles.backgroundImage, { backgroundColor: theme.surfaces.page }]}
+        onError={() => setBackgroundFailed(true)}
+      >
+        <Screen transparent>{content}</Screen>
+      </ImageBackground>
+    );
+  }
+
+  return <Screen>{content}</Screen>;
 }
 const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -69,17 +95,7 @@ const styles = StyleSheet.create({
     padding: scaleModerate(24)
   },
   avatar: {
-    width: scaleModerate(84),
-    height: scaleModerate(84),
-    borderRadius: scaleModerate(42),
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: scaleModerate(16)
-  },
-  avatarText: {
-    fontSize: scaleFont(32),
-    fontWeight: '800'
   },
   nameRow: {
     flexDirection: 'row',
