@@ -77,7 +77,23 @@ export const theme = {
         accent: colors.vipPurple,
         background: colors.onboardingAvatarNovaBackground
       },
-      more: {
+      star: {
+        accent: colors.facebookBlue,
+        background: colors.onboardingAvatarMoreBackground
+      },
+      wizard: {
+        accent: colors.teal400,
+        background: colors.onboardingAvatarRangerBackground
+      },
+      ninja: {
+        accent: colors.teal900,
+        background: colors.onboardingAvatarHeroBackground
+      },
+      robot: {
+        accent: colors.teal600,
+        background: colors.onboardingAvatarNovaBackground
+      },
+      explorer: {
         accent: colors.giftAccent,
         background: colors.onboardingAvatarMoreBackground
       }
