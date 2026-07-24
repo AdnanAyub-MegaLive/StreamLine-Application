@@ -1,34 +1,18 @@
 import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { FemaleIcon, MaleIcon } from '../../assets';
+import { updateProfile, UpdateProfileError } from '../../api';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
-import { Screen, showAlert } from '../../components';
+import { AVATAR_PRESETS, getAvatarPresetValue, Screen, showAlert } from '../../components';
 import { routes } from '../../navigation';
 import { scaleFont, scaleModerate } from '../../utils';
-const avatars = [{
-  id: 'a1',
-  label: 'Ranger',
-  emoji: '🕵️',
-  themeKey: 'ranger'
-}, {
-  id: 'a2',
-  label: 'Hero',
-  emoji: '🦸',
-  themeKey: 'hero'
-}, {
-  id: 'a3',
-  label: 'Nova',
-  emoji: '🪐',
-  themeKey: 'nova'
-}, {
-  id: 'a4',
-  label: 'More',
-  emoji: '⋯',
-  themeKey: 'more'
-}];
+
+const VISIBLE_AVATAR_COUNT = 3;
+const visibleAvatars = AVATAR_PRESETS.slice(0, VISIBLE_AVATAR_COUNT);
+const moreAvatars = AVATAR_PRESETS.slice(VISIBLE_AVATAR_COUNT);
 function StepIndicator() {
   const theme = useTheme();
   return <View style={styles.stepWrap}>
@@ -46,11 +30,12 @@ function StepIndicator() {
 function AvatarCard({
   item,
   selected,
-  onPress
+  onPress,
+  style
 }) {
   const theme = useTheme();
-  const avatarTheme = theme.onboarding.avatarStyles[item.themeKey];
-  return <Pressable onPress={onPress} style={[styles.avatarCard, {
+  const avatarTheme = theme.onboarding.avatarStyles[item.id];
+  return <Pressable onPress={onPress} style={[styles.avatarCard, style, {
     backgroundColor: theme.surfaces.card,
     borderColor: selected ? avatarTheme.accent : theme.colors.cardBorder,
     shadowColor: theme.colors.teal900
@@ -68,6 +53,63 @@ function AvatarCard({
       color: avatarTheme.accent
     }]}>Selected</Text> : null}
     </Pressable>;
+}
+// The 4th tile in the row — doubles as the DP preview slot for whichever
+// "more" avatar is currently selected (if any), or a generic "More" prompt
+// otherwise. Tapping it always opens the full picker so the choice can be
+// changed either way.
+function MoreAvatarTile({
+  selectedExtra,
+  onPress
+}) {
+  const theme = useTheme();
+  const item = selectedExtra ?? { label: 'More', emoji: '⋯', id: null };
+  const avatarTheme = item.id ? theme.onboarding.avatarStyles[item.id] : theme.onboarding.avatarStyles.explorer;
+  const selected = Boolean(selectedExtra);
+  return <Pressable onPress={onPress} style={[styles.avatarCard, {
+    backgroundColor: theme.surfaces.card,
+    borderColor: selected ? avatarTheme.accent : theme.colors.cardBorder,
+    shadowColor: theme.colors.teal900
+  }, selected && styles.avatarCardSelected]}>
+      <View style={[styles.avatarCircle, {
+      backgroundColor: selected ? avatarTheme.background : theme.surfaces.page,
+      borderColor: selected ? avatarTheme.accent : theme.colors.cardBorder
+    }]}>
+        <Text style={styles.avatarEmoji}>{item.emoji}</Text>
+      </View>
+      <Text style={[styles.avatarLabel, {
+      color: theme.text.primary
+    }]}>{item.label}</Text>
+      {selected ? <Text style={[styles.avatarSelected, {
+      color: avatarTheme.accent
+    }]}>Selected</Text> : null}
+    </Pressable>;
+}
+function MoreAvatarsModal({
+  visible,
+  selectedAvatar,
+  onSelect,
+  onClose
+}) {
+  const theme = useTheme();
+  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.moreBackdrop} onPress={onClose}>
+        <Pressable style={[styles.moreSheet, {
+        backgroundColor: theme.surfaces.card,
+        borderColor: theme.colors.cardBorder
+      }]} onPress={() => {}}>
+          <Text style={[styles.moreTitle, {
+          color: theme.text.primary
+        }]}>More Avatars</Text>
+          <View style={styles.moreGrid}>
+            {moreAvatars.map(item => <AvatarCard key={item.id} item={item} style={styles.avatarCardModal} selected={selectedAvatar === item.id} onPress={() => {
+            onSelect(item.id);
+            onClose();
+          }} />)}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>;
 }
 function GenderChoice({
   gender,
@@ -143,10 +185,14 @@ function DeviceAvatarPicker({
 export function OnboardingScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
+  const session = useAppStore(state => state.session);
+  const setSession = useAppStore(state => state.setSession);
   const completeOnboarding = useAppStore(state => state.completeOnboarding);
-  const [selectedAvatar, setSelectedAvatar] = React.useState(avatars[1].id);
+  const [selectedAvatar, setSelectedAvatar] = React.useState(AVATAR_PRESETS[1].id);
   const [selectedGender, setSelectedGender] = React.useState('boy');
+  const [isMoreAvatarsVisible, setIsMoreAvatarsVisible] = React.useState(false);
   const [deviceAvatarUri, setDeviceAvatarUri] = React.useState(null);
+  const [isSaving, setIsSaving] = React.useState(false);
   const handleChooseDeviceAvatar = async () => {
     const response = await launchImageLibrary({
       mediaType: 'photo',
@@ -164,7 +210,35 @@ export function OnboardingScreen() {
     }
     setDeviceAvatarUri(pickedUri);
   };
-  const handleNext = () => {
+  // Real device photos aren't persisted yet — no CDN/upload storage exists
+  // on the backend, so a local file URI can't be turned into something
+  // other devices/screens could ever fetch. The picker above stays as a
+  // local-only preview until that lands; only the bundled preset avatar (a
+  // plain string the database can store today) and gender are actually
+  // saved here. Gender is one-time — EditProfile locks it once set, so this
+  // is the only real chance to get it right.
+  const handleNext = async () => {
+    if (isSaving || !session?.token) {
+      completeOnboarding();
+      navigation.reset({ index: 0, routes: [{ name: routes.home }] });
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const updatedUser = await updateProfile(session.token, {
+        profileImage: getAvatarPresetValue(selectedAvatar),
+        gender: selectedGender === 'boy' ? 'male' : 'female'
+      });
+      setSession({ ...session, user: { ...session.user, ...updatedUser } });
+    } catch (updateError) {
+      // Best-effort — onboarding shouldn't block on this. Profile/Edit
+      // Profile still let the user set it again later if this failed.
+      if (!(updateError instanceof UpdateProfileError)) {
+        showAlert('Unable to Save', 'Your avatar and gender could not be saved right now — you can set them again from your profile.');
+      }
+    } finally {
+      setIsSaving(false);
+    }
     completeOnboarding();
     navigation.reset({
       index: 0,
@@ -212,9 +286,20 @@ export function OnboardingScreen() {
           color: theme.text.secondary
         }]}>Choose your avatar</Text>
           <View style={styles.avatarRow}>
-            {avatars.map(item => <AvatarCard key={item.id} item={item} selected={selectedAvatar === item.id} onPress={() => setSelectedAvatar(item.id)} />)}
+            {visibleAvatars.map(item => <AvatarCard key={item.id} item={item} selected={selectedAvatar === item.id} onPress={() => setSelectedAvatar(item.id)} />)}
+            <MoreAvatarTile
+              selectedExtra={moreAvatars.find(item => item.id === selectedAvatar) ?? null}
+              onPress={() => setIsMoreAvatarsVisible(true)}
+            />
           </View>
         </View>
+
+        <MoreAvatarsModal
+          visible={isMoreAvatarsVisible}
+          selectedAvatar={selectedAvatar}
+          onSelect={setSelectedAvatar}
+          onClose={() => setIsMoreAvatarsVisible(false)}
+        />
 
         <View style={styles.genderSection}>
           <Text style={[styles.genderHeading, {
@@ -230,20 +315,46 @@ export function OnboardingScreen() {
           </View>
         </View>
 
-        <Pressable onPress={handleNext} style={({
+        <Pressable onPress={handleNext} disabled={isSaving} style={({
         pressed
       }) => [styles.nextButton, {
         backgroundColor: theme.cta.primary.background,
-        opacity: pressed ? 0.92 : 1
+        opacity: pressed || isSaving ? 0.92 : 1
       }]}>
           <Text style={[styles.nextButtonText, {
           color: theme.cta.primary.text
-        }]}>Next →</Text>
+        }]}>{isSaving ? 'Saving...' : 'Next →'}</Text>
         </Pressable>
       </ScrollView>
     </Screen>;
 }
 const styles = StyleSheet.create({
+  moreBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end'
+  },
+  moreSheet: {
+    borderTopLeftRadius: scaleModerate(28),
+    borderTopRightRadius: scaleModerate(28),
+    borderWidth: 1,
+    paddingHorizontal: scaleModerate(20),
+    paddingTop: scaleModerate(20),
+    paddingBottom: scaleModerate(32)
+  },
+  moreTitle: {
+    fontSize: scaleFont(18),
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: scaleModerate(18)
+  },
+  moreGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    rowGap: scaleModerate(14),
+    columnGap: scaleModerate(12)
+  },
   container: {
     paddingHorizontal: scaleModerate(20),
     paddingTop: scaleModerate(18),
@@ -325,6 +436,7 @@ const styles = StyleSheet.create({
   },
   avatarRow: {
     flexDirection: 'row',
+    flexWrap: 'nowrap',
     justifyContent: 'space-between',
     gap: scaleModerate(10)
   },
@@ -341,6 +453,10 @@ const styles = StyleSheet.create({
       height: 6
     },
     elevation: 2
+  },
+  avatarCardModal: {
+    flex: 0,
+    width: '30%'
   },
   avatarCardSelected: {
     transform: [{
