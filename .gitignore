@@ -127,6 +127,10 @@ ios/build/
 # Watchman config (machine specific, optional to ignore)
 .watchmanconfig
 
+# Local backend-integration spec notes (not meant to be committed — these
+# are working notes for coordinating with the backend team, not project docs)
+docs/
+
 # Package manager lock file conflicts (keep ONE, ignore the rest if using multiple managers)
 # package-lock.json
 # yarn.lock
