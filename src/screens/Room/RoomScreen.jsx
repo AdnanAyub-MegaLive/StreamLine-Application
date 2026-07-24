@@ -3,7 +3,6 @@ import {
   Animated,
   AppState,
   FlatList,
-  Image,
   ImageBackground,
   Modal,
   PanResponder,
@@ -18,13 +17,19 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import Svg, { Path } from 'react-native-svg';
-import MaskedView from '@react-native-masked-view/masked-view';
-import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../theme';
-import { LockIcon, UserIcon, roomBackgroundImage } from '../../assets';
-import { showAlert } from '../../components';
+import { LockIcon, roomBackgroundImage } from '../../assets';
+import { Avatar, showAlert } from '../../components';
 import { AudioRoomError, endAudioRoom as endAudioRoomRecord, startAudioRoom, updateAudioRoom } from '../../api';
-import { getSessionSocket, joinAudioRoom, leaveAudioRoom } from '../../services/socket';
+import { useAssignedRoomBackground } from '../../hooks';
+import {
+  emitSeatUpdate,
+  getSessionSocket,
+  joinAudioRoom,
+  leaveAudioRoom,
+  requestSeat,
+  respondToSeatRequest
+} from '../../services/socket';
 import { useAppStore } from '../../store';
 import {
   clearCachedSeatState,
@@ -153,18 +158,6 @@ function buildSeatRowsFromGroups(seatGroups) {
   );
 }
 
-function AvatarWithFallback({ uri, size, theme, style }) {
-  const [failed, setFailed] = React.useState(false);
-  if (failed) {
-    return (
-      <View style={[style, styles.avatarFallback, { width: size, height: size }]}>
-        <UserIcon size={Math.round(size * 0.5)} color={theme.text.mutedIcon} />
-      </View>
-    );
-  }
-  return <Image source={{ uri }} style={[style, { width: size, height: size }]} onError={() => setFailed(true)} />;
-}
-
 function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmptySeatPress, pressEnabled, draggable, note }) {
   const avatarInnerSize = circleSize - 4;
   const ringSize = circleSize + 4;
@@ -269,7 +262,11 @@ function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmpt
             { width: avatarInnerSize, height: avatarInnerSize, borderRadius: avatarInnerSize / 2, backgroundColor: theme.surfaces.card }
           ]}
         >
-          <AvatarWithFallback uri={`${AVATAR_PLACEHOLDER}?seed=${seat.avatarSeed}`} size={avatarInnerSize} theme={theme} />
+          <Avatar
+            value={seat.avatarUri || `${AVATAR_PLACEHOLDER}?seed=${seat.avatarSeed}`}
+            fullName={seat.name}
+            size={avatarInnerSize}
+          />
         </View>
         <View
           style={[
@@ -397,6 +394,19 @@ export function RoomScreen() {
   // tap or a backgrounded-room resume); a brand-new room has no ID until the
   // START call below responds.
   const [roomId, setRoomId] = React.useState(route.params?.roomId ?? null);
+  // A room background is a perk an admin specifically assigns to a user
+  // (see StreamLine-Portal's mobile upload catalog docs) — there's no
+  // self-service picker for it yet, so this just uses one if the current
+  // account has one, otherwise the bundled default further down keeps
+  // working exactly as before.
+  const { source: assignedRoomBackgroundSource } = useAssignedRoomBackground();
+  const [customBackgroundFailed, setCustomBackgroundFailed] = React.useState(false);
+  // Reset whenever the source itself changes — otherwise a stale failure
+  // from a previous asset would keep this screen on the bundled default
+  // forever even after a working background comes through.
+  React.useEffect(() => {
+    setCustomBackgroundFailed(false);
+  }, [assignedRoomBackgroundSource]);
   const roomName = route.params?.roomName ?? `${ownerName}'s Room`;
   const mode = route.params?.mode ?? 'video';
   const seatGroups = route.params?.seatGroups;
@@ -412,10 +422,19 @@ export function RoomScreen() {
   const [mySeatId, setMySeatId] = React.useState(() => cachedSeatStateRef.current?.mySeatId ?? null);
   const [seatNotes, setSeatNotes] = React.useState(() => cachedSeatStateRef.current?.seatNotes ?? {});
   const [noteModal, setNoteModal] = React.useState({ visible: false, seatId: null, value: '' });
-  // The room creator (the person who opened this screen) always keeps mic
-  // access via their fixed header spot. Anyone else only gets the bottom-bar
-  // mic control once they've actually taken a seat.
-  const isOwner = true;
+  // Trending Parties navigates here with asViewer:true for someone else's
+  // room (no seatGroups — the layout is unknown until the owner's first
+  // seat-state broadcast arrives). Every other entry point (starting fresh,
+  // resuming your own room, the notification tap) is always the owner.
+  const isViewerEntry = Boolean(route.params?.asViewer);
+  // Optimistic default so the UI doesn't flash the wrong mode before the
+  // audio-room:join acknowledgement below confirms it server-side (see
+  // StreamLine-Portal/docs/mobile-audio-room-api.md — the ack now always
+  // carries the verified isOwner flag).
+  const [isOwner, setIsOwner] = React.useState(!isViewerEntry);
+  // The room creator always keeps mic access via their fixed header spot.
+  // Anyone else only gets the bottom-bar mic control once they've actually
+  // taken a seat.
   const hasMicAccess = mode !== 'audio' || isOwner || mySeatId !== null;
   const [isMicMuted, setIsMicMuted] = React.useState(false);
   // Mirrors isMicMuted for the setup effect's unmount cleanup below, which
@@ -432,6 +451,21 @@ export function RoomScreen() {
   // refreshed — calling showLiveRoomNotification while the app is in the
   // foreground would otherwise pop the notification up unnecessarily.
   const isBackgroundedRef = React.useRef(false);
+  // Mirror refs so the socket-listener effect below (registered once per
+  // room visit, deps=[isAudioRoom]) can always read the current value
+  // instead of whatever was current when it first ran.
+  const isOwnerRef = React.useRef(isOwner);
+  React.useEffect(() => {
+    isOwnerRef.current = isOwner;
+  }, [isOwner]);
+  const seatRowsRef = React.useRef(seatRows);
+  React.useEffect(() => {
+    seatRowsRef.current = seatRows;
+  }, [seatRows]);
+  const seatNotesRef = React.useRef(seatNotes);
+  React.useEffect(() => {
+    seatNotesRef.current = seatNotes;
+  }, [seatNotes]);
 
   const handleToggleMic = () => {
     setIsMicMuted(current => {
@@ -448,20 +482,35 @@ export function RoomScreen() {
     });
   };
 
-  const handleTakeSeat = seatId => {
-    if (mySeatId) {
-      return;
-    }
+  // Applies a seat assignment to local state — used once the owner (this
+  // device, on request-acceptance) or a viewer (on receiving an accepted
+  // audio-room:seat-response) actually has permission to occupy the seat.
+  const applySeatAssignment = (seatId, { name, avatarSeed, avatarUri, muted }) => {
     setSeatRows(current =>
-      current.map(row =>
-        row.map(seat =>
-          seat.id === seatId
-            ? { ...seat, occupied: true, name: ownerName, avatarSeed: ownerAvatarSeed, muted: isMicMuted }
-            : seat
-        )
+      (current ?? []).map(row =>
+        row.map(seat => (seat.id === seatId ? { ...seat, occupied: true, name, avatarSeed, avatarUri, muted } : seat))
       )
     );
-    setMySeatId(seatId);
+  };
+
+  // The room owner's device is the sole source of truth for seat state (see
+  // StreamLine-Portal/docs/mobile-audio-room-api.md's seat-request/
+  // seat-response relay) — a viewer can't just take a seat locally. This
+  // only sends the request; the seat is actually applied once
+  // audio-room:seat-response arrives with accepted:true (handled in the
+  // setup effect below).
+  const handleTakeSeat = seatId => {
+    if (mySeatId || !roomId) {
+      return;
+    }
+    requestSeat(roomId, seatId, seatNotes[seatId] ?? null, result => {
+      if (result && result.success === false) {
+        showAlert(
+          'Unable to Take Seat',
+          result.error?.code === 'ROOM_UNAVAILABLE' ? 'This room is no longer available.' : 'Please try again.'
+        );
+      }
+    });
   };
 
   // The owner can never sit, so tapping an empty seat opens the note popup
@@ -512,7 +561,10 @@ export function RoomScreen() {
   // channel is joined on the same authenticated socket used for session
   // enforcement (src/services/socket.js) to react instantly to admin
   // moderation (blocked/terminated/deleted rooms, joining disabled).
-  const isAudioRoom = mode === 'audio' && Boolean(seatRows);
+  // A viewer entry counts as an audio room immediately even before seatRows
+  // exists — its layout is unknown until the owner's first seat-state
+  // broadcast arrives, not derived from local seatGroups like the owner's.
+  const isAudioRoom = mode === 'audio' && (Boolean(seatRows) || isViewerEntry);
   const [joiningDisabled, setJoiningDisabled] = React.useState(false);
   const [isRoomBlocked, setIsRoomBlocked] = React.useState(false);
   const startedAtRef = React.useRef(null);
@@ -539,20 +591,29 @@ export function RoomScreen() {
   // deleted), same as the auto-release below, but this also lets the owner
   // attach a recording URL and records a clean END action in the audit log.
   const endAudioRoom = React.useCallback(() => {
-    if (!isAudioRoom || roomEndedRef.current || !session?.token || !roomId) {
+    if (!isAudioRoom || !isOwner || roomEndedRef.current || !session?.token || !roomId) {
       return;
     }
     roomEndedRef.current = true;
     leaveAudioRoom(roomId);
     clearCachedSeatState(roomId);
     endAudioRoomRecord(session.token).catch(() => {});
-  }, [isAudioRoom, roomId, session?.token]);
+  }, [isAudioRoom, isOwner, roomId, session?.token]);
 
   // Tapping the close button always asks first — "Yes" ends the room for
   // everyone, "No" just dismisses the popup and stays in the room. Video
-  // mode has no room to end, so it closes immediately without asking.
+  // mode has no room to end, so it closes immediately without asking. A
+  // viewer doesn't own the room and can't end it — leaving just stops
+  // listening to it, same as leaveAudioRoom anywhere else.
   const handleClosePress = () => {
     if (!isAudioRoom) {
+      navigation.goBack();
+      return;
+    }
+    if (!isOwner) {
+      if (roomId) {
+        leaveAudioRoom(roomId);
+      }
       navigation.goBack();
       return;
     }
@@ -583,6 +644,32 @@ export function RoomScreen() {
     // of the `roomId` state, since these closures are only created once per
     // effect run and wouldn't see a state update from within the same run.
     let activeRoomId = roomId;
+
+    // Shared by the unmount cleanup below AND by setup()'s post-await
+    // continuation — leaves the socket room and, for the owner, shows the
+    // "still live" notification. Needs activeRoomId to actually be known;
+    // see the comment where setup() calls this after a delayed START
+    // response for why that isn't always true the instant this effect
+    // tears down.
+    const backgroundNow = () => {
+      if (roomEndedRef.current || !activeRoomId) {
+        return;
+      }
+      leaveAudioRoom(activeRoomId);
+      // The "still live, tap to return" framing only makes sense for the
+      // room's owner — a viewer leaving someone else's room can always find
+      // it again via Trending Parties, so no notification for them.
+      if (isOwnerRef.current) {
+        isBackgroundedRef.current = true;
+        showLiveRoomNotification({
+          roomId: activeRoomId,
+          roomName,
+          mode,
+          seatGroups,
+          micMuted: isMicMutedRef.current
+        }).catch(() => {});
+      }
+    };
 
     // Blocked/terminated/deleted (or a failed join) all mean the room is
     // already gone on the backend — mark it ended right away so the unmount
@@ -620,23 +707,43 @@ export function RoomScreen() {
         return;
       }
       joinAudioRoom(activeRoomId, result => {
-        if (cancelled || !result || result.success !== false) {
+        if (cancelled || !result) {
           return;
         }
-        // ROOM_OWNER_ONLY means the room is still live, just temporarily
-        // owner-only — not gone. Everything else (blocked/terminated/
-        // deleted/not-found) means the room is no longer available.
-        if (result.error?.code === 'ROOM_OWNER_ONLY') {
-          setJoiningDisabled(true);
+        if (result.success === false) {
+          // ROOM_OWNER_ONLY means the room is still live, just temporarily
+          // owner-only — not gone. Everything else (blocked/terminated/
+          // deleted/not-found) means the room is no longer available.
+          if (result.error?.code === 'ROOM_OWNER_ONLY') {
+            setJoiningDisabled(true);
+            return;
+          }
+          handleRoomEndedExternally();
           return;
         }
-        handleRoomEndedExternally();
+        // The join ack is the authoritative, server-verified source for
+        // ownership (see docs/mobile-audio-room-api.md) — always trust it
+        // over the isViewerEntry-based optimistic default.
+        if (typeof result.data?.isOwner === 'boolean') {
+          setIsOwner(result.data.isOwner);
+        }
       });
     };
 
     const setup = async () => {
       const startedAt = new Date().toISOString();
       startedAtRef.current = startedAt;
+
+      // Joining someone else's room never goes through START — that call
+      // is scoped to the caller's OWN one-room-per-user record on the
+      // backend, so calling it here would create/restart this viewer's own
+      // room instead of joining the one they tapped into.
+      if (isViewerEntry) {
+        if (!cancelled) {
+          attemptJoin(5);
+        }
+        return;
+      }
 
       try {
         // Reusing an already-assigned room (returning from background)
@@ -651,15 +758,24 @@ export function RoomScreen() {
           activeRoomId = result.roomId;
           if (!cancelled) {
             setRoomId(result.roomId);
+          } else {
+            // The user backed out before this request even finished — the
+            // unmount cleanup already ran and silently skipped
+            // leaveAudioRoom/the "still live" notification because
+            // activeRoomId was still null at that point (a brand-new room
+            // has no ID until this response arrives). Do it now that one
+            // finally exists, instead of the room quietly staying LIVE with
+            // no notification ever shown — this is what made the
+            // notification only "sometimes" appear, depending on how fast
+            // the user backed out relative to this request.
+            backgroundNow();
+            return;
           }
         }
       } catch (startError) {
         // A blocked/terminated room means there's nothing to join at all —
         // surface it and back out instead of silently leaving the screen
-        // stuck with no seats and no explanation. Anything else (network
-        // blip, etc.) stays best-effort: still attempt to join with
-        // whatever ID we already have (e.g. returning to a backgrounded
-        // room) even though this call failed.
+        // stuck with no seats and no explanation.
         if (
           startError instanceof AudioRoomError &&
           (startError.code === 'ROOM_BLOCKED' || startError.code === 'ROOM_TERMINATED')
@@ -676,6 +792,22 @@ export function RoomScreen() {
           }
           return;
         }
+        // Any other failure (network blip, validation error, expired
+        // session, etc.) is only "best-effort, still try to join" when
+        // we're resuming an ALREADY-known room (activeRoomId was set on a
+        // previous visit) — attemptJoin can still succeed with that ID.
+        // But for a brand-new room that never got assigned an ID at all,
+        // silently falling through here left the screen stuck forever with
+        // no seats, no join, and no explanation. Surface it instead.
+        if (!activeRoomId) {
+          if (!cancelled) {
+            roomEndedRef.current = true;
+            showAlert('Unable to Start Room', 'Something went wrong starting this room. Please try again.', [
+              { text: 'OK', onPress: () => navigation.goBack() }
+            ]);
+          }
+          return;
+        }
       }
 
       if (!cancelled) {
@@ -685,6 +817,15 @@ export function RoomScreen() {
 
     setup();
 
+    // Captured once per room visit — safe today because nothing calls
+    // connectSessionSocket() again while a room is mounted (the only things
+    // that do — ban/force-logout/login/logout in useSessionGuard — already
+    // navigate away from this screen first). If a future feature ever
+    // reconnects the session socket while a room is open (e.g. a manual
+    // "reconnect" action or a token-refresh flow), these listeners would
+    // silently keep pointing at the old, discarded socket object and stop
+    // receiving room events — this effect would need to react to that
+    // instead of grabbing the socket once.
     const socket = getSessionSocket();
     const handleJoiningDisabled = () => setJoiningDisabled(true);
     // Owner-only mode lifting (manually or its timer expiring) is the only
@@ -696,11 +837,92 @@ export function RoomScreen() {
     const handleTerminated = handleRoomEndedExternally;
     const handleDeleted = handleRoomEndedExternally;
 
+    // See docs/mobile-audio-room-api.md's "Live seat-state relay" — none of
+    // this is persisted server-side, the owner's device is the sole source
+    // of truth and the server only validates ownership and relays.
+    const handleSeatUpdate = data => {
+      if (isOwnerRef.current || data?.roomId !== activeRoomId) {
+        return;
+      }
+      setSeatRows(Array.isArray(data.seatRows) ? data.seatRows : []);
+      setSeatNotes(data.notes ?? {});
+    };
+    // Fired to the owner whenever a new viewer joins — reply with the full
+    // current snapshot so they don't start blank.
+    const handleSeatSyncRequest = () => {
+      if (!isOwnerRef.current) {
+        return;
+      }
+      emitSeatUpdate(activeRoomId, seatRowsRef.current, seatNotesRef.current);
+    };
+    // Owner-only — a viewer asked to take a specific seat.
+    const handleSeatRequestEvent = data => {
+      if (!isOwnerRef.current) {
+        return;
+      }
+      if (!data?.seatId) {
+        respondToSeatRequest(activeRoomId, data?.requestId, data?.requesterId, null, false, 'No seat specified');
+        return;
+      }
+      // requesterName/requesterProfileImage are server-trusted (see
+      // docs/mobile-audio-room-api.md) — requesterId is kept only as a
+      // fallback for older backend builds that didn't send a name yet.
+      const requesterName = data.requesterName || data.requesterId;
+      showAlert(
+        'Seat Request',
+        data.note ? `${requesterName} wants to take a seat: "${data.note}"` : `${requesterName} wants to take a seat.`,
+        [
+          {
+            text: 'Decline',
+            style: 'cancel',
+            onPress: () =>
+              respondToSeatRequest(activeRoomId, data.requestId, data.requesterId, data.seatId, false, 'Declined by host')
+          },
+          {
+            text: 'Accept',
+            onPress: () => {
+              applySeatAssignment(data.seatId, {
+                name: requesterName,
+                avatarSeed: data.requesterId,
+                avatarUri: data.requesterProfileImage || null,
+                muted: false
+              });
+              respondToSeatRequest(activeRoomId, data.requestId, data.requesterId, data.seatId, true, null);
+            }
+          }
+        ]
+      );
+    };
+    // Viewer-only — the owner responded to this device's own seat request.
+    const handleSeatResponseEvent = data => {
+      if (isOwnerRef.current) {
+        return;
+      }
+      if (!data?.accepted) {
+        showAlert('Seat Request Declined', data?.reason || 'The host declined your request.');
+        return;
+      }
+      // Applied optimistically — the owner's own next seat-update broadcast
+      // carries the same change, but this avoids a visible delay for the
+      // requester in the meantime.
+      setMySeatId(data.seatId);
+      applySeatAssignment(data.seatId, {
+        name: ownerName,
+        avatarSeed: ownerAvatarSeed,
+        avatarUri: session?.user?.profileImage || null,
+        muted: isMicMutedRef.current
+      });
+    };
+
     socket?.on('audio-room:joining-disabled', handleJoiningDisabled);
     socket?.on('audio-room:joining-enabled', handleJoiningEnabled);
     socket?.on('audio-room:blocked', handleBlocked);
     socket?.on('audio-room:terminated', handleTerminated);
     socket?.on('audio-room:deleted', handleDeleted);
+    socket?.on('audio-room:seat-update', handleSeatUpdate);
+    socket?.on('audio-room:seat-sync-request', handleSeatSyncRequest);
+    socket?.on('audio-room:seat-request', handleSeatRequestEvent);
+    socket?.on('audio-room:seat-response', handleSeatResponseEvent);
 
     return () => {
       cancelled = true;
@@ -712,23 +934,15 @@ export function RoomScreen() {
       socket?.off('audio-room:blocked', handleBlocked);
       socket?.off('audio-room:terminated', handleTerminated);
       socket?.off('audio-room:deleted', handleDeleted);
-      // Use activeRoomId (kept current within this effect run), not the
-      // backgroundLiveRoom callback — that callback is recreated whenever
-      // the `roomId` state changes, but this effect only reruns on
-      // isAudioRoom, so the version captured in this closure would still
-      // have the null roomId from before startAudioRoom() resolved, and the
-      // "still live" notification would silently never show.
-      if (!roomEndedRef.current && activeRoomId) {
-        leaveAudioRoom(activeRoomId);
-        isBackgroundedRef.current = true;
-        showLiveRoomNotification({
-          roomId: activeRoomId,
-          roomName,
-          mode,
-          seatGroups,
-          micMuted: isMicMutedRef.current
-        }).catch(() => {});
-      }
+      socket?.off('audio-room:seat-update', handleSeatUpdate);
+      socket?.off('audio-room:seat-sync-request', handleSeatSyncRequest);
+      socket?.off('audio-room:seat-request', handleSeatRequestEvent);
+      socket?.off('audio-room:seat-response', handleSeatResponseEvent);
+      // If activeRoomId isn't known yet at this point (brand-new room,
+      // startAudioRoom() still in flight), there's nothing to background
+      // yet — setup()'s continuation handles it once the response arrives
+      // instead, via the same backgroundNow() helper.
+      backgroundNow();
     };
     // Only run once per room visit — roomName/session are stable for the
     // screen's lifetime, and re-running this on every viewerCount change
@@ -740,19 +954,42 @@ export function RoomScreen() {
 
   const isFirstParticipantSyncRef = React.useRef(true);
 
+  // Debounced — a burst of seats filling/emptying quickly (e.g. several
+  // people joining at once) would otherwise fire one API call per change.
+  // Owner-only: updateAudioRoom acts on the caller's OWN one-room-per-user
+  // record, so a viewer calling it would silently create/update their own
+  // separate room instead of this one.
   React.useEffect(() => {
-    if (!isAudioRoom || !session?.token || !roomId || roomEndedRef.current) {
-      return;
+    if (!isAudioRoom || !isOwner || !session?.token || !roomId || roomEndedRef.current) {
+      return undefined;
     }
     if (isFirstParticipantSyncRef.current) {
       isFirstParticipantSyncRef.current = false;
-      return;
+      return undefined;
     }
-    updateAudioRoom(session.token, {
-      title: roomName,
-      participantCount: viewerCount
-    }).catch(() => {});
-  }, [viewerCount, isAudioRoom, roomId, roomName, session?.token]);
+    const timer = setTimeout(() => {
+      updateAudioRoom(session.token, {
+        title: roomName,
+        participantCount: viewerCount
+      }).catch(() => {});
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [viewerCount, isAudioRoom, isOwner, roomId, roomName, session?.token]);
+
+  // Owner-only — broadcasts the full seat snapshot to every viewer whenever
+  // seats or notes change, debounced the same way. See
+  // docs/mobile-audio-room-api.md's "Live seat-state relay": this is never
+  // written to the database, the owner's device is the only source of
+  // truth and the server just validates ownership and relays it.
+  React.useEffect(() => {
+    if (!isAudioRoom || !isOwner || !roomId || roomEndedRef.current) {
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      emitSeatUpdate(roomId, seatRows, seatNotes);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [isAudioRoom, isOwner, roomId, seatRows, seatNotes]);
 
   // Backgrounding the whole app (home button) does NOT unmount this screen
   // — React Navigation only unmounts on an actual back/navigate-away, which
@@ -766,7 +1003,11 @@ export function RoomScreen() {
   // here, since simply backgrounding the app should keep the room (and this
   // device's participation in it) alive for as long as the OS allows.
   React.useEffect(() => {
-    if (!isAudioRoom || !roomId) {
+    // Same reasoning as everywhere else — the "still live" notification is
+    // an owner-only concept. A viewer backgrounding the app just keeps
+    // silently listening for as long as the OS allows, same as before, just
+    // without a notification implying they own the room.
+    if (!isAudioRoom || !roomId || !isOwner) {
       return undefined;
     }
     const subscription = AppState.addEventListener('change', nextState => {
@@ -782,7 +1023,7 @@ export function RoomScreen() {
       }
     });
     return () => subscription.remove();
-  }, [isAudioRoom, roomId, roomName, mode, seatGroups]);
+  }, [isAudioRoom, roomId, roomName, mode, seatGroups, isOwner]);
 
   // Always call the latest handleToggleMic/endAudioRoom — they close over
   // per-render values (mySeatId, etc.), but the registration effect below
@@ -797,8 +1038,10 @@ export function RoomScreen() {
   // this screen's real mic/end logic while it's mounted (app process
   // alive, room just backgrounded) — see registerLiveRoomActionHandler in
   // src/utils/liveRoomNotifications.js for the fully-killed-app fallback.
+  // Owner-only — no notification is ever shown for a viewer, so there's
+  // nothing for these actions to be triggered from on their behalf.
   React.useEffect(() => {
-    if (!isAudioRoom || !roomId) {
+    if (!isAudioRoom || !roomId || !isOwner) {
       return undefined;
     }
     return registerLiveRoomActionHandler({
@@ -808,7 +1051,7 @@ export function RoomScreen() {
         navigation.goBack();
       }
     });
-  }, [isAudioRoom, roomId, navigation]);
+  }, [isAudioRoom, roomId, isOwner, navigation]);
 
   React.useEffect(() => {
     if (isRoomBlocked) {
@@ -854,14 +1097,25 @@ export function RoomScreen() {
     }, [theme])
   );
 
+  const hasCustomBackground = Boolean(assignedRoomBackgroundSource) && !customBackgroundFailed;
+  const backgroundSource = hasCustomBackground ? assignedRoomBackgroundSource : roomBackgroundImage;
+  // No white scrim overlay at all — both backgrounds dim through image
+  // opacity alone against the card-colored surface behind them (custom
+  // uploads at 0.5, the bundled default at its original 0.35).
+  const backgroundImageStyle = hasCustomBackground ? styles.customBackgroundImage : styles.backgroundImage;
+
   return (
     <ImageBackground
-      source={roomBackgroundImage}
+      source={backgroundSource}
       resizeMode="cover"
       style={[styles.root, { backgroundColor: theme.surfaces.card }]}
-      imageStyle={styles.backgroundImage}
+      imageStyle={backgroundImageStyle}
+      onError={() => {
+        if (hasCustomBackground) {
+          setCustomBackgroundFailed(true);
+        }
+      }}
     >
-      <View style={[styles.backgroundScrim, { backgroundColor: theme.surfaces.card }]} pointerEvents="none" />
 
       <View style={[styles.foreground, { paddingTop: insets.top }]}>
         <View style={styles.header}>
@@ -869,10 +1123,10 @@ export function RoomScreen() {
             <View style={styles.identityPanel}>
               <View style={styles.identityAvatarOuter}>
                 <View style={[styles.identityAvatarWrap, { backgroundColor: theme.colors.teal50 }]}>
-                  <AvatarWithFallback
-                    uri={session?.user?.profileImage || `${AVATAR_PLACEHOLDER}?seed=${ownerAvatarSeed}`}
+                  <Avatar
+                    value={session?.user?.profileImage || `${AVATAR_PLACEHOLDER}?seed=${ownerAvatarSeed}`}
+                    fullName={ownerName}
                     size={34}
-                    theme={theme}
                   />
                 </View>
                 <View
@@ -928,18 +1182,21 @@ export function RoomScreen() {
               </View>
             ))}
           </View>
+        ) : isViewerEntry ? (
+          // Waiting on the owner's first audio-room:seat-update broadcast —
+          // a viewer never knows the seat layout up front.
+          <Text style={[styles.loadingText, { color: theme.text.secondary }]}>Loading room...</Text>
         ) : null}
 
         <View style={styles.chatArea}>
-          <MaskedView maskElement={<LinearGradient colors={['transparent', 'black']} locations={[0, 0.18]} style={StyleSheet.absoluteFill} />} style={styles.chatMask}>
-            <FlatList
-              data={messages}
-              keyExtractor={item => item.id}
-              renderItem={({ item }) => <ChatMessage message={item} theme={theme} />}
-              contentContainerStyle={styles.chatListContent}
-              showsVerticalScrollIndicator={false}
-            />
-          </MaskedView>
+          <FlatList
+            data={messages}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => <ChatMessage message={item} theme={theme} />}
+            contentContainerStyle={styles.chatListContent}
+            showsVerticalScrollIndicator={false}
+            style={styles.chatMask}
+          />
         </View>
 
         <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
@@ -1003,13 +1260,12 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
     opacity: 0.35
   },
-  backgroundScrim: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.88
-  },
-  avatarFallback: {
-    alignItems: 'center',
-    justifyContent: 'center'
+  customBackgroundImage: {
+    resizeMode: 'cover',
+    // Near-full opacity — just enough softening for seat/text legibility;
+    // much lower than this blends the photo into the white surface behind
+    // it and reads as a milky/whitish wash over the whole room.
+    opacity: 0.9
   },
   foreground: {
     flex: 1
@@ -1112,6 +1368,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: scaleModerate(20),
     marginTop: scaleModerate(18),
     gap: scaleModerate(5)
+  },
+  loadingText: {
+    marginTop: scaleModerate(24),
+    textAlign: 'center',
+    fontSize: scaleFont(13),
+    fontWeight: '600'
   },
   seatRow: {
     flexDirection: 'row',
