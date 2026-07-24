@@ -25,6 +25,14 @@ function buildUserFromLogin(identifier, method) {
 function delay() {
   return new Promise(resolve => setTimeout(resolve, TEMP_DELAY));
 }
+// Onboarding's whole job is collecting these two — once both exist on the
+// account, there's nothing left to onboard. Used instead of a stored
+// boolean so a returning user who logs out and back in (a fresh session
+// object every time) doesn't get sent through onboarding again just because
+// nothing locally remembered they'd already done it.
+function hasCompletedOnboarding(user) {
+  return Boolean(user.gender) && Boolean(user.profileImage);
+}
 export class RegisterUserError extends Error {
   code;
   fields;
@@ -54,6 +62,7 @@ export async function registerUser(input) {
     email: email && email.length > 0 ? email.toLowerCase() : undefined,
     country: input.country || undefined,
     profileImage: input.profileImage || undefined,
+    dob: input.dob || undefined,
     device: {
       macAddress: getStableDeviceId(),
       platform: Platform.OS === 'ios' ? 'iOS' : 'Android',
@@ -85,6 +94,8 @@ export async function registerUser(input) {
       vipLevel: user.vipLevel,
       country: user.country ?? undefined,
       profileImage: user.profileImage ?? undefined,
+      gender: user.gender ?? undefined,
+      dob: user.dob ?? undefined,
       sessionVersion: user.sessionVersion,
       createdAt: user.createdAt
     };
@@ -163,6 +174,8 @@ export async function loginWithPassword(input) {
       specialIdExpiresAt: data.user.specialIdExpiresAt ?? null,
       country: data.user.country ?? undefined,
       profileImage: data.user.profileImage ?? undefined,
+      gender: data.user.gender ?? undefined,
+      dob: data.user.dob ?? undefined,
       role: data.user.role,
       status: data.user.status,
       vipLevel: data.user.vipLevel,
@@ -172,7 +185,12 @@ export async function loginWithPassword(input) {
     return {
       token: data.sessionToken,
       user: authUser,
-      onboardingComplete: false
+      // Was hardcoded false — meaning every login, even a returning fully
+      // set-up user, got sent through onboarding again. A fresh session
+      // object is built on every login, so there's no stored flag to check
+      // here; derive it instead from whether the account already has both
+      // fields onboarding collects.
+      onboardingComplete: hasCompletedOnboarding(authUser)
     };
   } catch (error) {
     if (error instanceof LoginUserError) {
@@ -201,8 +219,8 @@ export class UpdateProfileError extends Error {
 }
 
 // PATCH /api/users/profile — self-service edit for name/phone/email/country/
-// profileImage. Only fields present on `input` are sent, so a partial update
-// leaves the rest untouched.
+// profileImage/gender. Only fields present on `input` are sent, so a
+// partial update leaves the rest untouched.
 export async function updateProfile(sessionToken, input) {
   const body = {};
   if (input.fullName !== undefined) body.name = input.fullName.trim();
@@ -210,6 +228,8 @@ export async function updateProfile(sessionToken, input) {
   if (input.email !== undefined) body.email = input.email?.trim().toLowerCase() ?? null;
   if (input.country !== undefined) body.country = input.country?.trim() ?? null;
   if (input.profileImage !== undefined) body.profileImage = input.profileImage ?? null;
+  if (input.gender !== undefined) body.gender = input.gender ?? null;
+  if (input.dob !== undefined) body.dob = input.dob ?? null;
   try {
     const response = await apiClient.patch('/api/users/profile', body, {
       headers: {
@@ -219,17 +239,28 @@ export async function updateProfile(sessionToken, input) {
     const {
       user
     } = response.data.data;
+    // Same Special ID caveat as registerUser/loginWithPassword — user.id can
+    // be a cosmetic VIP/SVIP display id once one is assigned, the permanent
+    // account key is always normalId. This previously mapped publicId
+    // straight from user.id, which would have silently corrupted the
+    // session's real identity for any user with an active Special ID
+    // saving literally any profile change (name, phone, avatar, gender...).
     return {
       fullName: user.name,
       email: user.email ?? undefined,
       phone: user.phone,
       method: 'phone',
-      publicId: user.id,
+      publicId: user.normalId ?? user.id,
+      displayId: user.id,
+      specialId: user.specialId ?? null,
+      specialIdExpiresAt: user.specialIdExpiresAt ?? null,
       role: user.role,
       status: user.status,
       vipLevel: user.vipLevel,
       country: user.country ?? undefined,
       profileImage: user.profileImage ?? undefined,
+      gender: user.gender ?? undefined,
+      dob: user.dob ?? undefined,
       sessionVersion: user.sessionVersion
     };
   } catch (error) {
@@ -261,6 +292,23 @@ export async function checkUserStatus(sessionToken, macAddress) {
       }
     });
     return response.data.data;
+  } catch {
+    return null;
+  }
+}
+// GET /api/users/check-phone — public, no session required. Tells the Auth
+// screen whether a phone number already has an account before deciding
+// whether to route into the login or sign-up path. Returns null (not a
+// boolean) on any failure — including the endpoint not existing yet on an
+// older backend build — so callers can fall back to their current
+// behavior instead of misreporting "not registered".
+export async function checkPhoneRegistered(phone) {
+  const cleanedPhone = phone.trim().replace(/[\s().-]/g, '');
+  try {
+    const response = await apiClient.get('/api/users/check-phone', {
+      params: { phone: cleanedPhone }
+    });
+    return Boolean(response.data?.data?.exists);
   } catch {
     return null;
   }
