@@ -160,9 +160,17 @@ export function useSessionGuard() {
       onDeviceBanned: handleDeviceBannedSocket,
       onDeviceUnbanned: handleDeviceUnbannedSocket
     });
+    // Without this flag, a check already in flight when this effect tears
+    // down (e.g. another update — like Onboarding's avatar/gender save —
+    // triggers a re-run because sessionVersion changed) would still resolve
+    // and run handleStatus() using this closure's now-stale
+    // knownSessionVersion. If the fresh sessionVersion looks "newer" than
+    // that stale snapshot, it incorrectly looks like another device forced
+    // a logout, and force-logs-out a session that was actually still valid.
+    let cancelled = false;
     const runFallbackCheck = async () => {
       const status = await checkUserStatus(sessionToken, deviceId);
-      if (status) {
+      if (!cancelled && status) {
         handleStatus(status);
       }
     };
@@ -174,6 +182,7 @@ export function useSessionGuard() {
       }
     });
     return () => {
+      cancelled = true;
       clearInterval(interval);
       subscription.remove();
       disconnectSessionSocket();
