@@ -108,3 +108,29 @@ export function joinAudioRoom(roomId, callback) {
 export function leaveAudioRoom(roomId) {
   socket?.emit('audio-room:leave', { roomId });
 }
+
+// See StreamLine-Portal/docs/mobile-audio-room-api.md's "Live seat-state
+// relay" section — seat state is intentionally NOT persisted server-side;
+// the room owner is the sole source of truth and the server only validates
+// ownership and relays. Owner-only; a non-owner call gets OWNER_REQUIRED.
+export function emitSeatUpdate(roomId, seatRows, notes) {
+  socket?.emit('audio-room:seat-update', { roomId, seatRows, notes });
+}
+
+// Viewer asks to take a specific seat. The ack only confirms the request
+// was queued (PENDING) — the actual accept/reject arrives later as an
+// `audio-room:seat-response` event once the owner responds.
+export function requestSeat(roomId, seatId, note, callback) {
+  if (!socket) {
+    callback?.({ success: false, error: { code: 'NOT_CONNECTED' } });
+    return;
+  }
+  socket.emit('audio-room:seat-request', { roomId, seatId, note }, callback);
+}
+
+// Owner accepts/rejects a pending `audio-room:seat-request`. On acceptance,
+// the caller is still responsible for updating its own seatRows and letting
+// the existing seat-update broadcast effect relay the change to everyone.
+export function respondToSeatRequest(roomId, requestId, requesterId, seatId, accepted, reason) {
+  socket?.emit('audio-room:seat-response', { roomId, requestId, requesterId, seatId, accepted, reason });
+}
