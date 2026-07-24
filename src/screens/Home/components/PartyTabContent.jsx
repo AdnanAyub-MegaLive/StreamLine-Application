@@ -2,6 +2,7 @@ import React from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { fetchDiscoverRooms } from '../../../api';
+import { Avatar } from '../../../components';
 import { useAppStore } from '../../../store';
 import { useTheme } from '../../../theme';
 import { routes } from '../../../navigation/routes';
@@ -23,6 +24,7 @@ function toPartyItem(room, index) {
     title: room.title,
     members: room.participantCount,
     hostName: room.owner?.name ?? 'Unknown host',
+    hostAvatar: room.owner?.profileImage,
     accent: accentForIndex(index)
   };
 }
@@ -114,20 +116,28 @@ function PartyBanner() {
     </View>;
 }
 
+// See StreamLine-Portal/docs/mobile-audio-room-api.md's "Live seat-state
+// relay" — RoomScreen now has a real viewer mode (asViewer:true), backed by
+// the owner-authoritative seat-broadcast relay, so this can navigate in for
+// real instead of showing a placeholder.
 function PartyCard({
   item
 }) {
   const theme = useTheme();
   const navigation = useNavigation();
   const accent = item.accent(theme);
+  const handlePress = () => {
+    navigation.navigate(routes.room, {
+      roomId: item.id,
+      roomName: item.title,
+      mode: 'audio',
+      asViewer: true
+    });
+  };
   return <Pressable style={[styles.partyCard, {
     backgroundColor: theme.surfaces.card,
     borderColor: theme.colors.cardBorder
-  }]} onPress={() => navigation.navigate(routes.room, {
-    roomId: item.id,
-    roomName: item.title,
-    mode: 'audio'
-  })}>
+  }]} onPress={handlePress}>
       <View style={[styles.partyThumb, {
       backgroundColor: accent
     }]}>
@@ -145,9 +155,7 @@ function PartyCard({
         {item.title}
       </Text>
       <View style={styles.partyMetaRow}>
-        <View style={[styles.partyAvatar, {
-        backgroundColor: accent
-      }]} />
+        <Avatar value={item.hostAvatar} fullName={item.hostName} size={scaleModerate(16)} />
         <Text style={[styles.partyMeta, {
         color: theme.text.secondary
       }]} numberOfLines={1}>
@@ -297,11 +305,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: scaleModerate(6),
     gap: scaleModerate(6)
-  },
-  partyAvatar: {
-    width: scaleModerate(16),
-    height: scaleModerate(16),
-    borderRadius: scaleModerate(8)
   },
   partyMeta: {
     fontSize: scaleFont(11),
