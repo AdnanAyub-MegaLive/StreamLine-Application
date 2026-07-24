@@ -6,7 +6,7 @@ import { fetchAudioRoom } from '../api';
 import { SEAT_LAYOUT_OPTIONS, SeatLayoutModal, StreamOptionModal } from '../components';
 import { useAppStore } from '../store';
 import { useTheme } from '../theme';
-import { scaleModerate } from '../utils';
+import { getCachedSeatState, scaleModerate } from '../utils';
 import { routes } from './routes';
 const ICONS = {
   HomeTab: HomeIcon,
@@ -71,16 +71,40 @@ export function CustomTabBar({
     setIsCheckingRoom(true);
     const existingRoom = await fetchAudioRoom(sessionToken);
     setIsCheckingRoom(false);
-    if (existingRoom?.status === 'LIVE') {
+    // Backgrounding a room (back gesture/notification) makes the backend
+    // auto-release it to IDLE the instant this device's socket leaves the
+    // room channel — that's expected per
+    // StreamLine-Portal/docs/mobile-audio-room-api.md, not the same thing
+    // as the owner explicitly ending it. Both look identical from status
+    // alone (IDLE either way), so the local seat cache is what actually
+    // tells them apart: explicit "End Room" and any externally-ended path
+    // both clear it (see endAudioRoom/handleRoomEndedExternally in
+    // RoomScreen), while simply backgrounding never does. If it's still
+    // there, this device backgrounded — not ended — that exact room, so
+    // "+" should resume it, not walk through the create flow and ask for a
+    // seat layout again.
+    const canResumeWithoutAsking =
+      existingRoom?.status === 'LIVE' || (existingRoom?.status === 'IDLE' && Boolean(getCachedSeatState(existingRoom.roomId)));
+    if (canResumeWithoutAsking) {
       // Only audio rooms are ever persisted backend-side today (video mode
-      // doesn't call the audio-room API yet). No seatGroups are sent here —
-      // RoomScreen resumes the real layout from its local seat cache when
-      // present, falling back to the smallest layout only if that cache
-      // was cleared (e.g. the app was killed and relaunched).
+      // doesn't call the audio-room API yet). RoomScreen resumes the real
+      // layout from its local seat cache when present (same app session,
+      // room only backgrounded) — seatGroups here is only a fallback for
+      // when that cache was cleared (e.g. the app was killed and
+      // relaunched). Picking the smallest layout unconditionally used to
+      // silently shrink a bigger room (e.g. 20 seats down to 2) with no
+      // warning; instead, size it to fit the room's last-known
+      // participantCount (which includes the owner's own non-seat spot,
+      // hence the -1), falling back to the largest tier if even that isn't
+      // enough.
+      const occupiedSeats = Math.max(0, (existingRoom.participantCount ?? 1) - 1);
+      const fallbackLayout =
+        SEAT_LAYOUT_OPTIONS.find(option => option.groups.reduce((sum, count) => sum + count, 0) >= occupiedSeats) ??
+        SEAT_LAYOUT_OPTIONS[SEAT_LAYOUT_OPTIONS.length - 1];
       navigation.navigate(routes.room, {
         roomId: existingRoom.roomId,
         mode: 'audio',
-        seatGroups: SEAT_LAYOUT_OPTIONS[0].groups
+        seatGroups: fallbackLayout.groups
       });
       return;
     }
