@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { EyeIcon, FacebookIcon, GoogleIcon } from '../../assets';
-import { loginWithPassword, LoginUserError } from '../../api';
+import { checkPhoneRegistered, loginWithPassword, LoginUserError } from '../../api';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { BrandMark, FormField, PrimaryButton, Screen, showAlert, TermsCheckbox } from '../../components';
@@ -93,6 +93,7 @@ export function AuthScreen() {
   const [rememberMe, setRememberMe] = React.useState(true);
   const [error, setError] = React.useState(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isCheckingPhone, setIsCheckingPhone] = React.useState(false);
   // TEMPORARY: lets QA reach Home while no backend is running. Remove once
   // the real backend is available.
   const handleSkipLogin = () => {
@@ -116,13 +117,28 @@ export function AuthScreen() {
       }]
     });
   };
-  const handlePhoneContinue = () => {
-    if (!termsAccepted) {
+  // Checks whether this number already has an account before deciding
+  // whether the OTP screen should behave like a login or a sign-up.
+  // checkPhoneRegistered() returns null (unknown) if the check itself
+  // failed or the backend doesn't support it yet — defaulting to 'signup'
+  // there preserves today's behavior (new number → verify → sign-up
+  // details) instead of guessing wrong and blocking a real signup.
+  const handlePhoneContinue = async () => {
+    if (!termsAccepted || isCheckingPhone) {
       return;
     }
-    navigation.navigate(routes.phoneAuth, phone.trim().length > 0 ? {
-      phone: phone.trim()
-    } : undefined);
+    const trimmedPhone = phone.trim();
+    if (trimmedPhone.length === 0) {
+      navigation.navigate(routes.phoneAuth);
+      return;
+    }
+    setIsCheckingPhone(true);
+    const exists = await checkPhoneRegistered(trimmedPhone);
+    setIsCheckingPhone(false);
+    navigation.navigate(routes.phoneAuth, {
+      phone: trimmedPhone,
+      mode: exists ? 'login' : 'signup'
+    });
   };
   const handleUsernameLogin = async () => {
     if (!termsAccepted || isSubmitting || username.trim().length === 0 || password.trim().length === 0) {
@@ -183,7 +199,7 @@ export function AuthScreen() {
           {activeTab === 'phone' ? <View style={styles.tabContent}>
               <FormField label="Phone Number" placeholder="Enter your phone number" value={phone} onChangeText={setPhone} icon="phone" keyboardType="phone-pad" />
 
-              <PrimaryButton label="Continue" onPress={handlePhoneContinue} disabled={!termsAccepted} style={styles.actionButton} />
+              <PrimaryButton label={isCheckingPhone ? 'Checking...' : 'Continue'} onPress={handlePhoneContinue} disabled={!termsAccepted || isCheckingPhone} style={styles.actionButton} />
             </View> : <View style={styles.tabContent}>
               <FormField label="Username" placeholder="Enter your registered phone number" value={username} onChangeText={setUsername} icon="user" keyboardType="phone-pad" />
 
