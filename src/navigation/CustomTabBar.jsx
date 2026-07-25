@@ -153,7 +153,8 @@ export function CustomTabBar({
           if (isCenter) {
             return <Pressable key={route.key} onPress={handleCenterPress} style={styles.item}>
                   <View style={[styles.centerButton, {
-                backgroundColor: theme.colors.teal700
+                backgroundColor: theme.colors.teal700,
+                borderColor: theme.cta.primary.text
               }]}>
                     <PlusIcon size={30} color={theme.cta.primary.text} />
                   </View>
@@ -214,6 +215,7 @@ const styles = StyleSheet.create({
     height: scaleModerate(66),
     borderRadius: scaleModerate(33),
     marginTop: scaleModerate(-57),
+    borderWidth: scaleModerate(3),
     alignItems: 'center',
     justifyContent: 'center'
   }
