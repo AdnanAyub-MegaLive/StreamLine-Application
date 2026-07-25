@@ -42,6 +42,16 @@ export function HomeScreen() {
   } = useWindowDimensions();
   const [activeTab, setActiveTab] = React.useState('live');
   const pagerRef = React.useRef(null);
+  // Disabled while a finger is on the Party banner carousel — the banner is
+  // itself a horizontal scroll, and Android can't arbitrate it against this
+  // horizontal pager. Uses setNativeProps (synchronous, applied natively
+  // right now) rather than React state on purpose: a state update lands a
+  // frame later, and the pager would intercept the very start of the drag
+  // before the re-render disabled it — which is why manual banner scroll
+  // only "sort of" worked. See PartyBanner's onBannerScrolling.
+  const handleBannerScrolling = React.useCallback(active => {
+    pagerRef.current?.setNativeProps({ scrollEnabled: !active });
+  }, []);
   const scrollToTab = tab => {
     const index = HOME_TABS.indexOf(tab);
     pagerRef.current?.scrollTo({
@@ -77,7 +87,7 @@ export function HomeScreen() {
         <View style={[styles.pagerPage, {
         width
       }]}>
-          <PartyTabContent />
+          <PartyTabContent onBannerScrolling={handleBannerScrolling} />
         </View>
         <View style={[styles.pagerPage, {
         width
