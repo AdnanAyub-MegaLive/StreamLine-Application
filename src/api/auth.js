@@ -261,7 +261,13 @@ export async function updateProfile(sessionToken, input) {
       profileImage: user.profileImage ?? undefined,
       gender: user.gender ?? undefined,
       dob: user.dob ?? undefined,
-      sessionVersion: user.sessionVersion
+      // The profile route's response doesn't include sessionVersion — always
+      // spreading it here wrote `undefined` into the session, which the
+      // session guard reads as 0, so the next status poll (reporting the
+      // real version, e.g. 1) looked like a forced version bump and
+      // instantly logged the user out after any profile save. Only include
+      // it when the backend actually sent one.
+      ...(user.sessionVersion !== undefined ? { sessionVersion: user.sessionVersion } : {})
     };
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.data?.error) {
