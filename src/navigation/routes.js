@@ -10,5 +10,8 @@ export const routes = {
   profile: 'Profile',
   banned: 'Banned',
   settings: 'Settings',
-  editProfile: 'EditProfile'
+  editProfile: 'EditProfile',
+  bannerDetail: 'BannerDetail',
+  createAgency: 'CreateAgency',
+  changeAvatar: 'ChangeAvatar'
 };
