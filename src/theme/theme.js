@@ -22,7 +22,11 @@ export const colors = {
   liveBadge: '#E24B4A',
   giftAccent: '#D4537E',
   vipPurple: '#7C4DFF',
-  facebookBlue: '#1877F2'
+  facebookBlue: '#1877F2',
+  vipGoldBackground: '#FFF3E0',
+  vipGoldText: '#B8860B',
+  followOrange: '#F5A623',
+  proGamerBackground: '#F1ECFF'
 };
 export const theme = {
   colors,
