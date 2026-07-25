@@ -1,8 +1,9 @@
 import React from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { fetchDiscoverRooms } from '../../../api';
 import { Avatar } from '../../../components';
+import { useBannerAssets } from '../../../hooks';
 import { useAppStore } from '../../../store';
 import { useTheme } from '../../../theme';
 import { routes } from '../../../navigation/routes';
@@ -46,73 +47,207 @@ const bannerSlides = [{
   subtitle: 'Send gifts today to earn double reward points.'
 }];
 
-function PartyBanner() {
+// The banner is a horizontal FlatList nested inside HomeScreen's horizontal
+// tab pager (also horizontal). Android's native ScrollViews can't arbitrate
+// two same-direction scrolls — the parent pager intercepts the drag before
+// the banner ever sees it, so the banner wouldn't scroll manually. Fix: the
+// onTouchStart/End listeners on the wrapper tell HomeScreen (via
+// onBannerScrolling) to disable the pager's scroll while a finger is on the
+// banner, so the banner scrolls freely and tab-switching is suppressed only
+// while on the banner (exactly the requested "separate it from page slide"
+// behavior). Vertical scroll is unaffected — that's a different, vertical
+// ScrollView.
+// One pagination dot — smoothly grows into a pill and tints when its slide
+// becomes active, instead of the jarring instant width/color snap.
+function BannerDot({ active, activeColor, mutedColor }) {
+  const anim = React.useRef(new Animated.Value(active ? 1 : 0)).current;
+  React.useEffect(() => {
+    Animated.timing(anim, {
+      toValue: active ? 1 : 0,
+      duration: 300,
+      // Width and backgroundColor can't run on the native driver.
+      useNativeDriver: false
+    }).start();
+  }, [active, anim]);
+  return <Animated.View style={[styles.dot, {
+    width: anim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [scaleModerate(5), scaleModerate(14)]
+    }),
+    backgroundColor: anim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [mutedColor, activeColor]
+    })
+  }]} />;
+}
+
+function PartyBanner({ onBannerScrolling }) {
   const theme = useTheme();
+  const navigation = useNavigation();
   const {
     width
   } = useWindowDimensions();
   const bannerWidth = width - 32;
-  const loopSlides = React.useMemo(() => [...bannerSlides, bannerSlides[0]], []);
+  // Admin-uploaded image banners take priority; if none exist, fall back to
+  // the bundled text promos so the section is never empty.
+  const bannerAssets = useBannerAssets();
+  const useImages = bannerAssets.length > 0;
+  const slides = useImages ? bannerAssets : bannerSlides;
+
+  // Infinite forward loop: a clone of the first slide is appended after the
+  // last one, so advancing past the end scrolls forward into the clone, and
+  // once it lands there we silently (no animation) jump back to the real
+  // first slide. Without this, wrapping from the last banner to the first
+  // visibly scrolled backwards through every slide.
+  const loop = slides.length > 1;
+  const renderSlides = loop ? [...slides, slides[0]] : slides;
+
   const [activeIndex, setActiveIndex] = React.useState(0);
   const bannerListRef = React.useRef(null);
-  const pageIndexRef = React.useRef(0);
-  const isAnimating = React.useRef(false);
+  const indexRef = React.useRef(0);
+  // Timestamp until which auto-advance stays paused — set on touch so the
+  // timer doesn't fight the user's manual swipe.
+  const pausedUntilRef = React.useRef(0);
+
   const handleScroll = event => {
-    if (isAnimating.current) {
+    const index = Math.round(event.nativeEvent.contentOffset.x / bannerWidth);
+    // Landed on the appended clone of slide 1 — snap to the real slide 1.
+    // Only once fully there (within a few px), otherwise the mid-animation
+    // rounding would cut the forward animation short with a visible jump.
+    if (loop && index >= slides.length) {
+      const offset = event.nativeEvent.contentOffset.x;
+      if (Math.abs(offset - slides.length * bannerWidth) < 4) {
+        indexRef.current = 0;
+        setActiveIndex(0);
+        bannerListRef.current?.scrollToOffset({ offset: 0, animated: false });
+      }
       return;
     }
-    const index = Math.round(event.nativeEvent.contentOffset.x / bannerWidth);
-    pageIndexRef.current = index;
-    setActiveIndex(index % bannerSlides.length);
-  };
-  const handleMomentumScrollEnd = () => {
-    if (pageIndexRef.current >= bannerSlides.length) {
-      bannerListRef.current?.scrollToOffset({
-        offset: 0,
-        animated: false
-      });
-      pageIndexRef.current = 0;
-      setActiveIndex(0);
+    if (index !== indexRef.current) {
+      indexRef.current = index;
+      setActiveIndex(index);
     }
-    isAnimating.current = false;
   };
+
+  // A banner named "Create Agency" on the portal (e.g. "1 Create Agency")
+  // opens the agency application form; every other slide opens the generic
+  // BannerDetail page — uploaded image banners pass their image, the
+  // bundled text-promo fallbacks pass their text instead.
+  const handleSlidePress = item => {
+    if (/create\s*agency/i.test(item.title ?? '')) {
+      navigation.navigate(routes.createAgency);
+      return;
+    }
+    navigation.navigate(routes.bannerDetail, {
+      uri: item.uri,
+      title: item.title,
+      subtitle: item.subtitle
+    });
+  };
+
+  // Tap detection is done by hand here instead of relying on a
+  // <Pressable>'s onPress. The pager needs to be disabled the instant a
+  // finger touches the banner (below) so the parent doesn't steal the
+  // drag — but flipping an ancestor ScrollView's native scrollEnabled prop
+  // mid-gesture makes Android terminate/cancel whatever responder chain is
+  // in progress, which was silently eating Pressable's onPress on a plain
+  // tap. Tracking start/end position and timing ourselves sidesteps that
+  // responder system entirely.
+  const touchStartRef = React.useRef(null);
+  const TAP_MAX_MOVEMENT = 10;
+  const TAP_MAX_DURATION = 300;
+
+  const handleTouchStart = event => {
+    pausedUntilRef.current = Date.now() + 6000;
+    touchStartRef.current = {
+      x: event.nativeEvent.pageX,
+      y: event.nativeEvent.pageY,
+      time: Date.now()
+    };
+    onBannerScrolling?.(true);
+  };
+  const handleTouchEnd = event => {
+    pausedUntilRef.current = Date.now() + 6000;
+    onBannerScrolling?.(false);
+
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) {
+      return;
+    }
+    const dx = Math.abs(event.nativeEvent.pageX - start.x);
+    const dy = Math.abs(event.nativeEvent.pageY - start.y);
+    const duration = Date.now() - start.time;
+    if (dx < TAP_MAX_MOVEMENT && dy < TAP_MAX_MOVEMENT && duration < TAP_MAX_DURATION) {
+      const item = slides[indexRef.current % slides.length];
+      if (item) {
+        handleSlidePress(item);
+      }
+    }
+  };
+
   React.useEffect(() => {
+    // Reset to the first slide if the slide set changes (e.g. banners load
+    // in after the text fallback was showing).
+    indexRef.current = 0;
+    setActiveIndex(0);
+    bannerListRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [useImages, slides.length]);
+
+  React.useEffect(() => {
+    if (slides.length <= 1) {
+      return undefined;
+    }
     const timer = setInterval(() => {
-      const nextIndex = pageIndexRef.current + 1;
-      isAnimating.current = true;
-      pageIndexRef.current = nextIndex;
-      setActiveIndex(nextIndex % bannerSlides.length);
+      if (Date.now() < pausedUntilRef.current) {
+        return;
+      }
+      // Advancing off the last slide targets the appended clone of slide 1
+      // (index === slides.length) — always a forward animation. handleScroll
+      // snaps back to the real slide 1 once it lands.
+      const next = indexRef.current + 1;
+      indexRef.current = next;
+      setActiveIndex(next % slides.length);
       bannerListRef.current?.scrollToOffset({
-        offset: nextIndex * bannerWidth,
+        offset: next * bannerWidth,
         animated: true
       });
-    }, 2000);
+    }, 3500);
     return () => clearInterval(timer);
-  }, [bannerWidth]);
-  return <View>
-      <FlatList ref={bannerListRef} data={loopSlides} keyExtractor={(item, index) => `${item.id}-${index}`} horizontal pagingEnabled showsHorizontalScrollIndicator={false} onScroll={handleScroll} onMomentumScrollEnd={handleMomentumScrollEnd} scrollEventThrottle={16} renderItem={({
-      item
-    }) => <View style={[styles.banner, {
-      width: bannerWidth,
-      backgroundColor: theme.colors.teal900,
-      borderColor: theme.colors.teal700
-    }]}>
-            <Text style={[styles.bannerEyebrow, {
-        color: theme.colors.teal200
-      }]}>{item.eyebrow}</Text>
-            <Text style={[styles.bannerTitle, {
-        color: theme.cta.primary.text
-      }]}>{item.title}</Text>
-            <Text style={[styles.bannerSubtitle, {
-        color: theme.colors.teal100
-      }]}>{item.subtitle}</Text>
+  }, [slides.length, bannerWidth]);
 
-            <View style={styles.bannerDots}>
-              {bannerSlides.map((slide, index) => <View key={slide.id} style={[index === activeIndex ? styles.dotActive : styles.dotMuted, {
-          backgroundColor: index === activeIndex ? theme.colors.teal200 : theme.colors.teal800
-        }]} />)}
-            </View>
-          </View>} />
+  return <View style={styles.bannerWrap} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd}>
+      <FlatList
+        ref={bannerListRef}
+        data={renderSlides}
+        keyExtractor={(item, index) => `${item.id}-${index}`}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        renderItem={({ item }) => useImages
+          ? <Image source={{ uri: item.uri }} style={[styles.bannerImage, { width: bannerWidth }]} resizeMode="cover" />
+          : <View style={[styles.banner, {
+            width: bannerWidth,
+            backgroundColor: theme.colors.teal900,
+            borderColor: theme.colors.teal700
+          }]}>
+              <Text style={[styles.bannerEyebrow, {
+            color: theme.colors.teal200
+          }]}>{item.eyebrow}</Text>
+              <Text style={[styles.bannerTitle, {
+            color: theme.cta.primary.text
+          }]}>{item.title}</Text>
+              <Text style={[styles.bannerSubtitle, {
+            color: theme.colors.teal100
+          }]}>{item.subtitle}</Text>
+            </View>}
+      />
+
+      {slides.length > 1 ? <View style={styles.bannerDots}>
+          {slides.map((slide, index) => <BannerDot key={slide.id} active={index === activeIndex} activeColor={theme.colors.teal200} mutedColor={theme.colors.teal800} />)}
+        </View> : null}
     </View>;
 }
 
@@ -165,7 +300,7 @@ function PartyCard({
     </Pressable>;
 }
 
-export function PartyTabContent() {
+export function PartyTabContent({ onBannerScrolling }) {
   const theme = useTheme();
   const sessionToken = useAppStore(store => store.session?.token);
   const [trendingParties, setTrendingParties] = React.useState([]);
@@ -188,7 +323,7 @@ export function PartyTabContent() {
   );
 
   return <ScrollView contentContainerStyle={styles.partyList} showsVerticalScrollIndicator={false}>
-      <PartyBanner />
+      <PartyBanner onBannerScrolling={onBannerScrolling} />
 
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionLabel, {
@@ -216,11 +351,19 @@ const styles = StyleSheet.create({
     padding: scaleModerate(16),
     paddingBottom: scaleModerate(28)
   },
+  bannerWrap: {
+    position: 'relative'
+  },
   banner: {
     borderRadius: scaleModerate(16),
     borderWidth: 1,
     padding: scaleModerate(20),
+    paddingBottom: scaleModerate(24),
     gap: scaleModerate(4)
+  },
+  bannerImage: {
+    height: scaleModerate(140),
+    borderRadius: scaleModerate(16)
   },
   bannerEyebrow: {
     fontSize: scaleFont(11),
@@ -236,21 +379,15 @@ const styles = StyleSheet.create({
   },
   bannerDots: {
     position: 'absolute',
-    bottom: scaleModerate(3),
+    bottom: scaleModerate(8),
     left: 0,
     right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: scaleModerate(4)
+    gap: scaleModerate(5)
   },
-  dotActive: {
-    width: scaleModerate(4),
-    height: scaleModerate(4),
-    borderRadius: 999
-  },
-  dotMuted: {
-    width: scaleModerate(4),
-    height: scaleModerate(4),
+  dot: {
+    height: scaleModerate(5),
     borderRadius: 999
   },
   sectionHeader: {
