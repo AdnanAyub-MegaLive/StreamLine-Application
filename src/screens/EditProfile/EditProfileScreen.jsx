@@ -5,9 +5,9 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { updateProfile, UpdateProfileError } from '../../api';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
-import { AVATAR_PRESETS, Avatar, FormField, getAvatarPresetId, getAvatarPresetValue, PrimaryButton, Screen } from '../../components';
+import { Avatar, FormField, PrimaryButton, Screen } from '../../components';
 import { scaleFont, scaleModerate } from '../../utils';
-import '../../navigation';
+import { routes } from '../../navigation/routes';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[0-9]{7,15}$/;
 function formatDobIso(date) {
@@ -28,13 +28,6 @@ export function EditProfileScreen() {
     email: session?.user.email ?? '',
     country: session?.user.country ?? ''
   });
-  // Only a bundled preset avatar can be chosen here for now — no CDN/upload
-  // storage exists yet, see the Onboarding screen's handleNext comment for
-  // why real device photos aren't persisted. Defaults to the first preset
-  // if nothing was ever saved (e.g. an account created before this shipped).
-  const [selectedAvatarId, setSelectedAvatarId] = React.useState(
-    getAvatarPresetId(session?.user.profileImage) ?? AVATAR_PRESETS[0].id
-  );
   // Gender and date of birth can only ever be set once — see
   // Onboarding/SignupDetails, where they're normally set for the first
   // time. Once the session already has a value, these fields lock: no
@@ -49,7 +42,6 @@ export function EditProfileScreen() {
   // chose. See handleSave, which only includes these fields when already
   // locked (harmless — same value round-trips) or actually touched.
   const [genderTouched, setGenderTouched] = React.useState(false);
-  const [avatarTouched, setAvatarTouched] = React.useState(false);
   const [dob, setDob] = React.useState(isDobLocked ? new Date(session.user.dob) : null);
   const [isDobPickerVisible, setIsDobPickerVisible] = React.useState(false);
   const [error, setError] = React.useState(null);
@@ -73,18 +65,15 @@ export function EditProfileScreen() {
         phone: form.phone.trim(),
         email: trimmedEmail.length > 0 ? trimmedEmail : null,
         country: form.country.trim().length > 0 ? form.country.trim() : null,
-        // profileImage isn't locked, so it's fine to resend once touched
-        // (or already set). gender/dob are different: the backend now
-        // rejects the request with 409 FIELD_LOCKED whenever the key is
-        // merely *present* in the body and already set server-side — it
-        // doesn't check whether the value actually changed. So once
+        // profileImage is no longer edited here — the Change Avatar page
+        // (opened from the picture below) owns that now. gender/dob: the
+        // backend rejects the request with 409 FIELD_LOCKED whenever the
+        // key is merely *present* in the body and already set server-side —
+        // it doesn't check whether the value actually changed. So once
         // locked, these must never be included at all, not even
         // unchanged — otherwise every unrelated edit (e.g. just the phone
         // number) would fail outright for any user who already has a
         // gender/dob saved.
-        ...(avatarTouched || session?.user.profileImage
-          ? { profileImage: getAvatarPresetValue(selectedAvatarId) }
-          : {}),
         ...(!isGenderLocked && genderTouched ? { gender } : {}),
         ...(!isDobLocked && dob ? { dob: formatDobIso(dob) } : {})
       });
@@ -121,34 +110,10 @@ export function EditProfileScreen() {
         borderColor: theme.colors.cardBorder,
         shadowColor: theme.colors.teal900
       }]}>
-          <Avatar value={getAvatarPresetValue(selectedAvatarId)} fullName={form.fullName} size={scaleModerate(72)} style={styles.avatarPreview} />
-
-          <Text style={[styles.sectionLabel, { color: theme.text.secondary }]}>Avatar</Text>
-          <View style={styles.avatarRow}>
-            {AVATAR_PRESETS.map(preset => {
-              const avatarTheme = theme.onboarding.avatarStyles[preset.id];
-              const selected = selectedAvatarId === preset.id;
-              return (
-                <Pressable
-                  key={preset.id}
-                  onPress={() => {
-                    setSelectedAvatarId(preset.id);
-                    setAvatarTouched(true);
-                  }}
-                  style={[
-                    styles.avatarOption,
-                    {
-                      backgroundColor: avatarTheme.background,
-                      borderColor: selected ? avatarTheme.accent : theme.colors.cardBorder,
-                      borderWidth: selected ? 2 : 1
-                    }
-                  ]}
-                >
-                  <Text style={styles.avatarOptionEmoji}>{preset.emoji}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <Pressable onPress={() => navigation.navigate(routes.changeAvatar)} style={styles.avatarPressable}>
+            <Avatar value={session?.user.profileImage} fullName={form.fullName} size={scaleModerate(72)} style={styles.avatarPreview} />
+            <Text style={[styles.editPictureText, { color: theme.colors.teal700 }]}>Edit Profile Picture</Text>
+          </Pressable>
 
           <Text style={[styles.sectionLabel, styles.sectionLabelSpacing, { color: theme.text.secondary }]}>Gender</Text>
           {isGenderLocked ? (
@@ -274,9 +239,15 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: 'center'
   },
+  avatarPressable: {
+    alignItems: 'center'
+  },
   avatarPreview: {
-    alignSelf: 'center',
-    marginBottom: scaleModerate(14)
+    marginBottom: scaleModerate(8)
+  },
+  editPictureText: {
+    fontSize: scaleFont(13),
+    fontWeight: '700'
   },
   sectionLabel: {
     fontSize: scaleFont(12),
@@ -287,22 +258,6 @@ const styles = StyleSheet.create({
   },
   sectionLabelSpacing: {
     marginTop: scaleModerate(18)
-  },
-  avatarRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    rowGap: scaleModerate(10),
-    columnGap: scaleModerate(10)
-  },
-  avatarOption: {
-    width: scaleModerate(48),
-    height: scaleModerate(48),
-    borderRadius: scaleModerate(24),
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  avatarOptionEmoji: {
-    fontSize: scaleFont(22)
   },
   genderRow: {
     flexDirection: 'row',
