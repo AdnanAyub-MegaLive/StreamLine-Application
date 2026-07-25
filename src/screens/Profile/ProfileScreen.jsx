@@ -1,131 +1,308 @@
 import React from 'react';
-import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SettingsIcon } from '../../assets';
 import { useTheme } from '../../theme';
 import { Avatar, Screen } from '../../components';
-import { useAssignedRoomBackground } from '../../hooks';
 import { useAppStore } from '../../store';
-import { isNewUser, scaleFont, scaleModerate } from '../../utils';
+import { scaleFont, scaleModerate } from '../../utils';
 import { routes } from '../../navigation/routes';
+
+// Matches the approved profile mockup: header card (avatar / name / ID /
+// PRO / share), Friends-Fans-Following stats, VIP upgrade banner, Wallet
+// and Earn Coins cards, then the Services & Tools grid. Stats, wallet
+// balance, and most tools have no backend yet — they render zeros or are
+// visual-only until those endpoints exist.
+const STATS = [
+  { key: 'friends', label: 'Friends', value: '0' },
+  { key: 'fans', label: 'Fans', value: '0' },
+  { key: 'following', label: 'Following', value: '0' }
+];
+
+function StatItem({ label, value }) {
+  const theme = useTheme();
+  return <View style={styles.statItem}>
+      <Text style={[styles.statValue, { color: theme.text.primary }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: theme.text.secondary }]}>{label}</Text>
+    </View>;
+}
+
+function ToolItem({ emoji, label, onPress }) {
+  const theme = useTheme();
+  return <Pressable onPress={onPress} disabled={!onPress} style={styles.toolItem}>
+      <View style={[styles.toolIcon, { backgroundColor: theme.colors.teal50 }]}>
+        <Text style={styles.toolEmoji}>{emoji}</Text>
+      </View>
+      <Text style={[styles.toolLabel, { color: theme.text.secondary }]}>{label}</Text>
+    </Pressable>;
+}
+
 export function ProfileScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
   const session = useAppStore(state => state.session);
-  const showNewBadge = isNewUser(session?.user.createdAt);
-  // Same perk-based background used in the Room screen (see
-  // useAssignedRoomBackground) — just showing it here for now, ahead of a
-  // full profile redesign. Falls back to the screen's normal plain
-  // background when nothing's assigned.
-  const { source: assignedBackgroundSource } = useAssignedRoomBackground();
-  const [backgroundFailed, setBackgroundFailed] = React.useState(false);
-  // Reset whenever the source itself changes — otherwise a stale failure
-  // from a previous asset would keep this screen falling back forever even
-  // after a working background comes through.
-  React.useEffect(() => {
-    setBackgroundFailed(false);
-  }, [assignedBackgroundSource]);
-  const showCustomBackground = Boolean(assignedBackgroundSource) && !backgroundFailed;
+  const user = session?.user;
 
-  const content = <>
-      <View style={styles.header}>
-        <View style={styles.headerSpacer} />
-        <Pressable onPress={() => navigation.navigate(routes.settings)} hitSlop={10}>
-          <SettingsIcon size={22} color={theme.text.secondary} />
+  const tools = [
+    { emoji: '📈', label: 'My Level' },
+    { emoji: '🛍️', label: 'Shop' },
+    { emoji: '🎖️', label: 'Badges' },
+    { emoji: '✅', label: 'Verified' },
+    { emoji: '🏢', label: 'Agency', onPress: () => navigation.navigate(routes.createAgency) },
+    { emoji: '🎒', label: 'Bag' },
+    { emoji: '🖥️', label: 'Monitor' },
+    { emoji: '⚙️', label: 'Settings', onPress: () => navigation.navigate(routes.settings) }
+  ];
+
+  const content = <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <View style={[styles.headerCard, {
+        backgroundColor: theme.surfaces.card,
+        borderColor: theme.colors.cardBorder
+      }]}>
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => navigation.navigate(routes.changeAvatar)} style={[styles.avatarRing, { borderColor: theme.colors.followOrange }]}>
+            <Avatar value={user?.profileImage} fullName={user?.fullName} size={scaleModerate(56)} />
+          </Pressable>
+          <View style={styles.headerInfo}>
+            <Text style={[styles.name, { color: theme.text.primary }]} numberOfLines={2}>{user?.fullName || 'Guest'}</Text>
+            <Text style={[styles.idText, { color: theme.text.secondary }]}>ID: {user?.displayId || user?.publicId || '—'}</Text>
+          </View>
+          <View style={[styles.proBadge, { backgroundColor: theme.colors.vipGoldBackground }]}>
+            <Text style={[styles.proBadgeText, { color: theme.colors.vipGoldText }]}>⚡ PRO</Text>
+          </View>
+          <Pressable hitSlop={10}>
+            <Text style={[styles.shareIcon, { color: theme.text.secondary }]}>⤴</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.statsRow}>
+          {STATS.map(stat => <StatItem key={stat.key} label={stat.label} value={stat.value} />)}
+        </View>
+
+        <Pressable style={[styles.vipBanner, { backgroundColor: theme.colors.followOrange }]}>
+          <View style={styles.vipTextWrap}>
+            <Text style={styles.vipTitle}>👑 Premium VIP Access</Text>
+            <Text style={styles.vipSubtitle}>Unlock exclusive perks & badges</Text>
+          </View>
+          <View style={styles.vipUpgrade}>
+            <Text style={[styles.vipUpgradeText, { color: theme.colors.followOrange }]}>Upgrade</Text>
+          </View>
         </Pressable>
       </View>
 
-      <View style={styles.container}>
-        <Avatar value={session?.user.profileImage} fullName={session?.user.fullName} size={scaleModerate(84)} style={styles.avatar} />
-
-        <View style={styles.nameRow}>
-          <Text style={[styles.title, {
-          color: theme.text.primary
-        }]}>{session?.user.fullName || 'Guest'}</Text>
-          {showNewBadge ? <View style={[styles.newBadge, {
-          backgroundColor: theme.cta.primary.background
+      <View style={styles.walletRow}>
+        <View style={[styles.walletCard, {
+          backgroundColor: theme.surfaces.card,
+          borderColor: theme.colors.cardBorder
         }]}>
-              <Text style={[styles.newBadgeText, {
-            color: theme.cta.primary.text
-          }]}>NEW</Text>
-            </View> : null}
+          <Text style={[styles.walletLabel, { color: theme.text.secondary }]}>💰 My Wallet</Text>
+          <Text style={[styles.walletValue, { color: theme.text.primary }]}>
+            0 <Text style={[styles.walletUnit, { color: theme.colors.followOrange }]}>Coins</Text>
+          </Text>
         </View>
-        <Text style={[styles.subtitle, {
-        color: theme.text.secondary
-      }]}>{session?.user.phone || session?.user.email || 'Account details belong here.'}</Text>
-        {session?.user.displayId || session?.user.publicId ? <Text style={[styles.idText, {
-        color: theme.text.mutedIcon
-      }]}>ID: {session?.user.displayId || session?.user.publicId}</Text> : null}
+        <View style={[styles.walletCard, {
+          backgroundColor: theme.surfaces.card,
+          borderColor: theme.colors.cardBorder
+        }]}>
+          <Text style={[styles.walletLabel, { color: theme.text.secondary }]}>🪙 Earn Coins</Text>
+          <View style={styles.tasksRow}>
+            <Text style={[styles.walletValue, { color: theme.text.primary }]}>Tasks</Text>
+            <View style={[styles.tasksDot, { backgroundColor: theme.colors.liveBadge }]} />
+          </View>
+        </View>
       </View>
-    </>;
 
-  if (showCustomBackground) {
-    return (
-      <ImageBackground
-        source={assignedBackgroundSource}
-        resizeMode="cover"
-        style={[styles.backgroundImage, { backgroundColor: theme.surfaces.page }]}
-        onError={() => setBackgroundFailed(true)}
-      >
-        <Screen transparent>{content}</Screen>
-      </ImageBackground>
-    );
-  }
+      <View style={[styles.toolsCard, {
+        backgroundColor: theme.surfaces.card,
+        borderColor: theme.colors.cardBorder
+      }]}>
+        <View style={styles.toolsHeader}>
+          <Text style={[styles.toolsTitle, { color: theme.text.primary }]}>Services & Tools</Text>
+          <SettingsIcon size={16} color={theme.text.mutedIcon} />
+        </View>
+        <View style={styles.toolsGrid}>
+          {tools.map(tool => <ToolItem key={tool.label} emoji={tool.emoji} label={tool.label} onPress={tool.onPress} />)}
+        </View>
+      </View>
+    </ScrollView>;
 
-  return <Screen>{content}</Screen>;
+  // Solid theme color behind the cards instead of the uploaded background
+  // image the room/profile perk used to show here — same teal as the tab
+  // bar's + button (the app's primary CTA color).
+  return <Screen style={{ backgroundColor: theme.cta.primary.background }}>{content}</Screen>;
 }
+
 const styles = StyleSheet.create({
-  backgroundImage: {
+  scrollContent: {
+    paddingHorizontal: scaleModerate(14),
+    paddingTop: scaleModerate(8),
+    paddingBottom: scaleModerate(28)
+  },
+  headerCard: {
+    borderRadius: scaleModerate(20),
+    borderWidth: 1,
+    padding: scaleModerate(14)
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(10)
+  },
+  avatarRing: {
+    borderWidth: 2,
+    borderRadius: 999,
+    padding: scaleModerate(2)
+  },
+  headerInfo: {
     flex: 1
   },
-  header: {
+  name: {
+    fontSize: scaleFont(17),
+    fontWeight: '800'
+  },
+  idText: {
+    marginTop: scaleModerate(2),
+    fontSize: scaleFont(11),
+    fontWeight: '600'
+  },
+  proBadge: {
+    paddingHorizontal: scaleModerate(8),
+    paddingVertical: scaleModerate(4),
+    borderRadius: 999
+  },
+  proBadgeText: {
+    fontSize: scaleFont(10),
+    fontWeight: '800'
+  },
+  shareIcon: {
+    fontSize: scaleFont(18),
+    fontWeight: '700'
+  },
+  statsRow: {
+    flexDirection: 'row',
+    marginTop: scaleModerate(14)
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center'
+  },
+  statValue: {
+    fontSize: scaleFont(16),
+    fontWeight: '800'
+  },
+  statLabel: {
+    marginTop: scaleModerate(2),
+    fontSize: scaleFont(11)
+  },
+  vipBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: scaleModerate(20),
-    paddingTop: scaleModerate(14)
+    borderRadius: scaleModerate(14),
+    paddingHorizontal: scaleModerate(12),
+    paddingVertical: scaleModerate(10),
+    marginTop: scaleModerate(14)
   },
-  headerSpacer: {
-    width: scaleModerate(22)
-  },
-  container: {
+  vipTextWrap: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: scaleModerate(24)
+    paddingRight: scaleModerate(8)
   },
-  avatar: {
-    marginBottom: scaleModerate(16)
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scaleModerate(8)
-  },
-  title: {
-    fontSize: scaleFont(22),
+  vipTitle: {
+    color: '#FFFFFF',
+    fontSize: scaleFont(13),
     fontWeight: '800'
   },
-  newBadge: {
-    paddingHorizontal: scaleModerate(8),
-    paddingVertical: scaleModerate(3),
-    borderRadius: 999
-  },
-  newBadgeText: {
+  vipSubtitle: {
+    color: '#FFFFFF',
+    opacity: 0.9,
     fontSize: scaleFont(10),
-    fontWeight: '800',
-    letterSpacing: 0.4
+    marginTop: scaleModerate(2)
   },
-  subtitle: {
-    marginTop: scaleModerate(6),
-    fontSize: scaleFont(14),
-    textAlign: 'center'
+  vipUpgrade: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: scaleModerate(12),
+    paddingVertical: scaleModerate(6)
   },
-  idText: {
-    marginTop: scaleModerate(4),
+  vipUpgradeText: {
     fontSize: scaleFont(11),
-    fontWeight: '600',
-    textAlign: 'center'
+    fontWeight: '800'
+  },
+  walletRow: {
+    flexDirection: 'row',
+    gap: scaleModerate(10),
+    marginTop: scaleModerate(12)
+  },
+  walletCard: {
+    flex: 1,
+    borderRadius: scaleModerate(16),
+    borderWidth: 1,
+    padding: scaleModerate(12)
+  },
+  walletLabel: {
+    fontSize: scaleFont(11),
+    fontWeight: '700'
+  },
+  walletValue: {
+    marginTop: scaleModerate(6),
+    fontSize: scaleFont(16),
+    fontWeight: '800'
+  },
+  walletUnit: {
+    fontSize: scaleFont(11),
+    fontWeight: '700'
+  },
+  tasksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(6)
+  },
+  tasksDot: {
+    width: scaleModerate(7),
+    height: scaleModerate(7),
+    borderRadius: 999,
+    marginTop: scaleModerate(6)
+  },
+  toolsCard: {
+    borderRadius: scaleModerate(20),
+    borderWidth: 1,
+    padding: scaleModerate(14),
+    marginTop: scaleModerate(12)
+  },
+  toolsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: scaleModerate(12)
+  },
+  toolsTitle: {
+    fontSize: scaleFont(14),
+    fontWeight: '800'
+  },
+  toolsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap'
+  },
+  toolItem: {
+    width: '25%',
+    alignItems: 'center',
+    marginBottom: scaleModerate(14)
+  },
+  toolIcon: {
+    width: scaleModerate(44),
+    height: scaleModerate(44),
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  toolEmoji: {
+    fontSize: scaleFont(18)
+  },
+  toolLabel: {
+    marginTop: scaleModerate(6),
+    fontSize: scaleFont(10),
+    fontWeight: '600'
   }
 });
+
 export default ProfileScreen;
