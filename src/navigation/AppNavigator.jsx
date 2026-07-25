@@ -13,6 +13,9 @@ import { ProfileScreen } from '../screens/Profile';
 import { BannedScreen } from '../screens/Banned';
 import { SettingsScreen } from '../screens/Settings';
 import { EditProfileScreen } from '../screens/EditProfile';
+import { BannerDetailScreen } from '../screens/BannerDetail';
+import { CreateAgencyScreen } from '../screens/CreateAgency';
+import { ChangeAvatarScreen } from '../screens/ChangeAvatar';
 const Stack = createNativeStackNavigator();
 export function AppNavigator() {
   return <Stack.Navigator screenOptions={{
@@ -33,6 +36,9 @@ export function AppNavigator() {
       <Stack.Screen name="Banned" component={BannedScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+      <Stack.Screen name="BannerDetail" component={BannerDetailScreen} />
+      <Stack.Screen name="CreateAgency" component={CreateAgencyScreen} />
+      <Stack.Screen name="ChangeAvatar" component={ChangeAvatarScreen} />
     </Stack.Navigator>;
 }
 export default AppNavigator;
