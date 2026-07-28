@@ -45,21 +45,54 @@ export function openLocationSettings() {
   }
   Linking.openSettings();
 }
-export function getCurrentLocation() {
+// Geolocation's own error codes (Android/iOS both use this numbering):
+// 1 = PERMISSION_DENIED, 2 = POSITION_UNAVAILABLE (location services off, or
+// no provider can produce a fix at all), 3 = TIMEOUT (services are on and a
+// fix is possible in principle, it just didn't arrive in time — weak
+// signal, indoors, cold GPS start). These need different user-facing
+// messages: only the first two are actually "turn location on/allow
+// permission" situations; a timeout is not, and sending the user to
+// Settings for it fixes nothing.
+const GEOLOCATION_ERROR_CODES = {
+  1: 'PERMISSION_DENIED',
+  2: 'POSITION_UNAVAILABLE',
+  3: 'TIMEOUT'
+};
+
+// Like getCurrentLocation, but reports *why* it failed instead of just
+// null, so callers (login/signup) can show an accurate message instead of
+// always claiming location is off. maximumAge lets a fix from the last
+// minute (e.g. one taken moments ago on a previous attempt) resolve
+// instantly instead of waiting on a fresh GPS read every single time —
+// the 12s timeout is the ceiling only for when no recent fix exists at
+// all.
+export function getCurrentLocationOrError() {
   return new Promise(resolve => {
-    Geolocation.getCurrentPosition(position => {
-      const location = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude
-      };
-      locationStorage.set(LOCATION_KEY, JSON.stringify(location));
-      resolve(location);
-    }, () => resolve(null), {
-      enableHighAccuracy: false,
-      timeout: 15000,
-      maximumAge: 60000
-    });
+    Geolocation.getCurrentPosition(
+      position => {
+        const location = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        };
+        locationStorage.set(LOCATION_KEY, JSON.stringify(location));
+        resolve({ location });
+      },
+      error => resolve({ errorCode: GEOLOCATION_ERROR_CODES[error?.code] ?? 'POSITION_UNAVAILABLE' }),
+      {
+        enableHighAccuracy: false,
+        timeout: 12000,
+        maximumAge: 60000
+      }
+    );
   });
+}
+
+// Back-compat for callers that only ever cared about success/failure (e.g.
+// PermissionsGate's background warm-up, SignupDetails' cached-location
+// fallback) — collapses any failure reason back down to null.
+export async function getCurrentLocation() {
+  const result = await getCurrentLocationOrError();
+  return result.location ?? null;
 }
 export function getCachedLocation() {
   const raw = locationStorage.getString(LOCATION_KEY);
@@ -86,13 +119,24 @@ export async function reverseGeocodeCountry(location) {
   return address?.country ?? null;
 }
 
+// Nominatim has no SLA and no request timeout of its own — a slow or
+// unreachable response used to hang login/signup for a long time (this
+// fetch had no timeout at all) since it's awaited before the actual login
+// request even starts. 4s is enough for a normal response; past that,
+// reverseGeocodeLocationLabel below just falls back to the raw
+// coordinates instead of blocking the user.
+const REVERSE_GEOCODE_TIMEOUT = 4000;
+
 async function reverseGeocodeAddress(location) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REVERSE_GEOCODE_TIMEOUT);
   try {
     // accept-language=en forces English place names — without it Nominatim
     // localizes to the device/region's language (e.g. Urdu for Pakistan).
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}&zoom=10&addressdetails=1&accept-language=en`;
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'StreamlineApp/1.0', 'Accept-Language': 'en' }
+      headers: { 'User-Agent': 'StreamlineApp/1.0', 'Accept-Language': 'en' },
+      signal: controller.signal
     });
     if (!response.ok) {
       return null;
@@ -101,6 +145,8 @@ async function reverseGeocodeAddress(location) {
     return data?.address ?? null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
