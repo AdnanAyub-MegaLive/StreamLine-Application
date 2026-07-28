@@ -11,6 +11,23 @@ import { scaleFont, scaleModerate } from '../../../utils';
 // until that listing endpoint exists, instead of showing fake rooms.
 const liveRooms = [];
 
+// DEMO DATA — for a stakeholder walkthrough only, so the Live tab doesn't
+// render empty while there's no real "browse all live rooms" endpoint yet.
+// Remove this block (and the fallback below) once that endpoint ships and
+// liveRooms above is wired up to it.
+const DEMO_ACCENT_KEYS = ['teal700', 'giftAccent', 'vipPurple', 'facebookBlue'];
+function demoAccentForIndex(index) {
+  return theme => theme.colors[DEMO_ACCENT_KEYS[index % DEMO_ACCENT_KEYS.length]];
+}
+const DEMO_LIVE_ROOMS = [
+  { id: 'demo-live-1', hostName: 'Ayesha Khan', hostTag: '@ayeshalive', viewers: '2.4k', accent: demoAccentForIndex(0) },
+  { id: 'demo-live-2', hostName: 'Bilal Ahmed', hostTag: '@bilalvibes', viewers: '1.1k', accent: demoAccentForIndex(1) },
+  { id: 'demo-live-3', hostName: 'Sara Malik', hostTag: '@sara_talks', viewers: '834', accent: demoAccentForIndex(2) },
+  { id: 'demo-live-4', hostName: 'Usman Raza', hostTag: '@usmanmusic', viewers: '612', accent: demoAccentForIndex(3) },
+  { id: 'demo-live-5', hostName: 'Hina Farooq', hostTag: '@hinaspeaks', viewers: '389', accent: demoAccentForIndex(0) },
+  { id: 'demo-live-6', hostName: 'Danish Iqbal', hostTag: '@danishgaming', viewers: '201', accent: demoAccentForIndex(1) }
+];
+
 const countryFilters = ['All', 'SA KSA', 'AE UAE', 'EG Egypt', 'KW Kuwait'];
 
 function LiveBadge() {
@@ -30,12 +47,26 @@ function LiveRoomCard({
   const theme = useTheme();
   const navigation = useNavigation();
   const accent = item.accent(theme);
+  // DEMO_LIVE_ROOMS ids (see above) route to a static preview screen
+  // instead of the real Room screen — a fake roomId there just got stuck
+  // "Loading room..." with no seats, since nothing on the backend actually
+  // exists for it. Real rooms are completely unaffected.
+  const isDemo = item.id.startsWith('demo-');
+  const handlePress = () => {
+    if (isDemo) {
+      navigation.navigate(routes.demoRoom, {
+        title: item.hostTag ?? item.hostName,
+        hostName: item.hostName,
+        members: item.viewers
+      });
+      return;
+    }
+    navigation.navigate(routes.room, { roomId: item.id });
+  };
   return <Pressable style={[styles.liveCard, {
     backgroundColor: theme.surfaces.card,
     borderColor: theme.colors.cardBorder
-  }]} onPress={() => navigation.navigate(routes.room, {
-    roomId: item.id
-  })}>
+  }]} onPress={handlePress}>
       <View style={[styles.liveThumb, {
       backgroundColor: accent
     }]}>
@@ -105,7 +136,10 @@ function LiveEmptyState() {
 
 export function LiveTabContent() {
   const [activeFilter, setActiveFilter] = React.useState('All');
-  return <FlatList data={liveRooms} keyExtractor={item => item.id} numColumns={2} columnWrapperStyle={liveRooms.length ? styles.liveRow : undefined} contentContainerStyle={styles.liveList} ListHeaderComponent={<CountryFilterRow activeFilter={activeFilter} onSelect={setActiveFilter} />} ListEmptyComponent={<LiveEmptyState />} renderItem={({
+  // Falls back to DEMO_LIVE_ROOMS above whenever the real list is empty —
+  // see the comment on that constant.
+  const data = liveRooms.length ? liveRooms : DEMO_LIVE_ROOMS;
+  return <FlatList data={data} keyExtractor={item => item.id} numColumns={2} columnWrapperStyle={data.length ? styles.liveRow : undefined} contentContainerStyle={styles.liveList} ListHeaderComponent={<CountryFilterRow activeFilter={activeFilter} onSelect={setActiveFilter} />} ListEmptyComponent={<LiveEmptyState />} renderItem={({
     item
   }) => <LiveRoomCard item={item} />} />;
 }
