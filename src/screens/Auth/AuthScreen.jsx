@@ -5,9 +5,10 @@ import { EyeIcon, FacebookIcon, GoogleIcon } from '../../assets';
 import { checkPhoneRegistered, loginWithPassword, LoginUserError } from '../../api';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
-import { BrandMark, FormField, PrimaryButton, Screen, showAlert, TermsCheckbox } from '../../components';
+import { BrandMark, FormField, PrimaryButton, Screen, showAlert, showLocationErrorAlert, TermsCheckbox } from '../../components';
 import { routes } from '../../navigation';
-import { openLocationSettings, scaleFont, scaleModerate } from '../../utils';
+import { scaleFont, scaleModerate } from '../../utils';
+const LOCATION_ERROR_CODES = ['LOCATION_UNAVAILABLE', 'LOCATION_TIMEOUT', 'LOCATION_PERMISSION_DENIED'];
 function createDummySocialSession(provider) {
   return {
     token: `${provider}-${Date.now()}`,
@@ -91,7 +92,6 @@ export function AuthScreen() {
   const [password, setPassword] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
   const [rememberMe, setRememberMe] = React.useState(true);
-  const [error, setError] = React.useState(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isCheckingPhone, setIsCheckingPhone] = React.useState(false);
   // TEMPORARY: lets QA reach Home while no backend is running. Remove once
@@ -144,7 +144,6 @@ export function AuthScreen() {
     if (!termsAccepted || isSubmitting || username.trim().length === 0 || password.trim().length === 0) {
       return;
     }
-    setError(null);
     setIsSubmitting(true);
     try {
       // The backend has no separate username field — accounts are looked up
@@ -161,21 +160,22 @@ export function AuthScreen() {
         }]
       });
     } catch (loginError) {
-      if (loginError instanceof LoginUserError && loginError.code === 'LOCATION_UNAVAILABLE') {
-        showAlert('Turn On Location', 'Please turn on location services to log in, then try again.', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => openLocationSettings() }
-        ]);
+      if (loginError instanceof LoginUserError && LOCATION_ERROR_CODES.includes(loginError.code)) {
+        showLocationErrorAlert(loginError);
       } else if (loginError instanceof LoginUserError && loginError.code === 'DEVICE_BANNED') {
         const reason = loginError.details?.reason;
         showAlert(
           'Device Banned',
           reason ? `This device has been banned.\nReason: ${reason}` : 'This device has been banned.'
         );
+      } else if (loginError instanceof LoginUserError && loginError.code === 'TIMEOUT') {
+        showAlert('Request Timed Out', loginError.message);
+      } else if (loginError instanceof LoginUserError && loginError.code === 'SERVER_UNREACHABLE') {
+        showAlert('Unable to Connect', loginError.message);
       } else if (loginError instanceof LoginUserError) {
-        setError(loginError.message);
+        showAlert('Login Failed', loginError.message);
       } else {
-        setError('Unable to log in.');
+        showAlert('Login Failed', 'Unable to log in. Please try again.');
       }
     } finally {
       setIsSubmitting(false);
@@ -217,10 +217,6 @@ export function AuthScreen() {
               </View>
 
               <PrimaryButton label={isSubmitting ? 'Logging in...' : 'Login'} onPress={handleUsernameLogin} disabled={!termsAccepted || isSubmitting || username.trim().length === 0 || password.trim().length === 0} style={styles.actionButton} />
-
-              {error ? <Text style={[styles.errorText, {
-            color: theme.colors.giftAccent
-          }]}>{error}</Text> : null}
             </View>}
 
           <View style={styles.divider}>
@@ -305,7 +301,7 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   tabContent: {
-    gap: scaleModerate(13)
+    gap: scaleModerate(6)
   },
   actionButton: {
     marginTop: scaleModerate(2)
@@ -376,12 +372,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: scaleModerate(10)
-  },
-  errorText: {
-    marginTop: scaleModerate(-6),
-    fontSize: scaleFont(12),
-    fontWeight: '600',
-    textAlign: 'center'
   },
   skipButton: {
     marginTop: scaleModerate(4),
