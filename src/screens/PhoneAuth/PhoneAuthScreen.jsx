@@ -6,10 +6,11 @@ import { LoginUserError, loginWithPassword, verifyPhoneOtp } from '../../api';
 import { appEnv } from '../../config';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
-import { FormField, PrimaryButton, Screen, showAlert } from '../../components';
+import { FormField, PrimaryButton, Screen, showAlert, showLocationErrorAlert } from '../../components';
 import { routes } from '../../navigation';
-import { openLocationSettings, scaleFont, scaleModerate } from '../../utils';
+import { scaleFont, scaleModerate } from '../../utils';
 const TEMP_OTP = '123456';
+const LOCATION_ERROR_CODES = ['LOCATION_UNAVAILABLE', 'LOCATION_TIMEOUT', 'LOCATION_PERMISSION_DENIED'];
 export function PhoneAuthScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -54,18 +55,23 @@ export function PhoneAuthScreen() {
         routes: [{ name: session.onboardingComplete ? routes.home : routes.onboarding }]
       });
     } catch (loginError) {
-      if (loginError instanceof LoginUserError && loginError.code === 'LOCATION_UNAVAILABLE') {
-        showAlert('Turn On Location', 'Please turn on location services to log in, then try again.', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => openLocationSettings() }
-        ]);
+      if (loginError instanceof LoginUserError && LOCATION_ERROR_CODES.includes(loginError.code)) {
+        showLocationErrorAlert(loginError);
       } else if (loginError instanceof LoginUserError && loginError.code === 'DEVICE_BANNED') {
         const reason = loginError.details?.reason;
         showAlert('Device Banned', reason ? `This device has been banned.\nReason: ${reason}` : 'This device has been banned.');
+      } else if (loginError instanceof LoginUserError && loginError.code === 'TIMEOUT') {
+        setError(loginError.message);
+        showAlert('Request Timed Out', loginError.message);
+      } else if (loginError instanceof LoginUserError && loginError.code === 'SERVER_UNREACHABLE') {
+        setError(loginError.message);
+        showAlert('Unable to Connect', loginError.message);
       } else if (loginError instanceof LoginUserError) {
         setError(loginError.message);
+        showAlert('Login Failed', loginError.message);
       } else {
         setError('Unable to log in.');
+        showAlert('Login Failed', 'Unable to log in. Please try again.');
       }
     } finally {
       setIsSubmitting(false);
