@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 import { appEnv } from '@/config/env';
 import { getStableDeviceId } from '@/utils/deviceId';
-import { getCurrentLocation, reverseGeocodeLocationLabel } from '@/utils/location';
+import { getCachedLocation, getCurrentLocationOrError, reverseGeocodeLocationLabel } from '@/utils/location';
 import { apiClient } from './client';
 const TEMP_AUTH_CONFIG = {
   email: appEnv.authEmail,
@@ -25,6 +25,33 @@ function buildUserFromLogin(identifier, method) {
 function delay() {
   return new Promise(resolve => setTimeout(resolve, TEMP_DELAY));
 }
+// Auth calls (login/signup/OTP) use a shorter timeout than the default
+// apiClient one — 5s is long enough for a real response and short enough
+// that a hung/unreachable server doesn't leave the user staring at a
+// spinner. See classifyAuthError below for how this maps to a popup.
+const AUTH_REQUEST_TIMEOUT = 5000;
+// Turns any axios failure from a login/signup call into one of three
+// distinct, user-facing outcomes instead of one generic "something went
+// wrong": the request timed out, the server couldn't be reached at all, or
+// the server responded with a real validation/business error (which already
+// carries its own message from the backend). UI screens use `code` to
+// decide which popup copy to show.
+function classifyAuthError(error, ErrorClass) {
+  if (error instanceof ErrorClass) {
+    return error;
+  }
+  if (axios.isAxiosError(error)) {
+    if (error.response?.data?.error) {
+      const { code, message, fields, details } = error.response.data.error;
+      return new ErrorClass(message, code, fields ?? details);
+    }
+    if (error.code === 'ECONNABORTED' || /timeout/i.test(error.message ?? '')) {
+      return new ErrorClass('The server is taking too long to respond. Please try again.', 'TIMEOUT');
+    }
+    return new ErrorClass('Unable to connect to the server. Check your internet connection and try again.', 'SERVER_UNREACHABLE');
+  }
+  return new ErrorClass('Something went wrong. Please try again.', 'UNKNOWN');
+}
 // Onboarding's whole job is collecting these two — once both exist on the
 // account, there's nothing left to onboard. Used instead of a stored
 // boolean so a returning user who logs out and back in (a fresh session
@@ -32,6 +59,42 @@ function delay() {
 // nothing locally remembered they'd already done it.
 function hasCompletedOnboarding(user) {
   return Boolean(user.gender) && Boolean(user.profileImage);
+}
+// Shared by registerUser/loginWithPassword — gets a fresh GPS fix or throws
+// with a message that actually matches why it failed. Only PERMISSION_DENIED
+// and POSITION_UNAVAILABLE are genuine "location is off/blocked" cases;
+// TIMEOUT means location is on and working, it just didn't get a fix in
+// time, so it gets its own message instead of the misleading "turn on
+// location" one.
+async function requireCurrentLocation(ErrorClass) {
+  const result = await getCurrentLocationOrError();
+  if (result.location) {
+    return result.location;
+  }
+  if (result.errorCode === 'TIMEOUT') {
+    throw new ErrorClass('Could not get your location in time. Move to an area with a clearer signal and try again.', 'LOCATION_TIMEOUT');
+  }
+  if (result.errorCode === 'PERMISSION_DENIED') {
+    throw new ErrorClass('Streamline needs location permission to continue. Please allow it in Settings.', 'LOCATION_PERMISSION_DENIED');
+  }
+  throw new ErrorClass('Please turn on location services to continue, then try again.', 'LOCATION_UNAVAILABLE');
+}
+// Login-only, temporary: the strict "turn on location" popup was making
+// login feel broken/slow, so login no longer blocks on it at all — it uses
+// a cached fix if one exists, otherwise tries for a fresh one but never
+// throws or shows a popup if that fails. The backend still requires
+// device.location to be a non-empty string, so this always resolves to
+// *something* usable (falling back to 0,0 in the worst case) rather than
+// leaving the field empty. Sign-up still uses requireCurrentLocation above
+// (unaffected) since accuracy matters more there and it wasn't reported as
+// a problem.
+async function bestEffortLocation() {
+  const cached = getCachedLocation();
+  if (cached) {
+    return cached;
+  }
+  const result = await getCurrentLocationOrError();
+  return result.location ?? { latitude: 0, longitude: 0 };
 }
 export class RegisterUserError extends Error {
   code;
@@ -45,13 +108,11 @@ export class RegisterUserError extends Error {
 }
 export async function registerUser(input) {
   const email = input.email?.trim();
-  // Same rule as loginWithPassword — require location to actually be on
-  // right now (not a stale cached fix from earlier), so sign-up is blocked
-  // with the same "Turn On Location" prompt until it is.
-  const location = await getCurrentLocation();
-  if (!location) {
-    throw new RegisterUserError('Unable to determine your location. Please check location permission and try again.', 'LOCATION_UNAVAILABLE');
-  }
+  // Same rule as loginWithPassword — require a fresh location fix (not a
+  // stale cached one from earlier), so sign-up is blocked until one is
+  // available. See requireCurrentLocation for why the failure reason
+  // matters (permission/services off vs. just a slow fix).
+  const location = await requireCurrentLocation(RegisterUserError);
   // Send a human-readable "City, Country" label (matches the backend's
   // documented example) instead of raw coordinates.
   const locationLabel = await reverseGeocodeLocationLabel(location);
@@ -70,7 +131,7 @@ export async function registerUser(input) {
     }
   };
   try {
-    const response = await apiClient.post('/api/users/register', body);
+    const response = await apiClient.post('/api/users/register', body, { timeout: AUTH_REQUEST_TIMEOUT });
     const {
       user,
       sessionToken
@@ -105,15 +166,7 @@ export async function registerUser(input) {
       onboardingComplete: false
     };
   } catch (error) {
-    if (axios.isAxiosError(error) && error.response?.data?.error) {
-      const {
-        code,
-        message,
-        fields
-      } = error.response.data.error;
-      throw new RegisterUserError(message, code, fields);
-    }
-    throw new RegisterUserError('Unable to reach the server. Check your network and the backend address in .env (STREAMLINE_API_BASE_URL).', 'NETWORK_ERROR');
+    throw classifyAuthError(error, RegisterUserError);
   }
 }
 export class LoginUserError extends Error {
@@ -132,15 +185,11 @@ export class LoginUserError extends Error {
 // returning 422 without them — see docs/mobile-login-api.md).
 export async function loginWithPassword(input) {
   const cleanedPhone = input.phone.trim().replace(/[\s().-]/g, '');
-  // Deliberately NOT falling back to getCachedLocation() here — login must
-  // block until location services are actually on right now, not whenever
-  // they were last on (e.g. permission was granted with GPS enabled, then
-  // the user turned it off before logging in; a stale cache would silently
-  // let that through).
-  const location = await getCurrentLocation();
-  if (!location) {
-    throw new LoginUserError('Unable to determine your location. Please check location permission and try again.', 'LOCATION_UNAVAILABLE');
-  }
+  // See bestEffortLocation above — login no longer blocks or pops up over
+  // location at all, it just uses whatever it can get (cached, fresh, or a
+  // 0,0 fallback) so the backend's required device.location field is never
+  // empty.
+  const location = await bestEffortLocation();
   // Human-readable "City, Country" label (matches the backend's documented
   // example), not raw coordinates. Falls back to "lat,lng" internally if
   // reverse geocoding fails, so this field is never left empty.
@@ -154,7 +203,7 @@ export async function loginWithPassword(input) {
         location: locationLabel,
         platform: Platform.OS === 'ios' ? 'iOS' : 'Android'
       }
-    });
+    }, { timeout: AUTH_REQUEST_TIMEOUT });
     const {
       data
     } = response.data;
@@ -193,18 +242,7 @@ export async function loginWithPassword(input) {
       onboardingComplete: hasCompletedOnboarding(authUser)
     };
   } catch (error) {
-    if (error instanceof LoginUserError) {
-      throw error;
-    }
-    if (axios.isAxiosError(error) && error.response?.data?.error) {
-      const {
-        code,
-        message,
-        details
-      } = error.response.data.error;
-      throw new LoginUserError(message, code, details);
-    }
-    throw new LoginUserError('Unable to reach the server. Check your network and the backend address in .env (STREAMLINE_API_BASE_URL).', 'NETWORK_ERROR');
+    throw classifyAuthError(error, LoginUserError);
   }
 }
 export class UpdateProfileError extends Error {
