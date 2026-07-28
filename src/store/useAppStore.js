@@ -17,6 +17,16 @@ export const useAppStore = create()(persist(set => ({
   session: null,
   hasHydrated: false,
   banInfo: null,
+  // Keyed by the user's publicId (not global) so multiple accounts signing
+  // in on the same device each get their own submitted/not-submitted state.
+  // There's no backend endpoint yet to check application status server-side
+  // (see docs/agency-application-spec.md), so this locally remembers a
+  // successful submission and blocks the Create Agency form from being
+  // shown again for that account on this device.
+  agencyApplications: {},
+  markAgencyApplicationSubmitted: userId => set(state => ({
+    agencyApplications: userId ? { ...state.agencyApplications, [userId]: new Date().toISOString() } : state.agencyApplications
+  })),
   setSession: session => set({
     session
   }),
