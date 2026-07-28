@@ -13,5 +13,6 @@ export const routes = {
   editProfile: 'EditProfile',
   bannerDetail: 'BannerDetail',
   createAgency: 'CreateAgency',
-  changeAvatar: 'ChangeAvatar'
+  changeAvatar: 'ChangeAvatar',
+  demoRoom: 'DemoRoom'
 };
