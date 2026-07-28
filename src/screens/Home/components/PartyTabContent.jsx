@@ -30,6 +30,15 @@ function toPartyItem(room, index) {
   };
 }
 
+// DEMO DATA — for a stakeholder walkthrough only, shown when the real
+// trending-parties fetch comes back empty (e.g. no rooms live right now).
+// Remove once real data is reliably present, or gate it behind a flag.
+const DEMO_TRENDING_PARTIES = [
+  { id: 'demo-party-1', title: 'Friday Night Karaoke', members: 128, hostName: 'Zara Sheikh', hostAvatar: undefined, accent: accentForIndex(0) },
+  { id: 'demo-party-2', title: 'Weekend Royale Tournament', members: 96, hostName: 'Omar Farooq', hostAvatar: undefined, accent: accentForIndex(1) },
+  { id: 'demo-party-3', title: 'Chill & Chat Lounge', members: 54, hostName: 'Mahnoor Ali', hostAvatar: undefined, accent: accentForIndex(2) }
+];
+
 const bannerSlides = [{
   id: 'b1',
   eyebrow: 'LEVEL UP YOUR NIGHT!',
@@ -261,7 +270,21 @@ function PartyCard({
   const theme = useTheme();
   const navigation = useNavigation();
   const accent = item.accent(theme);
+  // DEMO_TRENDING_PARTIES ids (see above) route to a static preview screen
+  // instead of the real Room screen — a fake roomId there just got stuck
+  // "Loading room..." with no seats, since nothing on the backend actually
+  // exists for it. Real rooms are completely unaffected.
+  const isDemo = item.id.startsWith('demo-');
   const handlePress = () => {
+    if (isDemo) {
+      navigation.navigate(routes.demoRoom, {
+        title: item.title,
+        hostName: item.hostName,
+        hostAvatar: item.hostAvatar,
+        members: item.members
+      });
+      return;
+    }
     navigation.navigate(routes.room, {
       roomId: item.id,
       roomName: item.title,
@@ -336,8 +359,11 @@ export function PartyTabContent({ onBannerScrolling }) {
         </Pressable>
       </View>
 
-      {trendingParties.length > 0 ? <View style={styles.partyRow}>
-          {trendingParties.map(item => <PartyCard key={item.id} item={item} />)}
+      {/* DEMO DATA fallback — see DEMO_TRENDING_PARTIES above. Falls back
+      to it only when the real fetch came back empty; real data always
+      wins once it exists. */}
+      {(trendingParties.length > 0 ? trendingParties : DEMO_TRENDING_PARTIES).length > 0 ? <View style={styles.partyRow}>
+          {(trendingParties.length > 0 ? trendingParties : DEMO_TRENDING_PARTIES).map(item => <PartyCard key={item.id} item={item} />)}
         </View> : <View style={styles.emptyState}>
           <Text style={[styles.emptyStateText, {
         color: theme.text.secondary
