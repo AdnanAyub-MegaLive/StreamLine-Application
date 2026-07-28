@@ -6,13 +6,12 @@ import { EyeIcon } from '../../assets';
 import { registerUser, RegisterUserError } from '../../api';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
-import { FormField, PrimaryButton, Screen, showAlert, TermsCheckbox } from '../../components';
+import { FormField, PrimaryButton, Screen, showAlert, showLocationErrorAlert, TermsCheckbox } from '../../components';
 import { routes } from '../../navigation';
 import {
   getCachedLocation,
   getCurrentLocation,
   getDeviceCountryName,
-  openLocationSettings,
   reverseGeocodeCountry,
   scaleFont,
   scaleModerate
@@ -21,6 +20,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[0-9]{7,15}$/;
 const MIN_PASSWORD_LENGTH = 8;
 const DEFAULT_DOB_AGE_YEARS = 18;
+const LOCATION_ERROR_CODES = ['LOCATION_UNAVAILABLE', 'LOCATION_TIMEOUT', 'LOCATION_PERMISSION_DENIED'];
 function formatDobIso(date) {
   return date.toISOString().slice(0, 10);
 }
@@ -106,16 +106,21 @@ export function SignupDetailsScreen() {
         }]
       });
     } catch (signupError) {
-      if (signupError instanceof RegisterUserError && signupError.code === 'LOCATION_UNAVAILABLE') {
-        showAlert('Turn On Location', 'Please turn on location services to create your account, then try again.', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => openLocationSettings() }
-        ]);
+      if (signupError instanceof RegisterUserError && LOCATION_ERROR_CODES.includes(signupError.code)) {
+        showLocationErrorAlert(signupError);
+      } else if (signupError instanceof RegisterUserError && signupError.code === 'TIMEOUT') {
+        setError(signupError.message);
+        showAlert('Request Timed Out', signupError.message);
+      } else if (signupError instanceof RegisterUserError && signupError.code === 'SERVER_UNREACHABLE') {
+        setError(signupError.message);
+        showAlert('Unable to Connect', signupError.message);
       } else if (signupError instanceof RegisterUserError) {
         setFieldErrors(signupError.fields ?? {});
         setError(signupError.message);
+        showAlert('Sign Up Failed', signupError.message);
       } else {
         setError('Unable to create account. Check your connection and try again.');
+        showAlert('Sign Up Failed', 'Unable to create account. Check your connection and try again.');
       }
     } finally {
       setIsSubmitting(false);
