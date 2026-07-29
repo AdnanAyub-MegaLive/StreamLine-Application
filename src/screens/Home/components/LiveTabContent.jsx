@@ -57,6 +57,7 @@ function LiveRoomCard({
       navigation.navigate(routes.demoRoom, {
         title: item.hostTag ?? item.hostName,
         hostName: item.hostName,
+        hostId: item.id,
         members: item.viewers
       });
       return;
