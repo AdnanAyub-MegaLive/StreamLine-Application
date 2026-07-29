@@ -49,7 +49,14 @@ function getInitial(fullName) {
 // a bundled preset (avatar:<id>), a real photo URL, or (if neither) a
 // letter-initial placeholder. Keeping this logic in one component means
 // every screen renders profile pictures the same way.
-export function Avatar({ value, fullName, size = 48, style }) {
+//
+// frameUri is an optional decorative border image (an admin-assigned
+// FRAMES asset — see useAssignedFrame) drawn around the circle. It has to
+// live outside the circle's own View, which clips its contents
+// (overflow:hidden, so the photo/initials stay a perfect circle) — a frame
+// is deliberately a bit larger than the photo and would get cut off by
+// that same clipping if it were inside it.
+export function Avatar({ value, fullName, size = 48, style, frameUri }) {
   const theme = useTheme();
   const [imageFailed, setImageFailed] = React.useState(false);
   // Reset whenever the value changes — otherwise a component instance that
@@ -61,15 +68,20 @@ export function Avatar({ value, fullName, size = 48, style }) {
     setImageFailed(false);
   }, [value]);
   const preset = getAvatarPreset(value);
+  // Only applied to the outermost element this component returns — the
+  // frame branch below wraps circleStyle in another View, so `style` must
+  // not also be baked into circleStyle there or margin/etc. would stack on
+  // both.
   const circleStyle = [
     styles.circle,
     { width: size, height: size, borderRadius: size / 2 },
-    style
+    !frameUri && style
   ];
 
+  let content;
   if (preset) {
     const avatarTheme = theme.onboarding.avatarStyles[preset.id];
-    return (
+    content = (
       <View
         style={[
           circleStyle,
@@ -79,23 +91,43 @@ export function Avatar({ value, fullName, size = 48, style }) {
         <Text style={{ fontSize: Math.round(size * 0.5) }}>{preset.emoji}</Text>
       </View>
     );
-  }
-
-  if (value && !imageFailed) {
-    return (
+  } else if (value && !imageFailed) {
+    content = (
       <Image
         source={{ uri: value }}
         style={circleStyle}
         onError={() => setImageFailed(true)}
       />
     );
+  } else {
+    content = (
+      <View style={[circleStyle, { backgroundColor: theme.state.soft, borderColor: theme.colors.cardBorder, borderWidth: 1 }]}>
+        <Text style={[styles.initial, { color: theme.colors.teal700, fontSize: scaleFont(Math.round(size * 0.4)) }]}>
+          {getInitial(fullName)}
+        </Text>
+      </View>
+    );
   }
 
+  if (!frameUri) {
+    return content;
+  }
+
+  // The frame is sized ~35% larger than the circle and centered over it —
+  // a typical decorative-frame proportion (it surrounds the photo rather
+  // than sitting flush against its edge). pointerEvents="none" so it never
+  // steals taps meant for whatever wraps this Avatar (e.g. a Pressable
+  // avatar that opens Change Avatar).
+  const frameSize = Math.round(size * 1.35);
   return (
-    <View style={[circleStyle, { backgroundColor: theme.state.soft, borderColor: theme.colors.cardBorder, borderWidth: 1 }]}>
-      <Text style={[styles.initial, { color: theme.colors.teal700, fontSize: scaleFont(Math.round(size * 0.4)) }]}>
-        {getInitial(fullName)}
-      </Text>
+    <View style={[styles.frameWrap, { width: frameSize, height: frameSize }, style]}>
+      {content}
+      <Image
+        source={{ uri: frameUri }}
+        style={[styles.frameImage, { width: frameSize, height: frameSize }]}
+        resizeMode="contain"
+        pointerEvents="none"
+      />
     </View>
   );
 }
@@ -108,6 +140,13 @@ const styles = StyleSheet.create({
   },
   initial: {
     fontWeight: '800'
+  },
+  frameWrap: {
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  frameImage: {
+    position: 'absolute'
   }
 });
 
