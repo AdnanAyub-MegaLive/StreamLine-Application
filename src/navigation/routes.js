@@ -14,5 +14,8 @@ export const routes = {
   bannerDetail: 'BannerDetail',
   createAgency: 'CreateAgency',
   changeAvatar: 'ChangeAvatar',
-  demoRoom: 'DemoRoom'
+  demoRoom: 'DemoRoom',
+  userProfile: 'UserProfile',
+  comingSoon: 'ComingSoon',
+  inAppBrowser: 'InAppBrowser'
 };
