@@ -56,7 +56,7 @@ function LayoutOption({ option, selected, onSelect, theme }) {
 
 // Second step of the Audio Room creation flow — pick one of the 4 seat
 // layouts, then confirm to create the room with that structure.
-export function SeatLayoutModal({ visible, onClose, onConfirm }) {
+export function SeatLayoutModal({ visible, onClose, onConfirm, title, confirmLabel }) {
   const theme = useTheme();
   const [selectedId, setSelectedId] = React.useState(SEAT_LAYOUT_OPTIONS[0].id);
 
@@ -74,7 +74,7 @@ export function SeatLayoutModal({ visible, onClose, onConfirm }) {
           style={[styles.sheet, { backgroundColor: theme.surfaces.card, borderColor: theme.colors.cardBorder }]}
           onPress={() => {}}
         >
-          <Text style={[styles.title, { color: theme.text.primary }]}>Choose Room Size</Text>
+          <Text style={[styles.title, { color: theme.text.primary }]}>{title || 'Choose Room Size'}</Text>
           <Text style={[styles.subtitle, { color: theme.text.secondary }]}>
             Select how many seats this audio room should have.
           </Text>
@@ -92,7 +92,7 @@ export function SeatLayoutModal({ visible, onClose, onConfirm }) {
           </ScrollView>
 
           <Pressable onPress={handleConfirm} style={[styles.confirmButton, { backgroundColor: theme.cta.primary.background }]}>
-            <Text style={[styles.confirmText, { color: theme.cta.primary.text }]}>Create Room</Text>
+            <Text style={[styles.confirmText, { color: theme.cta.primary.text }]}>{confirmLabel || 'Create Room'}</Text>
           </Pressable>
 
           <Pressable onPress={onClose} style={styles.cancelButton}>
