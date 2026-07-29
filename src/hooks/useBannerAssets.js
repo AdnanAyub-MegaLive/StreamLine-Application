@@ -1,6 +1,9 @@
 import React from 'react';
 import { fetchAssetDataUri, fetchUploadCatalog } from '../api';
 import { useAppStore } from '../store';
+import { getCachedAssetList, setCachedAssetList } from '../utils';
+
+const CATEGORY = 'BANNERS';
 
 // Fetches the BANNERS the admin uploaded from the portal (see
 // StreamLine-Portal's mobile upload catalog docs) for the Party tab's
@@ -29,9 +32,16 @@ function sortBanners(assets) {
   });
 }
 
+// Cached (see src/utils/assignedAssetCache.js) — renders the last-known
+// banner set instantly from disk on mount, and only re-downloads image
+// bytes for banners whose id wasn't already in that cached set, instead of
+// re-fetching the catalog and every single banner image on every visit to
+// the Party tab.
 export function useBannerAssets() {
   const sessionToken = useAppStore(state => state.session?.token);
-  const [banners, setBanners] = React.useState([]);
+  const userId = useAppStore(state => state.session?.user?.publicId);
+  const cached = React.useMemo(() => getCachedAssetList(userId, CATEGORY), [userId]);
+  const [banners, setBanners] = React.useState(cached?.items ?? []);
 
   React.useEffect(() => {
     if (!sessionToken) {
@@ -39,12 +49,26 @@ export function useBannerAssets() {
     }
     let cancelled = false;
     (async () => {
-      const assets = await fetchUploadCatalog(sessionToken, { category: 'BANNERS' });
+      const assets = sortBanners(await fetchUploadCatalog(sessionToken, { category: CATEGORY }));
       if (cancelled) {
         return;
       }
+      const ids = assets.map(asset => asset.id);
+      // Exact same set of banners (same ids, same order) as last time —
+      // the cached images are already showing, nothing to re-download.
+      if (cached && cached.ids.length === ids.length && cached.ids.every((id, index) => id === ids[index])) {
+        return;
+      }
+      const cachedById = new Map((cached?.items ?? []).map(item => [item.id, item]));
       const withUris = await Promise.all(
-        sortBanners(assets).map(async asset => {
+        assets.map(async asset => {
+          // Reuse the already-downloaded bytes for a banner that was in
+          // the previous set too — only genuinely new/changed banners
+          // need a fresh download.
+          const previous = cachedById.get(asset.id);
+          if (previous) {
+            return previous;
+          }
           const uri = await fetchAssetDataUri(asset, sessionToken);
           if (!uri) {
             return null;
@@ -52,17 +76,23 @@ export function useBannerAssets() {
           // Strip the ordering prefix off the display title — "1 Create
           // Agency" is shown as just "Create Agency".
           const title = (asset.name ?? '').replace(/^\s*\d+\s*[-._]?\s*/, '').trim();
-          return { id: asset.id, uri, title };
+          // See StreamLine-Portal's docs/mobile-upload-catalog-api.md —
+          // tapping a banner opens actionUrl (a marketing/campaign page)
+          // when the admin set one; banners with none just show the
+          // generic BannerDetail page instead.
+          return { id: asset.id, uri, title, actionUrl: asset.actionUrl ?? null };
         })
       );
       if (!cancelled) {
-        setBanners(withUris.filter(Boolean));
+        const resolved = withUris.filter(Boolean);
+        setBanners(resolved);
+        setCachedAssetList(userId, CATEGORY, ids, resolved);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [sessionToken]);
+  }, [sessionToken, userId, cached]);
 
   return banners;
 }
