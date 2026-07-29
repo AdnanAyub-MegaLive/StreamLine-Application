@@ -126,4 +126,14 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Without these, Fresco (RN's Android image pipeline, bundled via
+    // react-android) only decodes and shows the FIRST FRAME of an animated
+    // GIF/WebP — this is why admin-assigned avatar frames that are
+    // animated GIFs weren't animating anywhere in the app. Version pinned
+    // to match the Fresco version react-android already resolves to
+    // (3.6.0) — mismatched versions can crash at runtime.
+    implementation("com.facebook.fresco:animated-gif:3.6.0")
+    implementation("com.facebook.fresco:animated-webp:3.6.0")
+    implementation("com.facebook.fresco:webpsupport:3.6.0")
 }
