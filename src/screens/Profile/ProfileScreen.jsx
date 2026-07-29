@@ -1,9 +1,10 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SettingsIcon } from '../../assets';
 import { useTheme } from '../../theme';
 import { Avatar, Screen } from '../../components';
+import { useAssignedBadge, useAssignedFrame } from '../../hooks';
 import { useAppStore } from '../../store';
 import { scaleFont, scaleModerate } from '../../utils';
 import { routes } from '../../navigation/routes';
@@ -42,6 +43,8 @@ export function ProfileScreen() {
   const navigation = useNavigation();
   const session = useAppStore(state => state.session);
   const user = session?.user;
+  const frameUri = useAssignedFrame();
+  const badgeUri = useAssignedBadge();
 
   const tools = [
     { emoji: '📈', label: 'My Level' },
@@ -60,19 +63,27 @@ export function ProfileScreen() {
         borderColor: theme.colors.cardBorder
       }]}>
         <View style={styles.headerRow}>
-          <Pressable onPress={() => navigation.navigate(routes.changeAvatar)} style={[styles.avatarRing, { borderColor: theme.colors.followOrange }]}>
-            <Avatar value={user?.profileImage} fullName={user?.fullName} size={scaleModerate(56)} />
+          <Pressable
+            onPress={() => navigation.navigate(routes.changeAvatar)}
+            // An assigned frame is its own decoration around the photo —
+            // stacking the orange ring on top of it as well looked
+            // cramped/overlapping, so the ring is only shown when there's
+            // no frame.
+            style={frameUri ? undefined : [styles.avatarRing, { borderColor: theme.colors.followOrange }]}
+          >
+            <Avatar value={user?.profileImage} fullName={user?.fullName} size={scaleModerate(56)} frameUri={frameUri} />
           </Pressable>
           <View style={styles.headerInfo}>
             <Text style={[styles.name, { color: theme.text.primary }]} numberOfLines={2}>{user?.fullName || 'Guest'}</Text>
             <Text style={[styles.idText, { color: theme.text.secondary }]}>ID: {user?.displayId || user?.publicId || '—'}</Text>
           </View>
-          <View style={[styles.proBadge, { backgroundColor: theme.colors.vipGoldBackground }]}>
-            <Text style={[styles.proBadgeText, { color: theme.colors.vipGoldText }]}>⚡ PRO</Text>
-          </View>
-          <Pressable hitSlop={10}>
-            <Text style={[styles.shareIcon, { color: theme.text.secondary }]}>⤴</Text>
-          </Pressable>
+          {badgeUri ? (
+            // Replaces the old hardcoded "PRO" label — an actual
+            // admin-assigned badge image (see useAssignedBadge) when one
+            // exists. Nothing shown at all otherwise, rather than a
+            // placeholder that isn't backed by anything real.
+            <Image source={{ uri: badgeUri }} style={styles.profileBadge} resizeMode="contain" />
+          ) : null}
         </View>
 
         <View style={styles.statsRow}>
@@ -165,18 +176,9 @@ const styles = StyleSheet.create({
     fontSize: scaleFont(11),
     fontWeight: '600'
   },
-  proBadge: {
-    paddingHorizontal: scaleModerate(8),
-    paddingVertical: scaleModerate(4),
-    borderRadius: 999
-  },
-  proBadgeText: {
-    fontSize: scaleFont(10),
-    fontWeight: '800'
-  },
-  shareIcon: {
-    fontSize: scaleFont(18),
-    fontWeight: '700'
+  profileBadge: {
+    width: scaleModerate(28),
+    height: scaleModerate(28)
   },
   statsRow: {
     flexDirection: 'row',
