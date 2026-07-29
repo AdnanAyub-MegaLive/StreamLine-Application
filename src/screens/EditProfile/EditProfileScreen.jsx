@@ -6,6 +6,7 @@ import { updateProfile, UpdateProfileError } from '../../api';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { Avatar, FormField, PrimaryButton, Screen } from '../../components';
+import { useAssignedFrame } from '../../hooks';
 import { scaleFont, scaleModerate } from '../../utils';
 import { routes } from '../../navigation/routes';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -21,6 +22,7 @@ export function EditProfileScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
   const session = useAppStore(state => state.session);
+  const frameUri = useAssignedFrame();
   const setSession = useAppStore(state => state.setSession);
   const [form, setForm] = React.useState({
     fullName: session?.user.fullName ?? '',
@@ -111,7 +113,7 @@ export function EditProfileScreen() {
         shadowColor: theme.colors.teal900
       }]}>
           <Pressable onPress={() => navigation.navigate(routes.changeAvatar)} style={styles.avatarPressable}>
-            <Avatar value={session?.user.profileImage} fullName={form.fullName} size={scaleModerate(72)} style={styles.avatarPreview} />
+            <Avatar value={session?.user.profileImage} fullName={form.fullName} size={scaleModerate(72)} style={styles.avatarPreview} frameUri={frameUri} />
             <Text style={[styles.editPictureText, { color: theme.colors.teal700 }]}>Edit Profile Picture</Text>
           </Pressable>
 
