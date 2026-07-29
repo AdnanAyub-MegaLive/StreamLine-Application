@@ -17,6 +17,9 @@ import { BannerDetailScreen } from '../screens/BannerDetail';
 import { CreateAgencyScreen } from '../screens/CreateAgency';
 import { ChangeAvatarScreen } from '../screens/ChangeAvatar';
 import { DemoRoomScreen } from '../screens/DemoRoom';
+import { UserProfileScreen } from '../screens/UserProfile';
+import { ComingSoonScreen } from '../screens/ComingSoon';
+import { InAppBrowserScreen } from '../screens/InAppBrowser';
 const Stack = createNativeStackNavigator();
 export function AppNavigator() {
   return <Stack.Navigator screenOptions={{
@@ -41,6 +44,9 @@ export function AppNavigator() {
       <Stack.Screen name="CreateAgency" component={CreateAgencyScreen} />
       <Stack.Screen name="ChangeAvatar" component={ChangeAvatarScreen} />
       <Stack.Screen name="DemoRoom" component={DemoRoomScreen} />
+      <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+      <Stack.Screen name="ComingSoon" component={ComingSoonScreen} />
+      <Stack.Screen name="InAppBrowser" component={InAppBrowserScreen} />
     </Stack.Navigator>;
 }
 export default AppNavigator;
