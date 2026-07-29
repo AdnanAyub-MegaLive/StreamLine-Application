@@ -7,6 +7,8 @@ export * from './TermsCheckbox';
 export * from './VideoBackground';
 export * from './PermissionsGate';
 export * from './StreamOptionModal';
+export * from './RoomTitleModal';
+export * from './EmojiPickerModal';
 export * from './SeatLayoutModal';
 export * from './ThemedAlert';
 export * from './locationErrorAlert';
