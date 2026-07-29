@@ -5,5 +5,6 @@ export * from './location';
 export * from './devicePermissions';
 export * from './liveRoomNotifications';
 export * from './roomSeatCache';
+export * from './assignedAssetCache';
 export * from './newUser';
 export * from './responsive';
