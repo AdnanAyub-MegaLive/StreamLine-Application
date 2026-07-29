@@ -6,6 +6,7 @@ import { updateProfile, UpdateProfileError } from '../../api';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { AVATAR_PRESETS, Avatar, getAvatarPresetId, getAvatarPresetValue, PrimaryButton, Screen, showAlert } from '../../components';
+import { useAssignedFrame } from '../../hooks';
 import { scaleFont, scaleModerate } from '../../utils';
 
 // Opened by tapping the profile picture on the Profile screen. Offers the
@@ -18,6 +19,7 @@ export function ChangeAvatarScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
   const session = useAppStore(state => state.session);
+  const frameUri = useAssignedFrame();
   const setSession = useAppStore(state => state.setSession);
   const savedPresetId = getAvatarPresetId(session?.user.profileImage);
   const [selectedAvatarId, setSelectedAvatarId] = React.useState(savedPresetId ?? AVATAR_PRESETS[0].id);
@@ -86,7 +88,7 @@ export function ChangeAvatarScreen() {
           <View style={styles.headerSpacer} />
         </View>
 
-        <Avatar value={selectedValue} fullName={session?.user.fullName} size={scaleModerate(96)} style={styles.preview} />
+        <Avatar value={selectedValue} fullName={session?.user.fullName} size={scaleModerate(96)} style={styles.preview} frameUri={frameUri} />
 
         <Text style={[styles.sectionLabel, { color: theme.text.secondary }]}>Upload a photo</Text>
         <Pressable onPress={handlePickPhoto} style={[styles.uploadBox, {
