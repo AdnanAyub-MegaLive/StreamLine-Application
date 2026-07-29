@@ -1,7 +1,8 @@
 import React from 'react';
-import { Animated, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { fetchDiscoverRooms } from '../../../api';
+import { agencyApplyBannerImage } from '../../../assets';
 import { Avatar } from '../../../components';
 import { useBannerAssets } from '../../../hooks';
 import { useAppStore } from '../../../store';
@@ -38,6 +39,27 @@ const DEMO_TRENDING_PARTIES = [
   { id: 'demo-party-2', title: 'Weekend Royale Tournament', members: 96, hostName: 'Omar Farooq', hostAvatar: undefined, accent: accentForIndex(1) },
   { id: 'demo-party-3', title: 'Chill & Chat Lounge', members: 54, hostName: 'Mahnoor Ali', hostAvatar: undefined, accent: accentForIndex(2) }
 ];
+
+// Always the first banner, ahead of anything the admin uploads, and not
+// something the portal can remove or reorder — it's bundled into the app
+// itself (src/assets/images/Agency-Apply.png), not fetched from the
+// upload catalog. Tapping it opens the in-app Create Agency form, same as
+// an admin-uploaded banner literally named "Create Agency" (see
+// handleSlidePress).
+const AGENCY_BANNER_ID = 'agency-apply-fixed';
+// Deliberately NOT Image.resolveAssetSource(...).uri — in dev builds that
+// resolves to an http://localhost:8081/... URL pointing at the Metro
+// packager, and "localhost" on a physical phone means the phone itself,
+// not the dev machine, so the image silently never loaded there (worked
+// fine on an emulator, whose localhost does map back to the dev machine).
+// Passing the required module straight through as `source` sidesteps this
+// — RN resolves a local bundled asset correctly in both dev and release
+// regardless of packager host.
+const FIXED_AGENCY_BANNER = {
+  id: AGENCY_BANNER_ID,
+  source: agencyApplyBannerImage,
+  title: 'Apply for Agency'
+};
 
 const bannerSlides = [{
   id: 'b1',
@@ -97,11 +119,21 @@ function PartyBanner({ onBannerScrolling }) {
     width
   } = useWindowDimensions();
   const bannerWidth = width - 32;
-  // Admin-uploaded image banners take priority; if none exist, fall back to
-  // the bundled text promos so the section is never empty.
+  // Computed in JS (not CSS aspectRatio) on purpose — inside a horizontally
+  // paginated FlatList, an aspectRatio-sized Image can resolve its height a
+  // frame late on Android, so the item's real width/offset briefly doesn't
+  // match bannerWidth. That was enough to throw off the scroll-position
+  // math (indexRef/activeIndex, the paging snap points) during a manual
+  // swipe, making banners land in the wrong spot. A precomputed number has
+  // no such lag.
+  const bannerImageHeight = bannerWidth / 2.4;
+  // The fixed agency banner always leads the carousel; after it, admin-
+  // uploaded image banners take priority, falling back to the bundled
+  // text promos only when none exist yet — so the section is never just
+  // the one fixed banner alone.
   const bannerAssets = useBannerAssets();
   const useImages = bannerAssets.length > 0;
-  const slides = useImages ? bannerAssets : bannerSlides;
+  const slides = [FIXED_AGENCY_BANNER, ...(useImages ? bannerAssets : bannerSlides)];
 
   // Infinite forward loop: a clone of the first slide is appended after the
   // last one, so advancing past the end scrolls forward into the clone, and
@@ -114,6 +146,11 @@ function PartyBanner({ onBannerScrolling }) {
   const [activeIndex, setActiveIndex] = React.useState(0);
   const bannerListRef = React.useRef(null);
   const indexRef = React.useRef(0);
+  // Drives the per-slide scale/opacity animation below — tracked on the
+  // native thread (useNativeDriver) so the effect stays smooth even while
+  // JS is busy, purely cosmetic and separate from handleScroll's own
+  // index-tracking logic.
+  const scrollX = React.useRef(new Animated.Value(0)).current;
   // Timestamp until which auto-advance stays paused — set on touch so the
   // timer doesn't fight the user's manual swipe.
   const pausedUntilRef = React.useRef(0);
@@ -139,12 +176,22 @@ function PartyBanner({ onBannerScrolling }) {
   };
 
   // A banner named "Create Agency" on the portal (e.g. "1 Create Agency")
-  // opens the agency application form; every other slide opens the generic
-  // BannerDetail page — uploaded image banners pass their image, the
-  // bundled text-promo fallbacks pass their text instead.
+  // opens our in-app application form directly — kept as a special case
+  // even now that actionUrl exists, since this flow is a native screen,
+  // not a web page. Every other banner uses the admin-set actionUrl (see
+  // StreamLine-Portal's docs/mobile-upload-catalog-api.md) when present,
+  // opened in the in-app browser; with neither, it falls back to the
+  // generic BannerDetail page — uploaded image banners pass their image,
+  // the bundled text-promo fallbacks pass their text instead.
   const handleSlidePress = item => {
-    if (/create\s*agency/i.test(item.title ?? '')) {
+    if (item.id === AGENCY_BANNER_ID || /create\s*agency/i.test(item.title ?? '')) {
       navigation.navigate(routes.createAgency);
+      return;
+    }
+    if (item.actionUrl) {
+      // See StreamLine-Portal's docs/mobile-upload-catalog-api.md — opens
+      // in-app instead of handing off to the system browser.
+      navigation.navigate(routes.inAppBrowser, { url: item.actionUrl, title: item.title });
       return;
     }
     navigation.navigate(routes.bannerDetail, {
@@ -226,32 +273,55 @@ function PartyBanner({ onBannerScrolling }) {
   }, [slides.length, bannerWidth]);
 
   return <View style={styles.bannerWrap} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd}>
-      <FlatList
+      <Animated.FlatList
         ref={bannerListRef}
         data={renderSlides}
         keyExtractor={(item, index) => `${item.id}-${index}`}
         horizontal
-        pagingEnabled
+        // Not pagingEnabled — that snaps to the FlatList's own measured
+        // viewport width, which doesn't always exactly equal bannerWidth
+        // (a sub-pixel rounding difference is enough), so the next/previous
+        // slide would bleed in at the edge after a swipe. snapToInterval
+        // uses our own computed width directly, so the snap point always
+        // matches each item's actual width exactly.
+        snapToInterval={bannerWidth}
+        decelerationRate="fast"
+        disableIntervalMomentum
+        getItemLayout={(data, index) => ({ length: bannerWidth, offset: bannerWidth * index, index })}
         showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: true, listener: handleScroll }
+        )}
         scrollEventThrottle={16}
-        renderItem={({ item }) => useImages
-          ? <Image source={{ uri: item.uri }} style={[styles.bannerImage, { width: bannerWidth }]} resizeMode="cover" />
-          : <View style={[styles.banner, {
-            width: bannerWidth,
-            backgroundColor: theme.colors.teal900,
-            borderColor: theme.colors.teal700
-          }]}>
-              <Text style={[styles.bannerEyebrow, {
-            color: theme.colors.teal200
-          }]}>{item.eyebrow}</Text>
-              <Text style={[styles.bannerTitle, {
-            color: theme.cta.primary.text
-          }]}>{item.title}</Text>
-              <Text style={[styles.bannerSubtitle, {
-            color: theme.colors.teal100
-          }]}>{item.subtitle}</Text>
-            </View>}
+        renderItem={({ item, index }) => {
+          // The slide currently centered scrolls up to full size/opacity;
+          // its neighbors ease down slightly — a subtle "focus" effect
+          // instead of every slide snapping to the same flat look while
+          // scrolling past.
+          const inputRange = [(index - 1) * bannerWidth, index * bannerWidth, (index + 1) * bannerWidth];
+          const scale = scrollX.interpolate({ inputRange, outputRange: [0.92, 1, 0.92], extrapolate: 'clamp' });
+          const opacity = scrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
+          return <Animated.View style={{ transform: [{ scale }], opacity }}>
+              {item.source || item.uri
+                ? <Image source={item.source ?? { uri: item.uri }} style={[styles.bannerImage, { width: bannerWidth, height: bannerImageHeight }]} resizeMode="cover" />
+                : <View style={[styles.banner, {
+                  width: bannerWidth,
+                  backgroundColor: theme.colors.teal900,
+                  borderColor: theme.colors.teal700
+                }]}>
+                    <Text style={[styles.bannerEyebrow, {
+                  color: theme.colors.teal200
+                }]}>{item.eyebrow}</Text>
+                    <Text style={[styles.bannerTitle, {
+                  color: theme.cta.primary.text
+                }]}>{item.title}</Text>
+                    <Text style={[styles.bannerSubtitle, {
+                  color: theme.colors.teal100
+                }]}>{item.subtitle}</Text>
+                  </View>}
+            </Animated.View>;
+        }}
       />
 
       {slides.length > 1 ? <View style={styles.bannerDots}>
@@ -281,6 +351,7 @@ function PartyCard({
         title: item.title,
         hostName: item.hostName,
         hostAvatar: item.hostAvatar,
+        hostId: item.id,
         members: item.members
       });
       return;
@@ -388,7 +459,11 @@ const styles = StyleSheet.create({
     gap: scaleModerate(4)
   },
   bannerImage: {
-    height: scaleModerate(140),
+    // Width/height both come from bannerWidth/bannerImageHeight at the
+    // call site (matches the recommended 2.4:1 banner ratio — see the
+    // fixed Agency-Apply.png, 1942x809) — computed in JS rather than via
+    // this style's own aspectRatio, see the comment on bannerImageHeight
+    // for why.
     borderRadius: scaleModerate(16)
   },
   bannerEyebrow: {
