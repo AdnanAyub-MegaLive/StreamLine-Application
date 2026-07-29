@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { DiscoverIcon, FamilyIcon, HomeIcon, MessageIcon, PlusIcon, UserIcon } from '../assets';
 import { fetchAudioRoom } from '../api';
-import { SEAT_LAYOUT_OPTIONS, SeatLayoutModal, StreamOptionModal } from '../components';
+import { RoomTitleModal, SEAT_LAYOUT_OPTIONS, SeatLayoutModal, StreamOptionModal } from '../components';
 import { useAppStore } from '../store';
 import { useTheme } from '../theme';
 import { getCachedSeatState, scaleModerate } from '../utils';
@@ -43,15 +43,20 @@ export function CustomTabBar({
   navigation
 }) {
   const theme = useTheme();
-  const sessionToken = useAppStore(store => store.session?.token);
+  const session = useAppStore(store => store.session);
+  const sessionToken = session?.token;
   const [barWidth, setBarWidth] = React.useState(0);
   const [streamOptionsVisible, setStreamOptionsVisible] = React.useState(false);
+  const [roomTitleVisible, setRoomTitleVisible] = React.useState(false);
   const [seatLayoutVisible, setSeatLayoutVisible] = React.useState(false);
+  const [pendingRoomTitle, setPendingRoomTitle] = React.useState(null);
   const [isCheckingRoom, setIsCheckingRoom] = React.useState(false);
+  const defaultRoomTitle = `${session?.user?.fullName || 'My'}'s Room`;
   const handleLayout = event => {
     setBarWidth(event.nativeEvent.layout.width);
   };
   const closeStreamOptions = () => setStreamOptionsVisible(false);
+  const closeRoomTitle = () => setRoomTitleVisible(false);
   const closeSeatLayout = () => setSeatLayoutVisible(false);
   // Each user only ever owns one persistent, backend-assigned room — see
   // StreamLine-Portal/docs/mobile-audio-room-api.md and the AudioRoom
@@ -112,15 +117,26 @@ export function CustomTabBar({
   };
   const handleSelectAudio = () => {
     closeStreamOptions();
-    setSeatLayoutVisible(true);
+    setRoomTitleVisible(true);
   };
+  // No video pipeline exists yet — RoomScreen's mode:'video' path is just
+  // background+chat with no actual video, seats, or controls. Shows an
+  // explicit "in development" placeholder instead of that empty shell.
   const handleSelectVideo = () => {
     closeStreamOptions();
-    navigation.navigate(routes.room, { mode: 'video' });
+    navigation.navigate(routes.comingSoon, {
+      title: 'Live Video',
+      message: "Live video streaming is still in development. We're working on it — check back soon!"
+    });
+  };
+  const handleConfirmRoomTitle = title => {
+    setPendingRoomTitle(title);
+    closeRoomTitle();
+    setSeatLayoutVisible(true);
   };
   const handleConfirmSeatLayout = seatGroups => {
     closeSeatLayout();
-    navigation.navigate(routes.room, { mode: 'audio', seatGroups });
+    navigation.navigate(routes.room, { mode: 'audio', seatGroups, roomName: pendingRoomTitle });
   };
   return <View style={styles.wrapper} pointerEvents="box-none">
       <StreamOptionModal
@@ -128,6 +144,12 @@ export function CustomTabBar({
         onClose={closeStreamOptions}
         onSelectAudio={handleSelectAudio}
         onSelectVideo={handleSelectVideo}
+      />
+      <RoomTitleModal
+        visible={roomTitleVisible}
+        defaultTitle={defaultRoomTitle}
+        onClose={closeRoomTitle}
+        onConfirm={handleConfirmRoomTitle}
       />
       <SeatLayoutModal visible={seatLayoutVisible} onClose={closeSeatLayout} onConfirm={handleConfirmSeatLayout} />
       <View style={styles.barContainer} onLayout={handleLayout}>
