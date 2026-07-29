@@ -3,6 +3,7 @@ import {
   Animated,
   AppState,
   FlatList,
+  Image,
   ImageBackground,
   Modal,
   PanResponder,
@@ -19,9 +20,9 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../theme';
 import { LockIcon, roomBackgroundImage } from '../../assets';
-import { Avatar, showAlert } from '../../components';
+import { Avatar, EmojiPickerModal, SeatLayoutModal, showAlert } from '../../components';
 import { AudioRoomError, endAudioRoom as endAudioRoomRecord, startAudioRoom, updateAudioRoom } from '../../api';
-import { useAssignedRoomBackground } from '../../hooks';
+import { useAssignedFrame, useAssignedRoomBackground } from '../../hooks';
 import {
   emitSeatUpdate,
   getSessionSocket,
@@ -30,6 +31,7 @@ import {
   requestSeat,
   respondToSeatRequest
 } from '../../services/socket';
+import { routes } from '../../navigation/routes';
 import { useAppStore } from '../../store';
 import {
   clearCachedSeatState,
@@ -141,6 +143,28 @@ function MoreIcon({ size = 18, color }) {
   );
 }
 
+function SpeakerIcon({ size = 18, color, muted = false }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M4 9v6h4l5 4V5L8 9H4Z" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
+      {muted ? (
+        <Path d="M16 8l5 8M21 8l-5 8" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      ) : (
+        <Path d="M16.5 9a3.5 3.5 0 0 1 0 6" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      )}
+    </Svg>
+  );
+}
+
+function SeatsIcon({ size = 18, color }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M6 10a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm12 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4ZM12 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z" stroke={color} strokeWidth="1.6" />
+      <Path d="M3 20v-2a3 3 0 0 1 3-3h0a3 3 0 0 1 3 3v2M15 20v-2a3 3 0 0 1 3-3h0a3 3 0 0 1 3 3v2M9 20v-1a3 3 0 0 1 3-3h0a3 3 0 0 1 3 3v1" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 const AVATAR_PLACEHOLDER = 'https://api.dicebear.com/7.x/avataaars/svg';
 const CHAT_MESSAGE_MAX_LENGTH = 200;
 
@@ -158,7 +182,7 @@ function buildSeatRowsFromGroups(seatGroups) {
   );
 }
 
-function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmptySeatPress, pressEnabled, draggable, note }) {
+function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmptySeatPress, pressEnabled, draggable, note, onAvatarPress, myFrameUri }) {
   const avatarInnerSize = circleSize - 4;
   const ringSize = circleSize + 4;
   const micBadgeSize = Math.max(scaleModerate(16), Math.round(circleSize * 0.36));
@@ -237,10 +261,20 @@ function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmpt
     ? { style: [styles.seatColumn, columnStyle, { transform: pan.getTranslateTransform() }], ...panResponder.panHandlers }
     : { style: [styles.seatColumn, columnStyle] };
 
+  // Tapping a seated participant's avatar opens their profile — but never
+  // for the draggable seat (that's this device's own seat/pan gesture), so
+  // dragging your own tile around never gets swallowed by a press.
+  const AvatarWrapper = draggable ? View : Pressable;
+  const avatarWrapperProps = draggable ? {} : { onPress: () => onAvatarPress?.(seat) };
+
   return (
     <SeatWrapper {...wrapperProps}>
-      <View style={[styles.seatAvatarWrap, { width: circleSize, height: circleSize }]}>
-        {seat.host ? (
+      <AvatarWrapper {...avatarWrapperProps} style={[styles.seatAvatarWrap, { width: circleSize, height: circleSize }]}>
+        {/* Both rings below are skipped once a frame is showing (draggable
+        && myFrameUri) — the frame has its own decorative border, and a
+        plain ring the same size was peeking through its artwork's
+        transparent margins as a stray green line behind it. */}
+        {seat.host && !(draggable && myFrameUri) ? (
           <View
             style={[
               styles.speakingRing,
@@ -248,7 +282,7 @@ function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmpt
             ]}
           />
         ) : null}
-        {seat.speaking && !seat.host ? (
+        {seat.speaking && !seat.host && !(draggable && myFrameUri) ? (
           <View
             style={[
               styles.speakingRingSoft,
@@ -259,7 +293,16 @@ function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmpt
         <View
           style={[
             styles.seatAvatarInner,
-            { width: avatarInnerSize, height: avatarInnerSize, borderRadius: avatarInnerSize / 2, backgroundColor: theme.surfaces.card }
+            {
+              width: avatarInnerSize,
+              height: avatarInnerSize,
+              borderRadius: avatarInnerSize / 2,
+              // Transparent instead of the usual card-color plate when a
+              // frame is showing — that background circle is smaller than
+              // the frame, so it was visibly peeking out around/behind the
+              // frame's edges instead of just the photo + frame artwork.
+              backgroundColor: draggable && myFrameUri ? 'transparent' : theme.surfaces.card
+            }
           ]}
         >
           <Avatar
@@ -268,26 +311,56 @@ function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmpt
             size={avatarInnerSize}
           />
         </View>
-        <View
-          style={[
-            styles.micBadge,
-            {
-              width: micBadgeSize,
-              height: micBadgeSize,
-              borderRadius: micBadgeSize / 2,
-              borderColor: theme.surfaces.card
-            },
-            seat.muted ? { backgroundColor: theme.colors.giftAccent } : { backgroundColor: theme.colors.teal700 }
-          ]}
-        >
-          <MicIcon size={Math.round(micBadgeSize * 0.55)} muted={seat.muted} color={theme.cta.primary.text} />
-        </View>
-      </View>
+        {draggable && myFrameUri ? (
+          // Only this device's own seat can show its own assigned frame —
+          // other seats' occupants' frames aren't fetchable from here (no
+          // backend endpoint returns another user's assigned assets).
+          // Sits as its own overlay (not inside seatAvatarInner, which
+          // clips to a circle). Deliberately NOT reusing styles.speakingRing
+          // — it carries a fixed borderRadius meant for that circular ring
+          // indicator, which was forcing the frame's own (often
+          // non-circular/decorative) artwork into a clipped circle.
+          <Image
+            source={{ uri: myFrameUri }}
+            style={[styles.frameOverlay, { width: ringSize, height: ringSize }]}
+            resizeMode="contain"
+            pointerEvents="none"
+          />
+        ) : null}
+        {draggable && myFrameUri ? null : (
+          <View
+            style={[
+              styles.micBadge,
+              {
+                width: micBadgeSize,
+                height: micBadgeSize,
+                borderRadius: micBadgeSize / 2,
+                borderColor: theme.surfaces.card
+              },
+              seat.muted ? { backgroundColor: theme.colors.giftAccent } : { backgroundColor: theme.colors.teal700 }
+            ]}
+          >
+            <MicIcon size={Math.round(micBadgeSize * 0.55)} muted={seat.muted} color={theme.cta.primary.text} />
+          </View>
+        )}
+      </AvatarWrapper>
       <View style={styles.nameRow}>
         {seat.host ? <StarIcon color={theme.colors.teal700} /> : null}
         <Text style={[styles.seatNameText, { color: theme.text.primary }]} numberOfLines={1}>
           {seat.name}
         </Text>
+        {draggable && myFrameUri ? (
+          // Moved off the photo (see seatAvatarInner/frame above) so the
+          // frame is fully visible instead of partly covered by the badge.
+          <View
+            style={[
+              styles.micBadgeInline,
+              seat.muted ? { backgroundColor: theme.colors.giftAccent } : { backgroundColor: theme.colors.teal700 }
+            ]}
+          >
+            <MicIcon size={10} muted={seat.muted} color={theme.cta.primary.text} />
+          </View>
+        ) : null}
       </View>
     </SeatWrapper>
   );
@@ -327,6 +400,37 @@ function SeatNoteModal({ visible, value, onChangeText, onCancel, onSave, theme }
               <Text style={[styles.noteSaveText, { color: theme.cta.primary.text }]}>Save</Text>
             </Pressable>
           </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// Bottom-bar "More" menu — a plain action sheet, not the full seat-layout
+// picker itself (that's SeatLayoutModal, opened from here for the owner).
+function MoreMenuModal({ visible, onClose, theme, isSpeakerMuted, onToggleSpeaker, showSeatLayoutOption, onOpenSeatLayout }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.noteBackdrop} onPress={onClose}>
+        <Pressable
+          style={[styles.moreSheet, { backgroundColor: theme.surfaces.card, borderColor: theme.colors.cardBorder }]}
+          onPress={() => {}}
+        >
+          <Pressable onPress={onToggleSpeaker} style={styles.moreRow}>
+            <SpeakerIcon color={theme.text.primary} muted={isSpeakerMuted} />
+            <Text style={[styles.moreRowText, { color: theme.text.primary }]}>
+              {isSpeakerMuted ? 'Turn Speaker On' : 'Turn Speaker Off'}
+            </Text>
+          </Pressable>
+          {showSeatLayoutOption ? (
+            <Pressable onPress={onOpenSeatLayout} style={styles.moreRow}>
+              <SeatsIcon color={theme.text.primary} />
+              <Text style={[styles.moreRowText, { color: theme.text.primary }]}>Change Seat Count</Text>
+            </Pressable>
+          ) : null}
+          <Pressable onPress={onClose} style={styles.moreCancelButton}>
+            <Text style={[styles.moreCancelText, { color: theme.text.secondary }]}>Cancel</Text>
+          </Pressable>
         </Pressable>
       </Pressable>
     </Modal>
@@ -400,6 +504,7 @@ export function RoomScreen() {
   // account has one, otherwise the bundled default further down keeps
   // working exactly as before.
   const { source: assignedRoomBackgroundSource } = useAssignedRoomBackground();
+  const myFrameUri = useAssignedFrame();
   const [customBackgroundFailed, setCustomBackgroundFailed] = React.useState(false);
   // Reset whenever the source itself changes — otherwise a stale failure
   // from a previous asset would keep this screen on the bundled default
@@ -422,6 +527,12 @@ export function RoomScreen() {
   const [mySeatId, setMySeatId] = React.useState(() => cachedSeatStateRef.current?.mySeatId ?? null);
   const [seatNotes, setSeatNotes] = React.useState(() => cachedSeatStateRef.current?.seatNotes ?? {});
   const [noteModal, setNoteModal] = React.useState({ visible: false, seatId: null, value: '' });
+  // "More" bottom-bar menu — speaker toggle (everyone) and, for the owner,
+  // reconfiguring how many seats the room has without ending it.
+  const [moreMenuVisible, setMoreMenuVisible] = React.useState(false);
+  const [seatLayoutModalVisible, setSeatLayoutModalVisible] = React.useState(false);
+  const [isSpeakerMuted, setIsSpeakerMuted] = React.useState(false);
+  const [emojiPickerVisible, setEmojiPickerVisible] = React.useState(false);
   // Trending Parties navigates here with asViewer:true for someone else's
   // room (no seatGroups — the layout is unknown until the owner's first
   // seat-state broadcast arrives). Every other entry point (starting fresh,
@@ -523,7 +634,31 @@ export function RoomScreen() {
     handleTakeSeat(seatId);
   };
 
+  // Opens the seated participant's profile — the Seat component only wires
+  // this up for occupied seats other than this device's own (draggable)
+  // one, so this never fires for an empty seat or your own tile.
+  const handleSeatAvatarPress = seat => {
+    navigation.navigate(routes.userProfile, {
+      userId: seat.avatarSeed,
+      userName: seat.name,
+      userAvatar: seat.avatarUri
+    });
+  };
+
   const closeNoteModal = () => setNoteModal({ visible: false, seatId: null, value: '' });
+
+  // Reconfigures the current room's seat grid on the fly (e.g. 25 seats
+  // down to 2) without ending/restarting the room. Owner-only: every seat
+  // resets to empty in the new layout (occupants aren't remapped into a
+  // smaller grid), and this rides the existing owner-only seat-broadcast
+  // effect below (it already re-emits whenever seatRows changes), so
+  // viewers pick up the new layout the same way they see any other seat
+  // update — no extra socket wiring needed here.
+  const handleChangeSeatLayout = groups => {
+    setSeatRows(buildSeatRowsFromGroups(groups));
+    setSeatNotes({});
+    setSeatLayoutModalVisible(false);
+  };
 
   const handleSaveNote = () => {
     const text = noteModal.value.trim();
@@ -1122,13 +1257,27 @@ export function RoomScreen() {
           <View style={styles.identityCenterWrap} pointerEvents="box-none">
             <View style={styles.identityPanel}>
               <View style={styles.identityAvatarOuter}>
-                <View style={[styles.identityAvatarWrap, { backgroundColor: theme.colors.teal50 }]}>
+                <View style={[styles.identityAvatarWrap, { backgroundColor: myFrameUri ? 'transparent' : theme.colors.teal50 }]}>
                   <Avatar
                     value={session?.user?.profileImage || `${AVATAR_PLACEHOLDER}?seed=${ownerAvatarSeed}`}
                     fullName={ownerName}
                     size={34}
                   />
                 </View>
+                {myFrameUri ? (
+                  // The room owner never occupies a numbered seat (see
+                  // buildSeatRowsFromGroups) — their identity only ever
+                  // shows here, so this was the one place an owner's own
+                  // assigned frame never appeared at all. Sized a bit
+                  // larger than the 34px avatar and centered over it, same
+                  // proportions as everywhere else the frame renders.
+                  <Image
+                    source={{ uri: myFrameUri }}
+                    style={styles.identityFrameOverlay}
+                    resizeMode="contain"
+                    pointerEvents="none"
+                  />
+                ) : null}
                 <View
                   style={[
                     styles.identityMicBadge,
@@ -1152,6 +1301,11 @@ export function RoomScreen() {
           </View>
 
           <View style={styles.headerRight}>
+            {isSpeakerMuted ? (
+              <View style={[styles.iconButton, { backgroundColor: theme.colors.giftAccent }]}>
+                <SpeakerIcon size={16} muted color={theme.cta.primary.text} />
+              </View>
+            ) : null}
             <View style={styles.viewersPanel}>
               <View style={[styles.liveDot, { backgroundColor: theme.colors.liveBadge }]} />
               <Text style={[styles.viewersCount, { color: theme.colors.teal700 }]}>{viewerCount}</Text>
@@ -1177,6 +1331,8 @@ export function RoomScreen() {
                     pressEnabled={isOwner || canTakeSeat}
                     draggable={seat.id === mySeatId}
                     note={seatNotes[seat.id]}
+                    onAvatarPress={handleSeatAvatarPress}
+                    myFrameUri={myFrameUri}
                   />
                 ))}
               </View>
@@ -1219,7 +1375,7 @@ export function RoomScreen() {
             ) : null}
           </View>
           <View style={styles.bottomActions}>
-            <Pressable style={styles.iconButton}>
+            <Pressable onPress={() => setEmojiPickerVisible(true)} style={styles.iconButton}>
               <MoodIcon color={theme.text.primary} />
             </Pressable>
             {hasMicAccess ? (
@@ -1233,12 +1389,45 @@ export function RoomScreen() {
             <Pressable style={[styles.iconButton, { backgroundColor: theme.colors.teal700 }]}>
               <GiftIcon color={theme.cta.primary.text} />
             </Pressable>
-            <Pressable style={styles.iconButton}>
+            <Pressable onPress={() => setMoreMenuVisible(true)} style={styles.iconButton}>
               <MoreIcon color={theme.text.primary} />
             </Pressable>
           </View>
         </View>
       </View>
+
+      <MoreMenuModal
+        visible={moreMenuVisible}
+        onClose={() => setMoreMenuVisible(false)}
+        theme={theme}
+        isSpeakerMuted={isSpeakerMuted}
+        onToggleSpeaker={() => {
+          setIsSpeakerMuted(current => !current);
+          setMoreMenuVisible(false);
+        }}
+        showSeatLayoutOption={isAudioRoom && isOwner}
+        onOpenSeatLayout={() => {
+          setMoreMenuVisible(false);
+          setSeatLayoutModalVisible(true);
+        }}
+      />
+
+      <SeatLayoutModal
+        visible={seatLayoutModalVisible}
+        onClose={() => setSeatLayoutModalVisible(false)}
+        onConfirm={handleChangeSeatLayout}
+        title="Change Seat Count"
+        confirmLabel="Apply"
+      />
+
+      <EmojiPickerModal
+        visible={emojiPickerVisible}
+        onClose={() => setEmojiPickerVisible(false)}
+        onSelectEmoji={emoji => {
+          setDraft(current => current + emoji);
+          setEmojiPickerVisible(false);
+        }}
+      />
 
       <SeatNoteModal
         visible={noteModal.visible}
@@ -1300,6 +1489,13 @@ const styles = StyleSheet.create({
   identityAvatarOuter: {
     width: scaleModerate(34),
     height: scaleModerate(34)
+  },
+  identityFrameOverlay: {
+    position: 'absolute',
+    top: scaleModerate(-6),
+    left: scaleModerate(-6),
+    width: scaleModerate(46),
+    height: scaleModerate(46)
   },
   identityAvatarWrap: {
     width: scaleModerate(34),
@@ -1418,6 +1614,9 @@ const styles = StyleSheet.create({
     borderRadius: scaleModerate(30),
     borderWidth: 2
   },
+  frameOverlay: {
+    position: 'absolute'
+  },
   speakingRingSoft: {
     position: 'absolute',
     width: scaleModerate(60),
@@ -1444,6 +1643,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2
+  },
+  micBadgeInline: {
+    width: scaleModerate(16),
+    height: scaleModerate(16),
+    borderRadius: scaleModerate(8),
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   nameRow: {
     flexDirection: 'row',
@@ -1551,6 +1757,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: scaleModerate(24)
+  },
+  moreSheet: {
+    width: '100%',
+    borderRadius: scaleModerate(20),
+    borderWidth: 1,
+    padding: scaleModerate(8)
+  },
+  moreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(12),
+    paddingHorizontal: scaleModerate(14),
+    paddingVertical: scaleModerate(14)
+  },
+  moreRowText: {
+    fontSize: scaleFont(14),
+    fontWeight: '600'
+  },
+  moreCancelButton: {
+    marginTop: scaleModerate(4),
+    paddingVertical: scaleModerate(14),
+    alignItems: 'center'
+  },
+  moreCancelText: {
+    fontSize: scaleFont(14),
+    fontWeight: '700'
   },
   noteSheet: {
     width: '100%',
