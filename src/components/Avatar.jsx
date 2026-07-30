@@ -78,6 +78,9 @@ export function Avatar({ value, fullName, size = 48, style, frameUri }) {
     !frameUri && style
   ];
 
+  // A frame already draws its own decorative boundary around the circle —
+  // the circle's own border would double up with it (and often clash with
+  // the frame's colors), so it's only applied when there's no frame.
   let content;
   if (preset) {
     const avatarTheme = theme.onboarding.avatarStyles[preset.id];
@@ -85,7 +88,8 @@ export function Avatar({ value, fullName, size = 48, style, frameUri }) {
       <View
         style={[
           circleStyle,
-          { backgroundColor: avatarTheme.background, borderColor: avatarTheme.accent, borderWidth: 1 }
+          { backgroundColor: avatarTheme.background },
+          !frameUri && { borderColor: avatarTheme.accent, borderWidth: 1 }
         ]}
       >
         <Text style={{ fontSize: Math.round(size * 0.5) }}>{preset.emoji}</Text>
@@ -101,7 +105,7 @@ export function Avatar({ value, fullName, size = 48, style, frameUri }) {
     );
   } else {
     content = (
-      <View style={[circleStyle, { backgroundColor: theme.state.soft, borderColor: theme.colors.cardBorder, borderWidth: 1 }]}>
+      <View style={[circleStyle, { backgroundColor: theme.state.soft }, !frameUri && { borderColor: theme.colors.cardBorder, borderWidth: 1 }]}>
         <Text style={[styles.initial, { color: theme.colors.teal700, fontSize: scaleFont(Math.round(size * 0.4)) }]}>
           {getInitial(fullName)}
         </Text>

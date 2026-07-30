@@ -20,5 +20,7 @@ export const routes = {
   inAppBrowser: 'InAppBrowser',
   conversation: 'Conversation',
   userSearch: 'UserSearch',
-  friendRequests: 'FriendRequests'
+  friendRequests: 'FriendRequests',
+  connections: 'Connections',
+  store: 'Store'
 };

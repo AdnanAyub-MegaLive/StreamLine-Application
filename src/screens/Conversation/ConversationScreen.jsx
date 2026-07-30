@@ -5,6 +5,7 @@ import { useTheme } from '../../theme';
 import { Avatar, Screen } from '../../components';
 import { fetchMessages, markConversationRead } from '../../api';
 import { useUserAssets } from '../../hooks';
+import { routes } from '../../navigation/routes';
 import { getSessionSocket, sendMessage } from '../../services/socket';
 import { useAppStore } from '../../store';
 import { scaleFont, scaleModerate } from '../../utils';
@@ -92,7 +93,12 @@ export function ConversationScreen() {
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
           <Text style={[styles.backChevron, { color: theme.text.primary }]}>‹</Text>
         </Pressable>
-        <Avatar value={avatar} fullName={name} size={scaleModerate(34)} frameUri={frameUri} />
+        <Pressable
+          onPress={() => participantId && navigation.navigate(routes.userProfile, { userId: participantId, userName: name, userAvatar: avatar, userFrameUrl: frameUrl })}
+          disabled={!participantId}
+        >
+          <Avatar value={avatar} fullName={name} size={scaleModerate(34)} frameUri={frameUri} />
+        </Pressable>
         <Text style={[styles.headerTitle, { color: theme.text.primary }]} numberOfLines={1}>{name}</Text>
       </View>
 

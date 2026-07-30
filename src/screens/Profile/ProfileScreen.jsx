@@ -1,9 +1,10 @@
 import React from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { SettingsIcon } from '../../assets';
 import { useTheme } from '../../theme';
 import { Avatar, Screen } from '../../components';
+import { fetchFriends, fetchStoreCatalog } from '../../api';
 import { useAssignedBadge, useAssignedFrame } from '../../hooks';
 import { useAppStore } from '../../store';
 import { scaleFont, scaleModerate } from '../../utils';
@@ -14,18 +15,20 @@ import { routes } from '../../navigation/routes';
 // and Earn Coins cards, then the Services & Tools grid. Stats, wallet
 // balance, and most tools have no backend yet — they render zeros or are
 // visual-only until those endpoints exist.
-const STATS = [
-  { key: 'friends', label: 'Friends', value: '0' },
-  { key: 'fans', label: 'Fans', value: '0' },
-  { key: 'following', label: 'Following', value: '0' }
-];
+//
+// Friends is backed by the real friend-request system (see
+// docs/friends-api-spec.md) — dynamic below. Fans/Following have no
+// backend concept at all: the only "followers" field in the portal's
+// schema belongs to the agency Talent model (a static admin-facing
+// counter), not a real follow relationship between app users, so these
+// two stay at 0 until a real follow system exists.
 
-function StatItem({ label, value }) {
+function StatItem({ label, value, onPress }) {
   const theme = useTheme();
-  return <View style={styles.statItem}>
+  return <Pressable onPress={onPress} style={styles.statItem}>
       <Text style={[styles.statValue, { color: theme.text.primary }]}>{value}</Text>
       <Text style={[styles.statLabel, { color: theme.text.secondary }]}>{label}</Text>
-    </View>;
+    </Pressable>;
 }
 
 function ToolItem({ emoji, label, onPress }) {
@@ -45,10 +48,39 @@ export function ProfileScreen() {
   const user = session?.user;
   const frameUri = useAssignedFrame();
   const badgeUri = useAssignedBadge();
+  const [friendCount, setFriendCount] = React.useState(0);
+  const [coinBalance, setCoinBalance] = React.useState(null);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let cancelled = false;
+      if (session?.token) {
+        fetchFriends(session.token).then(friends => {
+          if (!cancelled) {
+            setFriendCount(friends.length);
+          }
+        });
+        fetchStoreCatalog(session.token).then(data => {
+          if (!cancelled) {
+            setCoinBalance(data.balance);
+          }
+        }).catch(() => {});
+      }
+      return () => {
+        cancelled = true;
+      };
+    }, [session?.token])
+  );
+
+  const stats = [
+    { key: 'friends', label: 'Friends', value: String(friendCount) },
+    { key: 'fans', label: 'Fans', value: '0' },
+    { key: 'following', label: 'Following', value: '0' }
+  ].map(stat => ({ ...stat, onPress: () => navigation.navigate(routes.connections, { type: stat.key }) }));
 
   const tools = [
     { emoji: '📈', label: 'My Level' },
-    { emoji: '🛍️', label: 'Shop' },
+    { emoji: '🛍️', label: 'Shop', onPress: () => navigation.navigate(routes.store) },
     { emoji: '🎖️', label: 'Badges' },
     { emoji: '✅', label: 'Verified' },
     { emoji: '🏢', label: 'Agency', onPress: () => navigation.navigate(routes.createAgency) },
@@ -87,7 +119,7 @@ export function ProfileScreen() {
         </View>
 
         <View style={styles.statsRow}>
-          {STATS.map(stat => <StatItem key={stat.key} label={stat.label} value={stat.value} />)}
+          {stats.map(stat => <StatItem key={stat.key} label={stat.label} value={stat.value} onPress={stat.onPress} />)}
         </View>
 
         <Pressable style={[styles.vipBanner, { backgroundColor: theme.colors.followOrange }]}>
@@ -108,7 +140,7 @@ export function ProfileScreen() {
         }]}>
           <Text style={[styles.walletLabel, { color: theme.text.secondary }]}>💰 My Wallet</Text>
           <Text style={[styles.walletValue, { color: theme.text.primary }]}>
-            0 <Text style={[styles.walletUnit, { color: theme.colors.followOrange }]}>Coins</Text>
+            {coinBalance !== null ? Number(coinBalance).toLocaleString() : '0'} <Text style={[styles.walletUnit, { color: theme.colors.followOrange }]}>Coins</Text>
           </Text>
         </View>
         <View style={[styles.walletCard, {

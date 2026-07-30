@@ -4,7 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { SearchIcon, UserIcon } from '../../assets';
 import { useTheme } from '../../theme';
 import { Avatar, Screen } from '../../components';
-import { fetchIncomingFriendRequests } from '../../api';
+import { fetchIncomingFriendRequests, startConversation } from '../../api';
 import { useMessaging, useUserAssets } from '../../hooks';
 import { getSessionSocket } from '../../services/socket';
 import { routes } from '../../navigation/routes';
@@ -65,13 +65,13 @@ function BroadcastRow({ emoji, iconBackground, title, time, children, unreadDot,
     </Pressable>;
 }
 
-function ChatRow({ chat, onPress }) {
+function ChatRow({ chat, onPress, onOpenProfile }) {
   const theme = useTheme();
   const { frameUri } = useUserAssets({ userId: chat.participantId, frameUrl: chat.frameUrl });
   return <Pressable onPress={onPress} style={styles.chatRow}>
-      <View style={styles.chatAvatarWrap}>
+      <Pressable onPress={onOpenProfile} disabled={!onOpenProfile} style={styles.chatAvatarWrap}>
         <Avatar value={chat.avatar} fullName={chat.name} size={scaleModerate(46)} frameUri={frameUri} />
-      </View>
+      </Pressable>
       <View style={styles.rowBody}>
         <View style={styles.rowTopLine}>
           <Text style={[styles.rowName, { color: theme.text.primary }]} numberOfLines={1}>{chat.name}</Text>
@@ -98,10 +98,11 @@ export function MessageScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
   const sessionToken = useAppStore(state => state.session?.token);
-  const { systemNotification, worldChat, recentChats } = useMessaging();
+  const { systemNotification, worldChat, recentChats, messagableFriends } = useMessaging();
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [requestCount, setRequestCount] = React.useState(0);
+  const [startingChatFor, setStartingChatFor] = React.useState(null);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -135,9 +136,36 @@ export function MessageScreen() {
   const filteredChats = trimmedQuery
     ? recentChats.filter(chat => chat.name.toLowerCase().includes(trimmedQuery) || chat.preview.toLowerCase().includes(trimmedQuery))
     : recentChats;
+  // Friends without an existing conversation only show up once you search
+  // for them — this way a newly-accepted friend is findable/messageable
+  // right away, without cluttering "Recent" with everyone you're friends
+  // with but haven't actually chatted with yet.
+  const matchingFriends = trimmedQuery
+    ? messagableFriends.filter(friend => friend.name.toLowerCase().includes(trimmedQuery))
+    : [];
   const worldChatMatches = !trimmedQuery || worldChat?.name.toLowerCase().includes(trimmedQuery) || worldChat?.preview.toLowerCase().includes(trimmedQuery);
   const openConversation = ({ id, name, avatar, participantId, frameUrl }) => {
     navigation.navigate(routes.conversation, { conversationId: id, name, avatar, participantId, frameUrl });
+  };
+  const openProfile = ({ participantId, name, avatar, frameUrl }) => {
+    if (!participantId) {
+      return;
+    }
+    navigation.navigate(routes.userProfile, { userId: participantId, userName: name, userAvatar: avatar, userFrameUrl: frameUrl });
+  };
+  const openFriendConversation = async friend => {
+    if (startingChatFor || !sessionToken) {
+      return;
+    }
+    setStartingChatFor(friend.id);
+    try {
+      const conversation = await startConversation(sessionToken, friend.id);
+      openConversation({ id: conversation.id, name: friend.name, avatar: friend.avatar, participantId: friend.id, frameUrl: friend.frameUrl });
+    } catch {
+      // Nothing to recover to — the user can just tap the row again.
+    } finally {
+      setStartingChatFor(null);
+    }
   };
   return <Screen>
       <HeaderBar
@@ -161,10 +189,24 @@ export function MessageScreen() {
           backgroundColor: theme.surfaces.card,
           borderColor: theme.colors.cardBorder
         }]}>
-          {filteredChats.length ? filteredChats.map((chat, index) => <View key={chat.id}>
-              <ChatRow chat={chat} onPress={() => openConversation({ id: chat.id, name: chat.name, avatar: chat.avatar, participantId: chat.participantId, frameUrl: chat.frameUrl })} />
-              {index < filteredChats.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: theme.colors.cardBorder }]} /> : null}
-            </View>) : <EmptyRecent hasQuery={Boolean(trimmedQuery)} />}
+          {filteredChats.length || matchingFriends.length ? <>
+              {filteredChats.map((chat, index) => <View key={chat.id}>
+                  <ChatRow
+                    chat={chat}
+                    onPress={() => openConversation({ id: chat.id, name: chat.name, avatar: chat.avatar, participantId: chat.participantId, frameUrl: chat.frameUrl })}
+                    onOpenProfile={() => openProfile({ participantId: chat.participantId, name: chat.name, avatar: chat.avatar, frameUrl: chat.frameUrl })}
+                  />
+                  {index < filteredChats.length - 1 || matchingFriends.length ? <View style={[styles.rowDivider, { backgroundColor: theme.colors.cardBorder }]} /> : null}
+                </View>)}
+              {matchingFriends.map((friend, index) => <View key={friend.id}>
+                  <ChatRow
+                    chat={{ id: friend.id, participantId: friend.id, name: friend.name, avatar: friend.avatar, frameUrl: friend.frameUrl, time: '', preview: 'Friend — tap to start chatting', unreadCount: 0 }}
+                    onPress={() => openFriendConversation(friend)}
+                    onOpenProfile={() => openProfile({ participantId: friend.id, name: friend.name, avatar: friend.avatar, frameUrl: friend.frameUrl })}
+                  />
+                  {index < matchingFriends.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: theme.colors.cardBorder }]} /> : null}
+                </View>)}
+            </> : <EmptyRecent hasQuery={Boolean(trimmedQuery)} />}
         </View>
       </ScrollView>
     </Screen>;

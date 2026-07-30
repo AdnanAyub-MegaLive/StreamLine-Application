@@ -9,7 +9,7 @@ import { apiClient } from './client';
 // own configured API base URL (same host it just successfully fetched the
 // catalog from) whenever this happens, keeping the path/query untouched.
 // Safe to remove once the backend always returns its real address.
-function fixLocalhostOrigin(url) {
+export function fixLocalhostOrigin(url) {
   try {
     const parsed = new URL(url);
     if (parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {

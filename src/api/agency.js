@@ -25,16 +25,20 @@ export async function submitAgencyApplication(sessionToken, input) {
   if (input.email) {
     form.append('email', input.email.trim().toLowerCase());
   }
-  form.append('cnicFront', {
-    uri: input.cnicFront.uri,
-    type: input.cnicFront.type ?? 'image/jpeg',
-    name: input.cnicFront.fileName ?? 'cnic-front.jpg'
-  });
-  form.append('cnicBack', {
-    uri: input.cnicBack.uri,
-    type: input.cnicBack.type ?? 'image/jpeg',
-    name: input.cnicBack.fileName ?? 'cnic-back.jpg'
-  });
+  if (input.cnicFront) {
+    form.append('cnicFront', {
+      uri: input.cnicFront.uri,
+      type: input.cnicFront.type ?? 'image/jpeg',
+      name: input.cnicFront.fileName ?? 'cnic-front.jpg'
+    });
+  }
+  if (input.cnicBack) {
+    form.append('cnicBack', {
+      uri: input.cnicBack.uri,
+      type: input.cnicBack.type ?? 'image/jpeg',
+      name: input.cnicBack.fileName ?? 'cnic-back.jpg'
+    });
+  }
   try {
     const response = await apiClient.post('/api/agencies/apply', form, {
       headers: {

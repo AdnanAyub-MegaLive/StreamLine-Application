@@ -23,6 +23,8 @@ import { InAppBrowserScreen } from '../screens/InAppBrowser';
 import { ConversationScreen } from '../screens/Conversation';
 import { UserSearchScreen } from '../screens/UserSearch';
 import { FriendRequestsScreen } from '../screens/FriendRequests';
+import { ConnectionsScreen } from '../screens/Connections';
+import { StoreScreen } from '../screens/Store';
 const Stack = createNativeStackNavigator();
 export function AppNavigator() {
   return <Stack.Navigator screenOptions={{
@@ -53,6 +55,8 @@ export function AppNavigator() {
       <Stack.Screen name="Conversation" component={ConversationScreen} />
       <Stack.Screen name="UserSearch" component={UserSearchScreen} />
       <Stack.Screen name="FriendRequests" component={FriendRequestsScreen} />
+      <Stack.Screen name="Connections" component={ConnectionsScreen} />
+      <Stack.Screen name="Store" component={StoreScreen} />
     </Stack.Navigator>;
 }
 export default AppNavigator;

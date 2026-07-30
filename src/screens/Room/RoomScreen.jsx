@@ -21,8 +21,8 @@ import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../theme';
 import { LockIcon, roomBackgroundImage } from '../../assets';
 import { Avatar, EmojiPickerModal, SeatLayoutModal, showAlert } from '../../components';
-import { AudioRoomError, endAudioRoom as endAudioRoomRecord, startAudioRoom, updateAudioRoom } from '../../api';
-import { useAssignedFrame, useAssignedRoomBackground } from '../../hooks';
+import { AudioRoomError, endAudioRoom as endAudioRoomRecord, fetchAssetDataUri, fixLocalhostOrigin, startAudioRoom, updateAudioRoom } from '../../api';
+import { assetIdentity, useAssignedFrame, useAssignedRoomBackground } from '../../hooks';
 import {
   emitSeatUpdate,
   getSessionSocket,
@@ -36,10 +36,12 @@ import { useAppStore } from '../../store';
 import {
   clearCachedSeatState,
   dismissLiveRoomNotification,
+  getCachedAssetByIdentity,
   getCachedSeatState,
   registerLiveRoomActionHandler,
   scaleFont,
   scaleModerate,
+  setCachedAssetByIdentity,
   setCachedSeatState,
   showLiveRoomNotification
 } from '../../utils';
@@ -437,6 +439,43 @@ function MoreMenuModal({ visible, onClose, theme, isSpeakerMuted, onToggleSpeake
   );
 }
 
+function EntranceBanner({ entrance }) {
+  const theme = useTheme();
+  const translateY = React.useRef(new Animated.Value(-60)).current;
+  const opacity = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (!entrance) {
+      return undefined;
+    }
+    translateY.setValue(-60);
+    opacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(translateY, { toValue: 0, duration: 260, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 260, useNativeDriver: true })
+    ]).start();
+    return undefined;
+  }, [entrance, translateY, opacity]);
+
+  if (!entrance) {
+    return null;
+  }
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.entranceBanner,
+        { backgroundColor: theme.surfaces.card, borderColor: theme.colors.teal700, transform: [{ translateY }], opacity }
+      ]}
+    >
+      {entrance.entranceUrl ? <Image source={{ uri: entrance.entranceUrl }} style={styles.entranceArt} resizeMode="contain" /> : null}
+      <Avatar value={entrance.profileImage} fullName={entrance.name} size={scaleModerate(26)} />
+      <Text style={[styles.entranceText, { color: theme.text.primary }]} numberOfLines={1}>{entrance.name} has entered</Text>
+    </Animated.View>
+  );
+}
+
 function ChatMessage({ message, theme }) {
   if (message.type === 'system') {
     return (
@@ -690,6 +729,36 @@ export function RoomScreen() {
   const [draft, setDraft] = React.useState('');
   const [messages, setMessages] = React.useState([]);
   const hasWelcomedRef = React.useRef(false);
+
+  const [currentEntrance, setCurrentEntrance] = React.useState(null);
+  const entranceQueueRef = React.useRef([]);
+  const entranceTimerRef = React.useRef(null);
+  const isShowingEntranceRef = React.useRef(false);
+  const showNextEntranceRef = React.useRef(null);
+  showNextEntranceRef.current = () => {
+    const next = entranceQueueRef.current.shift();
+    if (!next) {
+      isShowingEntranceRef.current = false;
+      setCurrentEntrance(null);
+      return;
+    }
+    isShowingEntranceRef.current = true;
+    setCurrentEntrance(next);
+    entranceTimerRef.current = setTimeout(() => showNextEntranceRef.current?.(), 3200);
+  };
+  const pushEntranceRef = React.useRef(null);
+  pushEntranceRef.current = data => {
+    console.log('[Entrance] pushed to queue', data);
+    entranceQueueRef.current.push(data);
+    if (!isShowingEntranceRef.current) {
+      showNextEntranceRef.current?.();
+    }
+  };
+  React.useEffect(() => () => {
+    if (entranceTimerRef.current) {
+      clearTimeout(entranceTimerRef.current);
+    }
+  }, []);
 
   // See StreamLine-Portal/docs/mobile-audio-room-api.md — a real room record
   // is created/updated on the backend for every audio room, and the room
@@ -965,8 +1034,6 @@ export function RoomScreen() {
       }
     };
 
-    setup();
-
     // Captured once per room visit — safe today because nothing calls
     // connectSessionSocket() again while a room is mounted (the only things
     // that do — ban/force-logout/login/logout in useSessionGuard — already
@@ -1080,6 +1147,32 @@ export function RoomScreen() {
       });
     };
 
+    const handleEntrance = payload => {
+      const data = payload?.data;
+      console.log('[Entrance] received', JSON.stringify(payload), 'activeRoomId', activeRoomId);
+      if (data?.roomId !== activeRoomId) {
+        console.log('[Entrance] dropped — roomId mismatch', data?.roomId, 'vs', activeRoomId);
+        return;
+      }
+      if (!data.entranceUrl) {
+        pushEntranceRef.current?.(data);
+        return;
+      }
+      const fixedUrl = fixLocalhostOrigin(data.entranceUrl);
+      const identity = assetIdentity(fixedUrl);
+      const cachedUri = getCachedAssetByIdentity('ENTRANCE_ART', identity);
+      if (cachedUri) {
+        pushEntranceRef.current?.({ ...data, entranceUrl: cachedUri });
+        return;
+      }
+      pushEntranceRef.current?.({ ...data, entranceUrl: fixedUrl });
+      fetchAssetDataUri({ url: fixedUrl }, session?.token).then(uri => {
+        if (uri) {
+          setCachedAssetByIdentity('ENTRANCE_ART', identity, uri);
+        }
+      });
+    };
+
     socket?.on('audio-room:joining-disabled', handleJoiningDisabled);
     socket?.on('audio-room:joining-enabled', handleJoiningEnabled);
     socket?.on('audio-room:blocked', handleBlocked);
@@ -1089,6 +1182,10 @@ export function RoomScreen() {
     socket?.on('audio-room:seat-sync-request', handleSeatSyncRequest);
     socket?.on('audio-room:seat-request', handleSeatRequestEvent);
     socket?.on('audio-room:seat-response', handleSeatResponseEvent);
+    socket?.on('audio-room:entrance', handleEntrance);
+    console.log('[Entrance] listener registered, socket connected:', socket?.connected);
+
+    setup();
 
     return () => {
       cancelled = true;
@@ -1102,6 +1199,7 @@ export function RoomScreen() {
       socket?.off('audio-room:deleted', handleDeleted);
       socket?.off('audio-room:seat-update', handleSeatUpdate);
       socket?.off('audio-room:seat-sync-request', handleSeatSyncRequest);
+      socket?.off('audio-room:entrance', handleEntrance);
       socket?.off('audio-room:seat-request', handleSeatRequestEvent);
       socket?.off('audio-room:seat-response', handleSeatResponseEvent);
       // If activeRoomId isn't known yet at this point (brand-new room,
@@ -1292,6 +1390,9 @@ export function RoomScreen() {
     >
 
       <View style={[styles.foreground, { paddingTop: insets.top }]}>
+        <View style={[styles.entranceBannerWrap, { top: insets.top + scaleModerate(8) }]}>
+          <EntranceBanner entrance={currentEntrance} />
+        </View>
         <View style={styles.header}>
           <View style={styles.identityCenterWrap} pointerEvents="box-none">
             <View style={styles.identityPanel}>
@@ -1485,10 +1586,21 @@ const styles = StyleSheet.create({
     flex: 1
   },
   backgroundImage: {
+    // Pinned to the container's exact current size (not just resizeMode
+    // alone) — without this, toggling Android's on-screen navigation bar
+    // (which resizes the window) could leave the image falling back to its
+    // own intrinsic pixel size for a frame, showing as stretched/zoomed
+    // instead of re-covering the new layout size.
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
     resizeMode: 'cover',
     opacity: 0.35
   },
   customBackgroundImage: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
     resizeMode: 'cover',
     // Near-full opacity — just enough softening for seat/text legibility;
     // much lower than this blends the photo into the white surface behind
@@ -1497,6 +1609,31 @@ const styles = StyleSheet.create({
   },
   foreground: {
     flex: 1
+  },
+  entranceBannerWrap: {
+    position: 'absolute',
+    left: scaleModerate(16),
+    right: scaleModerate(16),
+    zIndex: 20,
+    alignItems: 'center'
+  },
+  entranceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(8),
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: scaleModerate(12),
+    paddingVertical: scaleModerate(6),
+    maxWidth: '100%'
+  },
+  entranceArt: {
+    width: scaleModerate(28),
+    height: scaleModerate(28)
+  },
+  entranceText: {
+    fontSize: scaleFont(12.5),
+    fontWeight: '700'
   },
   header: {
     position: 'relative',

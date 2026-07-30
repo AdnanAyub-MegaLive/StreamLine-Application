@@ -1,33 +1,12 @@
 import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { launchImageLibrary } from 'react-native-image-picker';
 import { AgencyApplicationError, fetchMyAgencyApplication, submitAgencyApplication } from '../../api';
 import { FormField, PrimaryButton, Screen, showAlert } from '../../components';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { routes } from '../../navigation/routes';
 import { scaleFont, scaleModerate } from '../../utils';
-
-// One CNIC side (front/back) — tap to pick from the gallery, shows the
-// picked photo as a preview inside the box.
-function CnicUploadBox({ label, asset, onPick }) {
-  const theme = useTheme();
-  return <View style={styles.cnicBoxWrap}>
-      <Text style={[styles.cnicLabel, { color: theme.text.secondary }]}>{label}</Text>
-      <Pressable onPress={onPick} style={[styles.cnicBox, {
-        backgroundColor: theme.surfaces.card,
-        borderColor: theme.colors.cardBorder
-      }]}>
-        {asset
-          ? <Image source={{ uri: asset.uri }} style={styles.cnicPreview} resizeMode="cover" />
-          : <>
-              <Text style={[styles.cnicPlus, { color: theme.colors.teal700 }]}>+</Text>
-              <Text style={[styles.cnicHint, { color: theme.text.mutedIcon }]}>Tap to upload</Text>
-            </>}
-      </Pressable>
-    </View>;
-}
 
 export function CreateAgencyScreen() {
   const theme = useTheme();
@@ -66,62 +45,22 @@ export function CreateAgencyScreen() {
   }, [session?.token, submittedAt, user?.publicId, markAgencyApplicationSubmitted]);
 
   const [agencyName, setAgencyName] = React.useState('');
-  // Email comes from the account when it exists; otherwise the user types
-  // one here.
-  const hasDbEmail = Boolean(user?.email);
-  const [email, setEmail] = React.useState(user?.email ?? '');
   const [whatsapp, setWhatsapp] = React.useState('');
-  const [bdCode, setBdCode] = React.useState('');
-  const [cnicFront, setCnicFront] = React.useState(null);
-  const [cnicBack, setCnicBack] = React.useState(null);
+  const [adminId, setAdminId] = React.useState('');
   const [policiesAccepted, setPoliciesAccepted] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
-
-  const pickCnic = async setter => {
-    const response = await launchImageLibrary({
-      mediaType: 'photo',
-      selectionLimit: 1,
-      includeBase64: false,
-      // Without these, a picked photo comes through at full camera
-      // resolution (often 3000x4000px+) — rendering two of those at once
-      // in the small preview boxes was causing a native out-of-memory
-      // crash on Android (no JS error, the app just dies). 1600px is
-      // still plenty sharp for a CNIC to be legible while keeping decode
-      // memory sane.
-      maxWidth: 1600,
-      maxHeight: 1600,
-      quality: 0.8
-    });
-    if (response.didCancel) {
-      return;
-    }
-    const asset = response.assets?.[0];
-    if (!asset?.uri) {
-      showAlert('Photo not selected', 'Please choose a photo from your device.');
-      return;
-    }
-    setter(asset);
-  };
 
   const validate = () => {
     if (!agencyName.trim()) {
       showAlert('Missing info', 'Please enter the agency name.');
       return false;
     }
-    if (!email.trim()) {
-      showAlert('Missing info', 'Please enter an email address.');
-      return false;
-    }
     if (!whatsapp.trim()) {
-      showAlert('Missing info', 'Please enter your WhatsApp number.');
+      showAlert('Missing info', 'Please enter the agency owner\'s WhatsApp number.');
       return false;
     }
-    if (!cnicFront || !cnicBack) {
-      showAlert('Missing info', 'Please upload both sides of your CNIC.');
-      return false;
-    }
-    if (!bdCode.trim()) {
-      showAlert('Missing info', 'Please enter your BD code.');
+    if (!adminId.trim()) {
+      showAlert('Missing info', 'Please enter the admin ID.');
       return false;
     }
     if (!policiesAccepted) {
@@ -136,11 +75,9 @@ export function CreateAgencyScreen() {
     try {
       await submitAgencyApplication(session?.token, {
         agencyName,
-        email,
+        email: user?.email,
         whatsapp,
-        bdCode,
-        cnicFront,
-        cnicBack
+        bdCode: adminId
       });
       markAgencyApplicationSubmitted(user?.publicId);
       showAlert('Application sent', 'Your agency application has been submitted. We will contact you soon.');
@@ -209,18 +146,12 @@ export function CreateAgencyScreen() {
         </View>
 
         <FormField label="User ID" value={user?.displayId || user?.publicId || '—'} editable={false} icon="user" />
-        <FormField label="Agency Name" placeholder="Enter your agency name" value={agencyName} onChangeText={setAgencyName} />
         <FormField label="Country" value={user?.country || 'Not set'} editable={false} />
-        <FormField label="Email" placeholder="Enter your email" value={email} onChangeText={setEmail} editable={!hasDbEmail} icon="email" keyboardType="email-address" />
-        <FormField label="WhatsApp Number" placeholder="e.g. +92 300 1234567" value={whatsapp} onChangeText={setWhatsapp} icon="phone" keyboardType="phone-pad" />
-
-        <Text style={[styles.sectionLabel, { color: theme.text.secondary }]}>CNIC (both sides)</Text>
-        <View style={styles.cnicRow}>
-          <CnicUploadBox label="Front side" asset={cnicFront} onPick={() => pickCnic(setCnicFront)} />
-          <CnicUploadBox label="Back side" asset={cnicBack} onPick={() => pickCnic(setCnicBack)} />
-        </View>
-
-        <FormField label="Your BD Code" placeholder="Enter your BD code" value={bdCode} onChangeText={setBdCode} />
+        <FormField label="Gender" value={user?.gender === 'female' ? 'Female' : user?.gender === 'male' ? 'Male' : 'Not set'} editable={false} />
+        <FormField label="Phone Number" value={user?.phone || 'Not set'} editable={false} icon="phone" />
+        <FormField label="Admin ID" placeholder="Enter the admin ID" value={adminId} onChangeText={setAdminId} />
+        <FormField label="Agency Name" placeholder="Enter your agency name" value={agencyName} onChangeText={setAgencyName} />
+        <FormField label="Agency Owner WhatsApp Number" placeholder="e.g. +92 300 1234567" value={whatsapp} onChangeText={setWhatsapp} icon="phone" keyboardType="phone-pad" />
 
         <View style={styles.policyRow}>
           <Pressable onPress={() => setPoliciesAccepted(current => !current)} style={[styles.checkbox, {
@@ -264,47 +195,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: scaleFont(20),
     fontWeight: '800'
-  },
-  sectionLabel: {
-    marginTop: scaleModerate(4),
-    marginBottom: scaleModerate(8),
-    paddingLeft: scaleModerate(4),
-    fontSize: scaleFont(12),
-    fontWeight: '700'
-  },
-  cnicRow: {
-    flexDirection: 'row',
-    gap: scaleModerate(12),
-    marginBottom: scaleModerate(14)
-  },
-  cnicBoxWrap: {
-    flex: 1
-  },
-  cnicLabel: {
-    marginBottom: scaleModerate(6),
-    paddingLeft: scaleModerate(4),
-    fontSize: scaleFont(11),
-    fontWeight: '700'
-  },
-  cnicBox: {
-    height: scaleModerate(110),
-    borderRadius: scaleModerate(14),
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden'
-  },
-  cnicPreview: {
-    width: '100%',
-    height: '100%'
-  },
-  cnicPlus: {
-    fontSize: scaleFont(26),
-    fontWeight: '700'
-  },
-  cnicHint: {
-    fontSize: scaleFont(11)
   },
   policyRow: {
     flexDirection: 'row',

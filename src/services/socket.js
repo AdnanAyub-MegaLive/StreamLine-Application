@@ -66,6 +66,8 @@ export function connectSessionSocket(sessionToken, handlers) {
   socket.on('friend:request', payload => handlers.onFriendRequest?.(payload));
   socket.on('friend:accepted', payload => handlers.onFriendAccepted?.(payload));
   socket.on('friend:declined', payload => handlers.onFriendDeclined?.(payload));
+  socket.on('props:granted', payload => handlers.onPropsGranted?.(payload));
+  socket.on('props:updated', payload => handlers.onPropsUpdated?.(payload));
   socket.on('connect_error', error => {
     const data = error.data;
     if (error.message === 'ACCOUNT_BANNED') {

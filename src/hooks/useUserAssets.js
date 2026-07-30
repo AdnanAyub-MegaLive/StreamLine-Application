@@ -1,5 +1,7 @@
 import React from 'react';
-import { fetchAssetDataUri, fetchUploadCatalog } from '../api';
+import { useFocusEffect } from '@react-navigation/native';
+import { fetchAssetDataUri, fetchMyProps } from '../api';
+import { getSessionSocket } from '../services/socket';
 import { useAppStore } from '../store';
 import { clearCachedAssignedAsset, getCachedAssignedAsset, setCachedAssignedAsset } from '../utils';
 
@@ -34,7 +36,7 @@ const CATALOG_CATEGORY = {
 // single time and re-download unnecessarily. Extracting the stable
 // /api/uploads/<assetId>/file segment gives a real identity to compare —
 // only an actual asset change (a different assetId) invalidates the cache.
-function assetIdentity(url) {
+export function assetIdentity(url) {
   if (!url) {
     return null;
   }
@@ -49,6 +51,37 @@ function useResolvedAsset(kind, { userId, explicitUrl } = {}) {
   const category = CATALOG_CATEGORY[kind];
   const cached = React.useMemo(() => getCachedAssignedAsset(targetUserId, category), [targetUserId, category]);
   const [dataUri, setDataUri] = React.useState(cached?.dataUri ?? null);
+  const [propsVersion, setPropsVersion] = React.useState(0);
+  // Tracks the identity actually reflected in `dataUri` right now — kept in
+  // sync imperatively every time we clear/set the on-disk cache, unlike
+  // `cached` above (only read once per targetUserId/category, so it goes
+  // stale the moment we clear/re-set mid-lifetime — e.g. unequip then
+  // re-equip the same frame: `cached` would still show the old assetId,
+  // making the re-equip look like a no-op and leaving dataUri stuck at the
+  // null the unequip step set it to).
+  const resolvedIdentityRef = React.useRef(cached?.assetId ?? null);
+
+  React.useEffect(() => {
+    if (targetUserId !== ownUserId) {
+      return undefined;
+    }
+    const socket = getSessionSocket();
+    const bump = () => setPropsVersion(version => version + 1);
+    socket?.on('props:granted', bump);
+    socket?.on('props:updated', bump);
+    return () => {
+      socket?.off('props:granted', bump);
+      socket?.off('props:updated', bump);
+    };
+  }, [targetUserId, ownUserId]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (targetUserId === ownUserId) {
+        setPropsVersion(version => version + 1);
+      }
+    }, [targetUserId, ownUserId])
+  );
 
   React.useEffect(() => {
     if (!sessionToken || !targetUserId) {
@@ -59,11 +92,12 @@ function useResolvedAsset(kind, { userId, explicitUrl } = {}) {
     if (explicitUrl !== undefined) {
       if (!explicitUrl) {
         clearCachedAssignedAsset(targetUserId, category);
+        resolvedIdentityRef.current = null;
         setDataUri(null);
         return undefined;
       }
       const identity = assetIdentity(explicitUrl);
-      if (identity === cached?.assetId) {
+      if (identity === resolvedIdentityRef.current) {
         return undefined;
       }
       // A network failure here (fetchAssetDataUri returns null) leaves
@@ -73,6 +107,7 @@ function useResolvedAsset(kind, { userId, explicitUrl } = {}) {
       fetchAssetDataUri({ url: explicitUrl }, sessionToken).then(uri => {
         if (!cancelled && uri) {
           setCachedAssignedAsset(targetUserId, category, identity, uri);
+          resolvedIdentityRef.current = identity;
           setDataUri(uri);
         }
       });
@@ -85,35 +120,32 @@ function useResolvedAsset(kind, { userId, explicitUrl } = {}) {
       return undefined;
     }
 
-    fetchUploadCatalog(sessionToken, { category, roomBackground: kind === 'roomBackground' }).then(async assets => {
-      if (cancelled) {
+    fetchMyProps(sessionToken).then(async propsData => {
+      if (cancelled || propsData === null) {
         return;
       }
-      // null means the catalog request itself failed (network/server) —
-      // distinct from a genuinely empty `[]` (checked, nothing assigned).
-      // Only the latter should clear an already-cached result.
-      if (assets === null) {
-        return;
-      }
-      const asset = assets.find(item => item.assignedUser) ?? assets[0] ?? null;
-      if (!asset) {
+      const equipped = propsData?.equipped?.[category];
+      if (!equipped?.url) {
         clearCachedAssignedAsset(targetUserId, category);
+        resolvedIdentityRef.current = null;
         setDataUri(null);
         return;
       }
-      if (asset.id === cached?.assetId) {
+      const identity = assetIdentity(equipped.url) ?? equipped.assetId;
+      if (identity === resolvedIdentityRef.current) {
         return;
       }
-      const uri = await fetchAssetDataUri(asset, sessionToken);
+      const uri = await fetchAssetDataUri({ url: equipped.url }, sessionToken);
       if (!cancelled && uri) {
-        setCachedAssignedAsset(targetUserId, category, asset.id, uri);
+        setCachedAssignedAsset(targetUserId, category, identity, uri);
+        resolvedIdentityRef.current = identity;
         setDataUri(uri);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [sessionToken, targetUserId, ownUserId, category, kind, explicitUrl, cached?.assetId]);
+  }, [sessionToken, targetUserId, ownUserId, category, kind, explicitUrl, propsVersion]);
 
   return dataUri;
 }

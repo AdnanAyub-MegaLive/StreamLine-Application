@@ -58,3 +58,21 @@ export function getCachedAssetList(userId, category) {
 export function setCachedAssetList(userId, category, ids, items) {
   cacheStorage.set(cacheKey(userId, `list:${category}`), JSON.stringify({ ids, items }));
 }
+
+function identityCacheKey(category, identity) {
+  return `identity:${category}:${identity}`;
+}
+
+export function getCachedAssetByIdentity(category, identity) {
+  if (!identity) {
+    return null;
+  }
+  return cacheStorage.getString(identityCacheKey(category, identity)) ?? null;
+}
+
+export function setCachedAssetByIdentity(category, identity, dataUri) {
+  if (!identity) {
+    return;
+  }
+  cacheStorage.set(identityCacheKey(category, identity), dataUri);
+}

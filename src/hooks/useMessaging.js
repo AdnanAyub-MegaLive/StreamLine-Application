@@ -1,6 +1,6 @@
 import React from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { fetchConversations, fetchNotifications } from '../api';
+import { fetchConversations, fetchFriends, fetchNotifications } from '../api';
 import { getSessionSocket } from '../services/socket';
 import { useAppStore } from '../store';
 
@@ -57,18 +57,21 @@ export function useMessaging() {
   const sessionToken = useAppStore(state => state.session?.token);
   const [conversations, setConversations] = React.useState([]);
   const [notifications, setNotifications] = React.useState([]);
+  const [friends, setFriends] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
 
   const reload = React.useCallback(async () => {
     if (!sessionToken) {
       return;
     }
-    const [conversationList, notificationList] = await Promise.all([
+    const [conversationList, notificationList, friendList] = await Promise.all([
       fetchConversations(sessionToken),
-      fetchNotifications(sessionToken, { limit: 20 })
+      fetchNotifications(sessionToken, { limit: 20 }),
+      fetchFriends(sessionToken)
     ]);
     setConversations(conversationList);
     setNotifications(notificationList);
+    setFriends(friendList);
     setLoading(false);
   }, [sessionToken]);
 
@@ -98,12 +101,16 @@ export function useMessaging() {
       socket?.on('message:new', handleUpdate);
       socket?.on('conversation:read', handleUpdate);
       socket?.on('notification:new', handleUpdate);
+      // A newly-accepted friend should be searchable/messageable right
+      // away — see docs/friends-api-spec.md.
+      socket?.on('friend:accepted', handleUpdate);
 
       return () => {
         cancelled = true;
         socket?.off('message:new', handleUpdate);
         socket?.off('conversation:read', handleUpdate);
         socket?.off('notification:new', handleUpdate);
+        socket?.off('friend:accepted', handleUpdate);
       };
     }, [reload])
   );
@@ -131,6 +138,22 @@ export function useMessaging() {
     [conversations]
   );
 
+  // Friends who don't have an existing conversation yet — so a newly
+  // accepted friend is still findable/messageable from the Messages
+  // search, not just people you've already chatted with (see
+  // MessageScreen.jsx's search, which merges this in alongside recentChats).
+  const messagableFriends = React.useMemo(() => {
+    const existingParticipantIds = new Set(recentChats.map(chat => chat.participantId).filter(Boolean));
+    return friends
+      .filter(friend => !existingParticipantIds.has(friend.id))
+      .map(friend => ({
+        id: friend.id,
+        name: friend.name,
+        avatar: friend.profileImage ?? null,
+        frameUrl: friend.frameUrl ?? null
+      }));
+  }, [friends, recentChats]);
+
   const systemNotification = React.useMemo(() => {
     const latest = notifications[0];
     if (!latest) {
@@ -143,7 +166,7 @@ export function useMessaging() {
     };
   }, [notifications]);
 
-  return { loading, systemNotification, worldChat, recentChats, reload };
+  return { loading, systemNotification, worldChat, recentChats, messagableFriends, reload };
 }
 
 export default useMessaging;
