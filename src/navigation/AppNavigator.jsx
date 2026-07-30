@@ -20,6 +20,9 @@ import { DemoRoomScreen } from '../screens/DemoRoom';
 import { UserProfileScreen } from '../screens/UserProfile';
 import { ComingSoonScreen } from '../screens/ComingSoon';
 import { InAppBrowserScreen } from '../screens/InAppBrowser';
+import { ConversationScreen } from '../screens/Conversation';
+import { UserSearchScreen } from '../screens/UserSearch';
+import { FriendRequestsScreen } from '../screens/FriendRequests';
 const Stack = createNativeStackNavigator();
 export function AppNavigator() {
   return <Stack.Navigator screenOptions={{
@@ -47,6 +50,9 @@ export function AppNavigator() {
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
       <Stack.Screen name="ComingSoon" component={ComingSoonScreen} />
       <Stack.Screen name="InAppBrowser" component={InAppBrowserScreen} />
+      <Stack.Screen name="Conversation" component={ConversationScreen} />
+      <Stack.Screen name="UserSearch" component={UserSearchScreen} />
+      <Stack.Screen name="FriendRequests" component={FriendRequestsScreen} />
     </Stack.Navigator>;
 }
 export default AppNavigator;

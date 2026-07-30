@@ -56,6 +56,16 @@ export function connectSessionSocket(sessionToken, handlers) {
   socket.on('audio-room:joining-enabled', payload => handlers.onAudioRoomJoiningEnabled?.(payload.data));
   socket.on('audio-room:unblocked', payload => handlers.onAudioRoomRestored?.(payload.data));
   socket.on('audio-room:restored', payload => handlers.onAudioRoomRestored?.(payload.data));
+  // See StreamLine-Portal/docs/mobile-messaging-api.md — messages/reads/
+  // notifications are unwrapped events (no {success, data} envelope),
+  // unlike the events above.
+  socket.on('message:new', payload => handlers.onMessageNew?.(payload));
+  socket.on('conversation:read', payload => handlers.onConversationRead?.(payload));
+  socket.on('notification:new', payload => handlers.onNotificationNew?.(payload));
+  // See docs/friends-api-spec.md — unwrapped, same as the messaging events.
+  socket.on('friend:request', payload => handlers.onFriendRequest?.(payload));
+  socket.on('friend:accepted', payload => handlers.onFriendAccepted?.(payload));
+  socket.on('friend:declined', payload => handlers.onFriendDeclined?.(payload));
   socket.on('connect_error', error => {
     const data = error.data;
     if (error.message === 'ACCOUNT_BANNED') {
@@ -133,4 +143,16 @@ export function requestSeat(roomId, seatId, note, callback) {
 // the existing seat-update broadcast effect relay the change to everyone.
 export function respondToSeatRequest(roomId, requestId, requesterId, seatId, accepted, reason) {
   socket?.emit('audio-room:seat-response', { roomId, requestId, requesterId, seatId, accepted, reason });
+}
+
+// See StreamLine-Portal/docs/mobile-messaging-api.md — sends over the
+// already-authenticated session socket instead of the REST fallback
+// (sendMessageRest in src/api/messaging.js), so the sender also gets the
+// same real-time message:new the other participants receive.
+export function sendMessage(conversationId, body, callback) {
+  if (!socket) {
+    callback?.({ success: false, error: { code: 'NOT_CONNECTED' } });
+    return;
+  }
+  socket.emit('message:send', { conversationId, body }, callback);
 }

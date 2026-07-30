@@ -33,7 +33,7 @@ function AppContent() {
         <VideoBackground />
 
         <NavigationContainer ref={navigationRef} theme={navigationTheme} onReady={consumePendingRoomNavigation}>
-          <StatusBar barStyle="dark-content" backgroundColor={theme.surfaces.page} translucent />
+          <StatusBar barStyle="light-content" backgroundColor={theme.surfaces.page} translucent />
           <AppNavigator />
           <SessionGuard />
         </NavigationContainer>

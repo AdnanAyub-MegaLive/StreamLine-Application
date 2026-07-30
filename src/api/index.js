@@ -3,3 +3,6 @@ export * from './auth';
 export * from './audioRooms';
 export * from './uploads';
 export * from './agency';
+export * from './friends';
+export * from './messaging';
+export * from './users';

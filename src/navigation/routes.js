@@ -17,5 +17,8 @@ export const routes = {
   demoRoom: 'DemoRoom',
   userProfile: 'UserProfile',
   comingSoon: 'ComingSoon',
-  inAppBrowser: 'InAppBrowser'
+  inAppBrowser: 'InAppBrowser',
+  conversation: 'Conversation',
+  userSearch: 'UserSearch',
+  friendRequests: 'FriendRequests'
 };

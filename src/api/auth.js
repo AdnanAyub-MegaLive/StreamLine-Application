@@ -319,6 +319,29 @@ export async function updateProfile(sessionToken, input) {
     throw new UpdateProfileError('Unable to reach the server. Check your network and the backend address in .env (STREAMLINE_API_BASE_URL).', 'NETWORK_ERROR');
   }
 }
+export class ChangePasswordError extends Error {
+  code;
+  constructor(message, code) {
+    super(message);
+    this.name = 'ChangePasswordError';
+    this.code = code;
+  }
+}
+export async function changePassword(sessionToken, currentPassword, newPassword) {
+  try {
+    await apiClient.post('/api/users/password', { currentPassword, newPassword }, {
+      headers: {
+        Authorization: `Bearer ${sessionToken}`
+      }
+    });
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data?.error) {
+      const { code, message } = error.response.data.error;
+      throw new ChangePasswordError(message, code);
+    }
+    throw new ChangePasswordError('Unable to reach the server. Check your network and try again.', 'NETWORK_ERROR');
+  }
+}
 // Fallback status check for cold start / foreground resume (the socket
 // connection in src/services/socket.ts handles live push updates while the
 // app is running). Fails silently (returns null) if the token is missing,

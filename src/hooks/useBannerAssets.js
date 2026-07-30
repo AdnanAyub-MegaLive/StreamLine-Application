@@ -49,10 +49,14 @@ export function useBannerAssets() {
     }
     let cancelled = false;
     (async () => {
-      const assets = sortBanners(await fetchUploadCatalog(sessionToken, { category: CATEGORY }));
-      if (cancelled) {
+      const catalog = await fetchUploadCatalog(sessionToken, { category: CATEGORY });
+      // null means the request itself failed (network/server) — keep
+      // showing whatever's already cached/rendered instead of wiping the
+      // carousel to empty on a connectivity blip.
+      if (catalog === null || cancelled) {
         return;
       }
+      const assets = sortBanners(catalog);
       const ids = assets.map(asset => asset.id);
       // Exact same set of banners (same ids, same order) as last time —
       // the cached images are already showing, nothing to re-download.

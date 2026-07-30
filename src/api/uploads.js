@@ -28,9 +28,10 @@ function fixLocalhostOrigin(url) {
 // GET /api/uploads/catalog — see StreamLine-Portal's mobile upload catalog
 // docs. Returns global assets plus assets specifically assigned to the
 // authenticated user; assets assigned to other users are never included.
-// Fails silently (returns []) so a network blip or the endpoint not
-// existing yet on an older backend build just shows whatever local
-// fallback the caller already has, instead of an error.
+// Returns null on failure (network blip, endpoint not existing yet on an
+// older backend build) — distinct from a genuinely empty `[]` response —
+// so callers can tell "couldn't check" apart from "checked, there's
+// nothing" and keep showing their last-cached result instead of wiping it.
 export async function fetchUploadCatalog(sessionToken, { category, roomBackground } = {}) {
   try {
     const response = await apiClient.get('/api/uploads/catalog', {
@@ -45,7 +46,7 @@ export async function fetchUploadCatalog(sessionToken, { category, roomBackgroun
     const assets = response.data?.data?.assets ?? [];
     return assets.map(asset => (asset.url ? { ...asset, url: fixLocalhostOrigin(asset.url) } : asset));
   } catch {
-    return [];
+    return null;
   }
 }
 

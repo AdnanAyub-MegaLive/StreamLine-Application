@@ -1,44 +1,50 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SearchIcon, TrophyIcon } from '../../assets';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { SearchIcon, UserIcon } from '../../assets';
 import { useTheme } from '../../theme';
 import { Avatar, Screen } from '../../components';
+import { fetchIncomingFriendRequests } from '../../api';
+import { useMessaging, useUserAssets } from '../../hooks';
+import { getSessionSocket } from '../../services/socket';
+import { routes } from '../../navigation/routes';
+import { useAppStore } from '../../store';
 import { scaleFont, scaleModerate } from '../../utils';
 
-// System/world-wide rows sit above the per-person conversation list — both
-// app-wide broadcasts, not tied to any one user. No backend for messaging
-// exists yet, so everything below (these two rows and RECENT_CHATS) is
-// placeholder content, styled to the approved design, until a real chat
-// API is wired up.
-const SYSTEM_NOTIFICATION = {
-  time: '10:42 AM',
-  preview: 'Welcome to Streamline! Check out the new banner carousel.',
-  unread: true
-};
-const WORLD_CHAT = {
-  time: 'Just now',
-  senderName: 'Alex',
-  preview: 'Anyone for a quick match?',
-  unreadCount: 12
-};
-const RECENT_CHATS = [
-  { id: 'chat-1', name: 'Sarah Jenkins', avatar: undefined, time: '2m', preview: "Yeah, I'll be online in about 10 min", unreadCount: 2, online: true },
-  { id: 'chat-2', name: 'Team Alpha LFG', avatar: undefined, time: '1h', preview: 'ggs everyone, we played well today.', unreadCount: 0, online: false },
-  { id: 'chat-3', name: 'Elena R.', avatar: undefined, time: 'Yesterday', preview: 'Did you see the new update notes?', unreadCount: 0, online: true }
-];
-
-function HeaderBar() {
+function HeaderBar({ searchOpen, query, onToggleSearch, onChangeQuery, requestCount, onOpenFriendRequests }) {
   const theme = useTheme();
+  if (searchOpen) {
+    return <View style={styles.headerBar}>
+        <Pressable onPress={() => onToggleSearch(false)} hitSlop={10}>
+          <Text style={[styles.backChevron, { color: theme.text.primary }]}>‹</Text>
+        </Pressable>
+        <TextInput
+          value={query}
+          onChangeText={onChangeQuery}
+          placeholder="Search messages"
+          placeholderTextColor={theme.text.secondary}
+          autoFocus
+          style={[styles.searchInput, { color: theme.text.primary, backgroundColor: theme.surfaces.card, borderColor: theme.colors.cardBorder }]}
+        />
+      </View>;
+  }
   return <View style={styles.headerBar}>
-      <SearchIcon size={22} color={theme.text.secondary} />
+      <Pressable onPress={() => onToggleSearch(true)} hitSlop={10}>
+        <SearchIcon size={22} color={theme.text.secondary} />
+      </Pressable>
       <Text style={[styles.headerTitle, { color: theme.colors.teal700 }]}>Messages</Text>
-      <TrophyIcon size={22} color={theme.text.secondary} />
+      <Pressable onPress={onOpenFriendRequests} hitSlop={10} style={styles.friendRequestsButton}>
+        <UserIcon size={22} color={theme.text.secondary} />
+        {requestCount ? <View style={[styles.headerBadge, { backgroundColor: theme.colors.liveBadge }]}>
+            <Text style={styles.headerBadgeText}>{requestCount > 9 ? '9+' : requestCount}</Text>
+          </View> : null}
+      </Pressable>
     </View>;
 }
 
-function BroadcastRow({ emoji, iconBackground, title, time, children, unreadDot, unreadCount }) {
+function BroadcastRow({ emoji, iconBackground, title, time, children, unreadDot, unreadCount, onPress }) {
   const theme = useTheme();
-  return <Pressable style={[styles.broadcastRow, {
+  return <Pressable onPress={onPress} style={[styles.broadcastRow, {
       backgroundColor: theme.surfaces.card,
       borderColor: theme.colors.cardBorder
     }]}>
@@ -59,12 +65,12 @@ function BroadcastRow({ emoji, iconBackground, title, time, children, unreadDot,
     </Pressable>;
 }
 
-function ChatRow({ chat }) {
+function ChatRow({ chat, onPress }) {
   const theme = useTheme();
-  return <Pressable style={styles.chatRow}>
+  const { frameUri } = useUserAssets({ userId: chat.participantId, frameUrl: chat.frameUrl });
+  return <Pressable onPress={onPress} style={styles.chatRow}>
       <View style={styles.chatAvatarWrap}>
-        <Avatar value={chat.avatar} fullName={chat.name} size={scaleModerate(46)} />
-        {chat.online ? <View style={[styles.onlineDot, { backgroundColor: theme.colors.teal400, borderColor: theme.surfaces.page }]} /> : null}
+        <Avatar value={chat.avatar} fullName={chat.name} size={scaleModerate(46)} frameUri={frameUri} />
       </View>
       <View style={styles.rowBody}>
         <View style={styles.rowTopLine}>
@@ -79,28 +85,86 @@ function ChatRow({ chat }) {
     </Pressable>;
 }
 
+function EmptyRecent({ hasQuery }) {
+  const theme = useTheme();
+  return <View style={styles.emptyRecent}>
+      <Text style={[styles.emptyRecentText, { color: theme.text.secondary }]}>
+        {hasQuery ? 'No matching friends or messages.' : 'No conversations yet.'}
+      </Text>
+    </View>;
+}
+
 export function MessageScreen() {
   const theme = useTheme();
-  return <Screen>
-      <HeaderBar />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <BroadcastRow emoji="📣" iconBackground={theme.colors.vipGoldBackground} title="System Notifications" time={SYSTEM_NOTIFICATION.time} unreadDot={SYSTEM_NOTIFICATION.unread}>
-          {SYSTEM_NOTIFICATION.preview}
-        </BroadcastRow>
-        <BroadcastRow emoji="🌐" iconBackground={theme.colors.proGamerBackground} title="World Chat" time={WORLD_CHAT.time} unreadCount={WORLD_CHAT.unreadCount}>
-          <Text style={[styles.senderName, { color: theme.colors.teal700 }]}>{WORLD_CHAT.senderName}: </Text>
-          {WORLD_CHAT.preview}
-        </BroadcastRow>
+  const navigation = useNavigation();
+  const sessionToken = useAppStore(state => state.session?.token);
+  const { systemNotification, worldChat, recentChats } = useMessaging();
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [query, setQuery] = React.useState('');
+  const [requestCount, setRequestCount] = React.useState(0);
 
-        <Text style={[styles.sectionLabel, { color: theme.text.secondary }]}>Recent</Text>
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!sessionToken) {
+        return undefined;
+      }
+      let cancelled = false;
+      const reloadRequestCount = () => {
+        fetchIncomingFriendRequests(sessionToken).then(requests => {
+          if (!cancelled) {
+            setRequestCount(requests.length);
+          }
+        });
+      };
+      reloadRequestCount();
+      const socket = getSessionSocket();
+      socket?.on('friend:request', reloadRequestCount);
+      return () => {
+        cancelled = true;
+        socket?.off('friend:request', reloadRequestCount);
+      };
+    }, [sessionToken])
+  );
+  const handleToggleSearch = open => {
+    setSearchOpen(open);
+    if (!open) {
+      setQuery('');
+    }
+  };
+  const trimmedQuery = query.trim().toLowerCase();
+  const filteredChats = trimmedQuery
+    ? recentChats.filter(chat => chat.name.toLowerCase().includes(trimmedQuery) || chat.preview.toLowerCase().includes(trimmedQuery))
+    : recentChats;
+  const worldChatMatches = !trimmedQuery || worldChat?.name.toLowerCase().includes(trimmedQuery) || worldChat?.preview.toLowerCase().includes(trimmedQuery);
+  const openConversation = ({ id, name, avatar, participantId, frameUrl }) => {
+    navigation.navigate(routes.conversation, { conversationId: id, name, avatar, participantId, frameUrl });
+  };
+  return <Screen>
+      <HeaderBar
+        searchOpen={searchOpen}
+        query={query}
+        onToggleSearch={handleToggleSearch}
+        onChangeQuery={setQuery}
+        requestCount={requestCount}
+        onOpenFriendRequests={() => navigation.navigate(routes.friendRequests)}
+      />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {!trimmedQuery && systemNotification ? <BroadcastRow emoji="📣" iconBackground={theme.colors.vipGoldBackground} title="System Notifications" time={systemNotification.time} unreadDot={systemNotification.unread}>
+            {systemNotification.preview}
+          </BroadcastRow> : null}
+        {worldChat && worldChatMatches ? <BroadcastRow emoji="🌐" iconBackground={theme.colors.proGamerBackground} title="World Chat" time={worldChat.time} unreadCount={worldChat.unreadCount} onPress={() => openConversation({ id: worldChat.id, name: worldChat.name, avatar: null })}>
+            {worldChat.preview}
+          </BroadcastRow> : null}
+
+        <Text style={[styles.sectionLabel, { color: theme.text.secondary }]}>{trimmedQuery ? 'Results' : 'Recent'}</Text>
         <View style={[styles.recentCard, {
           backgroundColor: theme.surfaces.card,
           borderColor: theme.colors.cardBorder
         }]}>
-          {RECENT_CHATS.map((chat, index) => <View key={chat.id}>
-              <ChatRow chat={chat} />
-              {index < RECENT_CHATS.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: theme.colors.cardBorder }]} /> : null}
-            </View>)}
+          {filteredChats.length ? filteredChats.map((chat, index) => <View key={chat.id}>
+              <ChatRow chat={chat} onPress={() => openConversation({ id: chat.id, name: chat.name, avatar: chat.avatar, participantId: chat.participantId, frameUrl: chat.frameUrl })} />
+              {index < filteredChats.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: theme.colors.cardBorder }]} /> : null}
+            </View>) : <EmptyRecent hasQuery={Boolean(trimmedQuery)} />}
         </View>
       </ScrollView>
     </Screen>;
@@ -118,6 +182,38 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: scaleFont(18),
     fontWeight: '800'
+  },
+  backChevron: {
+    fontSize: scaleFont(28),
+    fontWeight: '700'
+  },
+  friendRequestsButton: {
+    position: 'relative'
+  },
+  headerBadge: {
+    position: 'absolute',
+    top: scaleModerate(-4),
+    right: scaleModerate(-6),
+    minWidth: scaleModerate(16),
+    height: scaleModerate(16),
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: scaleModerate(3)
+  },
+  headerBadgeText: {
+    color: '#FFFFFF',
+    fontSize: scaleFont(9),
+    fontWeight: '800'
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: scaleModerate(10),
+    borderWidth: 1,
+    borderRadius: scaleModerate(12),
+    paddingHorizontal: scaleModerate(14),
+    paddingVertical: scaleModerate(9),
+    fontSize: scaleFont(14)
   },
   scrollContent: {
     paddingHorizontal: scaleModerate(16),
@@ -165,14 +261,12 @@ const styles = StyleSheet.create({
   chatAvatarWrap: {
     position: 'relative'
   },
-  onlineDot: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: scaleModerate(11),
-    height: scaleModerate(11),
-    borderRadius: scaleModerate(6),
-    borderWidth: 2
+  emptyRecent: {
+    paddingVertical: scaleModerate(24),
+    alignItems: 'center'
+  },
+  emptyRecentText: {
+    fontSize: scaleFont(12.5)
   },
   rowDivider: {
     height: StyleSheet.hairlineWidth
@@ -197,9 +291,6 @@ const styles = StyleSheet.create({
   },
   rowPreview: {
     fontSize: scaleFont(12.5)
-  },
-  senderName: {
-    fontWeight: '700'
   },
   unreadDot: {
     width: scaleModerate(9),

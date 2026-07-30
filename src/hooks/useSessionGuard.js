@@ -2,6 +2,7 @@ import React from 'react';
 import { AppState } from 'react-native';
 import { checkUserStatus } from '../api';
 import { connectSessionSocket, disconnectSessionSocket } from '../services/socket';
+import { showAlert } from '../components';
 import { clearCachedSeatState, dismissLiveRoomNotification, getStableDeviceId } from '../utils';
 import { useAppStore } from '../store';
 import { navigationRef } from '../navigation/navigationRef';
@@ -61,7 +62,41 @@ export function useSessionGuard() {
         });
       }
     };
-    const handleForceLogout = () => {
+    // session:force-logout is ALWAYS an admin-triggered action on this
+    // backend — confirmed against StreamLine-Portal's login route and
+    // database-actions.js: logging in never bumps sessionVersion, only
+    // these three admin actions do (forceLogoutUser, resetUserPassword,
+    // deleteUserAccount). There is no "logged in on another device" case
+    // to distinguish here; every force-logout came from an administrator,
+    // so the message says that plainly instead of hedging with "or
+    // accessed elsewhere", which described something that can't actually
+    // happen on this backend.
+    //
+    // `reason` is a fixed classification code ("PASSWORD_RESET",
+    // "ACCOUNT_DELETED", or absent for a plain admin Force Logout) used to
+    // pick which pre-written explanation to show. `adminReason` is the
+    // admin's own free-text explanation, appended when present — as of
+    // this writing StreamLine-Portal doesn't send `reason` at all for a
+    // plain Force Logout, and doesn't send `adminReason` for any of the
+    // three actions yet (see docs/force-logout-reason-spec.md for the
+    // one-line fix needed per action). This picks both up automatically
+    // the moment the backend starts sending them — no app change needed
+    // then.
+    const FORCE_LOGOUT_MESSAGES = {
+      PASSWORD_RESET: 'Your password was reset by an administrator. Please log in again with your new password.',
+      ACCOUNT_DELETED: 'Your account has been deleted.'
+    };
+    const handleForceLogout = data => {
+      const reason = data?.reason;
+      const adminReason = data?.adminReason;
+      const knownMessage = FORCE_LOGOUT_MESSAGES[reason];
+      let message = knownMessage ?? (reason
+        ? `An administrator logged you out.\nReason: ${reason}`
+        : 'An administrator logged you out of your account.');
+      if (adminReason && message !== `An administrator logged you out.\nReason: ${adminReason}`) {
+        message += `\nReason: ${adminReason}`;
+      }
+      showAlert('Logged Out by Administrator', message);
       clearSession();
       disconnectSessionSocket();
       if (navigationRef.isReady()) {

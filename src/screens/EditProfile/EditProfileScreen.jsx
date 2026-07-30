@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { updateProfile, UpdateProfileError } from '../../api';
+import { changePassword, ChangePasswordError, updateProfile, UpdateProfileError } from '../../api';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { Avatar, FormField, PrimaryButton, Screen } from '../../components';
@@ -49,6 +49,34 @@ export function EditProfileScreen() {
   const [error, setError] = React.useState(null);
   const [fieldErrors, setFieldErrors] = React.useState({});
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [passwordForm, setPasswordForm] = React.useState({ current: '', next: '', confirm: '' });
+  const [passwordError, setPasswordError] = React.useState(null);
+  const [passwordSuccess, setPasswordSuccess] = React.useState(false);
+  const [isChangingPassword, setIsChangingPassword] = React.useState(false);
+  const isNewPasswordValid = passwordForm.next.length >= 8;
+  const doPasswordsMatch = passwordForm.next === passwordForm.confirm;
+  const changePasswordDisabled = !passwordForm.current || !isNewPasswordValid || !doPasswordsMatch || isChangingPassword;
+  const handleChangePassword = async () => {
+    if (changePasswordDisabled || !session) {
+      return;
+    }
+    setPasswordError(null);
+    setPasswordSuccess(false);
+    setIsChangingPassword(true);
+    try {
+      await changePassword(session.token, passwordForm.current, passwordForm.next);
+      setPasswordForm({ current: '', next: '', confirm: '' });
+      setPasswordSuccess(true);
+    } catch (changeError) {
+      if (changeError instanceof ChangePasswordError) {
+        setPasswordError(changeError.message);
+      } else {
+        setPasswordError('Unable to change password. Check your connection and try again.');
+      }
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
   const trimmedEmail = form.email.trim();
   const isEmailValid = trimmedEmail.length === 0 || EMAIL_PATTERN.test(trimmedEmail);
   const isPhoneValid = PHONE_PATTERN.test(form.phone.trim());
@@ -220,6 +248,42 @@ export function EditProfileScreen() {
           color: theme.colors.giftAccent
         }]}>{error}</Text> : null}
         </View>
+
+        <View style={[styles.card, {
+        backgroundColor: theme.surfaces.card,
+        borderColor: theme.colors.cardBorder,
+        shadowColor: theme.colors.teal900
+      }]}>
+          <Text style={[styles.sectionLabel, { color: theme.text.secondary }]}>Change Password</Text>
+
+          <FormField label="Current Password" placeholder="Current Password" value={passwordForm.current} onChangeText={text => setPasswordForm(current => ({
+          ...current,
+          current: text
+        }))} icon="lock" secureTextEntry />
+
+          <FormField label="New Password" placeholder="New Password" value={passwordForm.next} onChangeText={text => setPasswordForm(current => ({
+          ...current,
+          next: text
+        }))} icon="lock" secureTextEntry />
+          {passwordForm.next.length > 0 && !isNewPasswordValid ? <Text style={[styles.fieldErrorText, {
+          color: theme.colors.giftAccent
+        }]}>Must be at least 8 characters.</Text> : null}
+
+          <FormField label="Confirm New Password" placeholder="Confirm New Password" value={passwordForm.confirm} onChangeText={text => setPasswordForm(current => ({
+          ...current,
+          confirm: text
+        }))} icon="lock" secureTextEntry />
+          {passwordForm.confirm.length > 0 && !doPasswordsMatch ? <Text style={[styles.fieldErrorText, {
+          color: theme.colors.giftAccent
+        }]}>Passwords don't match.</Text> : null}
+
+          <PrimaryButton label={isChangingPassword ? 'Updating...' : 'Update Password'} onPress={handleChangePassword} disabled={changePasswordDisabled} style={styles.button} />
+
+          {passwordSuccess ? <Text style={[styles.successText, { color: theme.colors.teal400 }]}>Password updated.</Text> : null}
+          {passwordError ? <Text style={[styles.errorText, {
+          color: theme.colors.giftAccent
+        }]}>{passwordError}</Text> : null}
+        </View>
       </ScrollView>
     </Screen>;
 }
@@ -315,6 +379,12 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   errorText: {
+    marginTop: scaleModerate(10),
+    fontSize: scaleFont(12),
+    fontWeight: '600',
+    textAlign: 'center'
+  },
+  successText: {
     marginTop: scaleModerate(10),
     fontSize: scaleFont(12),
     fontWeight: '600',

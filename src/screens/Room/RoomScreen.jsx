@@ -702,6 +702,10 @@ export function RoomScreen() {
   const isAudioRoom = mode === 'audio' && (Boolean(seatRows) || isViewerEntry);
   const [joiningDisabled, setJoiningDisabled] = React.useState(false);
   const [isRoomBlocked, setIsRoomBlocked] = React.useState(false);
+  // Populated from the admin-provided reason on the audio-room:blocked/
+  // terminated/deleted event that set isRoomBlocked, so the alert below can
+  // show it instead of a generic "removed by an administrator" message.
+  const [roomBlockedReason, setRoomBlockedReason] = React.useState(null);
   const startedAtRef = React.useRef(null);
   const roomEndedRef = React.useRef(false);
   // Always read the latest count from this ref (not the `viewerCount`
@@ -813,7 +817,17 @@ export function RoomScreen() {
     // notification for a room that no longer exists. It also stops the
     // participant-count-sync effect from upserting (and accidentally
     // re-creating) a deleted room.
-    const handleRoomEndedExternally = () => {
+    // socket.on here is the raw socket instance (not the connectSessionSocket
+    // wrapper in useSessionGuard, which already unwraps payload.data before
+    // calling its handlers) — every listener below has to unwrap
+    // payload?.data itself. This was previously missed on every one of
+    // these (blocked/terminated/deleted, seat-update, seat-request,
+    // seat-response), so all of them were silently reading fields off the
+    // wrong object (undefined roomId, undefined seatId, etc.) — seat sync
+    // for real viewers, seat-take requests, and the room-blocked reason
+    // text were all quietly broken.
+    const handleRoomEndedExternally = payload => {
+      const data = payload?.data;
       if (roomEndedRef.current) {
         return;
       }
@@ -823,6 +837,7 @@ export function RoomScreen() {
         clearCachedSeatState(activeRoomId);
       }
       dismissLiveRoomNotification().catch(() => {});
+      setRoomBlockedReason(data?.reason || null);
       setIsRoomBlocked(true);
     };
 
@@ -962,7 +977,20 @@ export function RoomScreen() {
     // receiving room events — this effect would need to react to that
     // instead of grabbing the socket once.
     const socket = getSessionSocket();
-    const handleJoiningDisabled = () => setJoiningDisabled(true);
+    // Doesn't kick anyone already in the room — just blocks new seats from
+    // being taken — so unlike the blocked/terminated case this only needs a
+    // heads-up alert (with the admin's reason, when given), not a forced
+    // exit.
+    const handleJoiningDisabled = payload => {
+      setJoiningDisabled(true);
+      if (!isOwnerRef.current) {
+        const reason = payload?.data?.reason;
+        showAlert(
+          'Seating Paused',
+          reason ? `The host has temporarily paused new seats.\nReason: ${reason}` : 'The host has temporarily paused new seats from being taken.'
+        );
+      }
+    };
     // Owner-only mode lifting (manually or its timer expiring) is the only
     // one of these that matters while still inside a live room — blocked/
     // terminated/deleted rooms are already handled by
@@ -975,7 +1003,8 @@ export function RoomScreen() {
     // See docs/mobile-audio-room-api.md's "Live seat-state relay" — none of
     // this is persisted server-side, the owner's device is the sole source
     // of truth and the server only validates ownership and relays.
-    const handleSeatUpdate = data => {
+    const handleSeatUpdate = payload => {
+      const data = payload?.data;
       if (isOwnerRef.current || data?.roomId !== activeRoomId) {
         return;
       }
@@ -991,7 +1020,8 @@ export function RoomScreen() {
       emitSeatUpdate(activeRoomId, seatRowsRef.current, seatNotesRef.current);
     };
     // Owner-only — a viewer asked to take a specific seat.
-    const handleSeatRequestEvent = data => {
+    const handleSeatRequestEvent = payload => {
+      const data = payload?.data;
       if (!isOwnerRef.current) {
         return;
       }
@@ -1029,7 +1059,8 @@ export function RoomScreen() {
       );
     };
     // Viewer-only — the owner responded to this device's own seat request.
-    const handleSeatResponseEvent = data => {
+    const handleSeatResponseEvent = payload => {
+      const data = payload?.data;
       if (isOwnerRef.current) {
         return;
       }
@@ -1190,11 +1221,15 @@ export function RoomScreen() {
 
   React.useEffect(() => {
     if (isRoomBlocked) {
-      showAlert('Room unavailable', 'This room was blocked, ended, or removed by an administrator.', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+      showAlert(
+        'Room Unavailable',
+        roomBlockedReason
+          ? `This room was removed by an administrator.\nReason: ${roomBlockedReason}`
+          : 'This room was blocked, ended, or removed by an administrator.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
     }
-  }, [isRoomBlocked, navigation]);
+  }, [isRoomBlocked, roomBlockedReason, navigation]);
 
   React.useEffect(() => {
     if (hasWelcomedRef.current) {
@@ -1225,7 +1260,11 @@ export function RoomScreen() {
       StatusBar.setTranslucent(true);
       StatusBar.setBackgroundColor('transparent');
       return () => {
-        StatusBar.setBarStyle('dark-content');
+        // Matches App.jsx's app-wide default now that the page background
+        // is dark — this used to restore 'dark-content' for the old light
+        // theme, which would leave status bar icons invisible against the
+        // new dark surfaces.page everywhere else in the app.
+        StatusBar.setBarStyle('light-content');
         StatusBar.setTranslucent(true);
         StatusBar.setBackgroundColor(theme.surfaces.page);
       };

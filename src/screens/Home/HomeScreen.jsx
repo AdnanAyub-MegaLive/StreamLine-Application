@@ -1,15 +1,21 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View, ScrollView, useWindowDimensions } from 'react-native';
-import { SearchIcon, TrophyIcon } from '../../assets';
+import { ImageBackground, Pressable, StyleSheet, Text, View, ScrollView, useWindowDimensions } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { homeBackgroundImage, SearchIcon, TrophyIcon } from '../../assets';
 import { useTheme } from '../../theme';
 import { Screen } from '../../components';
+import { routes } from '../../navigation/routes';
 import { scaleFont, scaleModerate } from '../../utils';
 import { LiveTabContent, PartyTabContent, GamesTabContent } from './components';
 
 function HeaderBar() {
   const theme = useTheme();
+  const navigation = useNavigation();
   return <View style={styles.headerBar}>
-      <SearchIcon size={22} color={theme.text.secondary} />
+      <Pressable onPress={() => navigation.navigate(routes.userSearch)} hitSlop={10}>
+        <SearchIcon size={22} color={theme.text.secondary} />
+      </Pressable>
       <Text style={[styles.headerTitle, {
       color: theme.colors.teal700
     }]}>Streamline</Text>
@@ -37,18 +43,22 @@ const HOME_TABS = ['live', 'party', 'games'];
 
 export function HomeScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const {
     width
   } = useWindowDimensions();
   const [activeTab, setActiveTab] = React.useState('live');
   const pagerRef = React.useRef(null);
-  // Disabled while a finger is on the Party banner carousel — the banner is
-  // itself a horizontal scroll, and Android can't arbitrate it against this
-  // horizontal pager. Uses setNativeProps (synchronous, applied natively
-  // right now) rather than React state on purpose: a state update lands a
-  // frame later, and the pager would intercept the very start of the drag
-  // before the re-render disabled it — which is why manual banner scroll
-  // only "sort of" worked. See PartyBanner's onBannerScrolling.
+  // Disabled while a finger is on any nested horizontal scroller inside a
+  // tab page (the Party banner, the Live tab's region filter row) — those
+  // are horizontal scrolls too, and Android can't arbitrate them against
+  // this horizontal pager. Uses setNativeProps (synchronous, applied
+  // natively right now) rather than React state on purpose: a state
+  // update lands a frame later, and the pager would intercept the very
+  // start of the drag before the re-render disabled it — which is why
+  // this only "sort of" worked when it used to be React state. Shared by
+  // PartyBanner's onBannerScrolling and CountryFilterRow's
+  // onFilterRowScrolling below.
   const handleBannerScrolling = React.useCallback(active => {
     pagerRef.current?.setNativeProps({ scrollEnabled: !active });
   }, []);
@@ -64,41 +74,50 @@ export function HomeScreen() {
     const index = Math.round(event.nativeEvent.contentOffset.x / width);
     setActiveTab(HOME_TABS[index] ?? 'live');
   };
-  return <Screen>
-      <HeaderBar />
+  return <ImageBackground source={homeBackgroundImage} resizeMode="cover" style={[styles.background, { backgroundColor: theme.surfaces.page }]}>
+      <Screen transparent>
+        {/* Screen skips its own safe-area top padding in transparent mode
+        (see Screen.jsx) — normally fine since most transparent screens
+        want their background to run fully edge-to-edge under the status
+        bar, but here it meant HeaderBar (search/title/trophy) rendered
+        underneath the status bar itself, invisible behind its icons. */}
+        <View style={{ height: insets.top }} />
+        <HeaderBar />
 
-      <View style={[styles.header, {
-      borderBottomColor: theme.colors.cardBorder
-    }]}>
-        <TabPill label="Live" active={activeTab === 'live'} onPress={() => scrollToTab('live')} />
-        <TabPill label="Party" active={activeTab === 'party'} onPress={() => scrollToTab('party')} />
-        <TabPill label="Games" active={activeTab === 'games'} onPress={() => scrollToTab('games')} />
-      </View>
+        <View style={styles.header}>
+          <TabPill label="Live" active={activeTab === 'live'} onPress={() => scrollToTab('live')} />
+          <TabPill label="Party" active={activeTab === 'party'} onPress={() => scrollToTab('party')} />
+          <TabPill label="Games" active={activeTab === 'games'} onPress={() => scrollToTab('games')} />
+        </View>
 
-      <ScrollView ref={pagerRef} style={styles.pager} horizontal pagingEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={handleMomentumScrollEnd} contentOffset={{
-      x: HOME_TABS.indexOf(activeTab) * width,
-      y: 0
-    }}>
-        <View style={[styles.pagerPage, {
-        width
-      }]}>
-          <LiveTabContent />
-        </View>
-        <View style={[styles.pagerPage, {
-        width
-      }]}>
-          <PartyTabContent onBannerScrolling={handleBannerScrolling} />
-        </View>
-        <View style={[styles.pagerPage, {
-        width
-      }]}>
-          <GamesTabContent />
-        </View>
-      </ScrollView>
-    </Screen>;
+        <ScrollView ref={pagerRef} style={styles.pager} horizontal pagingEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={handleMomentumScrollEnd} contentOffset={{
+        x: HOME_TABS.indexOf(activeTab) * width,
+        y: 0
+      }}>
+          <View style={[styles.pagerPage, {
+          width
+        }]}>
+            <LiveTabContent onFilterRowScrolling={handleBannerScrolling} />
+          </View>
+          <View style={[styles.pagerPage, {
+          width
+        }]}>
+            <PartyTabContent onBannerScrolling={handleBannerScrolling} />
+          </View>
+          <View style={[styles.pagerPage, {
+          width
+        }]}>
+            <GamesTabContent />
+          </View>
+        </ScrollView>
+      </Screen>
+    </ImageBackground>;
 }
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1
+  },
   pager: {
     flex: 1
   },
@@ -122,7 +141,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: scaleModerate(20),
     paddingTop: scaleModerate(10),
-    borderBottomWidth: 1,
     gap: scaleModerate(22)
   },
   tabPill: {

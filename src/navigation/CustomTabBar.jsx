@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { DiscoverIcon, FamilyIcon, HomeIcon, MessageIcon, PlusIcon, UserIcon } from '../assets';
 import { fetchAudioRoom } from '../api';
@@ -43,6 +44,7 @@ export function CustomTabBar({
   navigation
 }) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const session = useAppStore(store => store.session);
   const sessionToken = session?.token;
   const [barWidth, setBarWidth] = React.useState(0);
@@ -138,7 +140,7 @@ export function CustomTabBar({
     closeSeatLayout();
     navigation.navigate(routes.room, { mode: 'audio', seatGroups, roomName: pendingRoomTitle });
   };
-  return <View style={styles.wrapper} pointerEvents="box-none">
+  return <View style={[styles.wrapper, { paddingBottom: insets.bottom }]} pointerEvents="box-none">
       <StreamOptionModal
         visible={streamOptionsVisible}
         onClose={closeStreamOptions}
@@ -154,7 +156,7 @@ export function CustomTabBar({
       <SeatLayoutModal visible={seatLayoutVisible} onClose={closeSeatLayout} onConfirm={handleConfirmSeatLayout} />
       <View style={styles.barContainer} onLayout={handleLayout}>
         {barWidth > 0 ? <Svg width={barWidth} height={BAR_HEIGHT} style={styles.barSvg}>
-            <Path d={buildBarPath(barWidth)} fill={theme.surfaces.card} />
+            <Path d={buildBarPath(barWidth)} fill="#000000" />
           </Svg> : null}
 
         <View style={styles.row}>
@@ -199,9 +201,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    alignItems: 'center',
-    paddingBottom: scaleModerate(22),
-    paddingHorizontal: scaleModerate(16)
+    alignItems: 'center'
   },
   barContainer: {
     width: '100%',

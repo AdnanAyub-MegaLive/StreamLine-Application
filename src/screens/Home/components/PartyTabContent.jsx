@@ -4,7 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { fetchDiscoverRooms } from '../../../api';
 import { agencyApplyBannerImage } from '../../../assets';
 import { Avatar } from '../../../components';
-import { useBannerAssets } from '../../../hooks';
+import { useBannerAssets, useUserAssets } from '../../../hooks';
 import { useAppStore } from '../../../store';
 import { useTheme } from '../../../theme';
 import { routes } from '../../../navigation/routes';
@@ -25,8 +25,10 @@ function toPartyItem(room, index) {
     id: room.roomId,
     title: room.title,
     members: room.participantCount,
+    hostId: room.owner?.id ?? null,
     hostName: room.owner?.name ?? 'Unknown host',
     hostAvatar: room.owner?.profileImage,
+    hostFrameUrl: room.owner?.frameUrl ?? null,
     accent: accentForIndex(index)
   };
 }
@@ -340,6 +342,11 @@ function PartyCard({
   const theme = useTheme();
   const navigation = useNavigation();
   const accent = item.accent(theme);
+  // A fake, never-real userId for demo cards (no hostId at all) — passing
+  // undefined here would make useUserAssets fall back to resolving the
+  // *signed-in user's own* frame instead of showing nothing, and would
+  // clear their real cached frame in the process.
+  const { frameUri: hostFrameUri } = useUserAssets({ userId: item.hostId ?? 'demo-host', frameUrl: item.hostId ? item.hostFrameUrl : null });
   // DEMO_TRENDING_PARTIES ids (see above) route to a static preview screen
   // instead of the real Room screen — a fake roomId there just got stuck
   // "Loading room..." with no seats, since nothing on the backend actually
@@ -384,7 +391,7 @@ function PartyCard({
         {item.title}
       </Text>
       <View style={styles.partyMetaRow}>
-        <Avatar value={item.hostAvatar} fullName={item.hostName} size={scaleModerate(16)} />
+        <Avatar value={item.hostAvatar} fullName={item.hostName} size={scaleModerate(16)} frameUri={hostFrameUri} />
         <Text style={[styles.partyMeta, {
         color: theme.text.secondary
       }]} numberOfLines={1}>

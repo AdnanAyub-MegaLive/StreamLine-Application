@@ -1,10 +1,12 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { MessageIcon } from '../../assets';
 import { useTheme } from '../../theme';
 import { Avatar, Screen } from '../../components';
-import { useAssignedFrame } from '../../hooks';
+import { fetchFriendStatus, respondToFriendRequest, sendFriendRequest, startConversation } from '../../api';
+import { useUserAssets } from '../../hooks';
+import { routes } from '../../navigation/routes';
 import { useAppStore } from '../../store';
 import { scaleFont, scaleModerate } from '../../utils';
 
@@ -56,15 +58,90 @@ export function UserProfileScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
   const route = useRoute();
-  const { userId, userName, userAvatar } = route.params ?? {};
+  const { userId, userName, userAvatar, userFrameUrl } = route.params ?? {};
   const displayName = userName || 'User';
-  // There's no backend endpoint to fetch another user's assigned frame —
-  // only shown when this happens to be a look at your own profile (e.g.
-  // tapping your own seat in the demo room).
   const session = useAppStore(state => state.session);
+  const sessionToken = session?.token;
   const isOwnProfile = Boolean(userId) && userId === (session?.user?.displayId || session?.user?.publicId);
-  const ownFrameUri = useAssignedFrame();
-  const frameUri = isOwnProfile ? ownFrameUri : null;
+  // frameUrl is only ever populated for someone else's profile once the
+  // caller passes it through route.params (i.e. once the backend starts
+  // including it on search results / conversation participants — see
+  // docs/asset-centralization-spec.md). For your own profile, useUserAssets
+  // resolves it from the upload catalog as usual.
+  const { frameUri } = useUserAssets(isOwnProfile ? undefined : { userId: userId ?? 'unknown-user', frameUrl: userId ? userFrameUrl : null });
+
+  // See docs/friends-api-spec.md — resolves to "none" until the backend
+  // ships the friend system, so the button just always offers "Add Friend"
+  // until then.
+  const [friendStatus, setFriendStatus] = React.useState({ status: 'none', requestId: null });
+  const [friendActionBusy, setFriendActionBusy] = React.useState(false);
+  const [startingChat, setStartingChat] = React.useState(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (isOwnProfile || !sessionToken || !userId) {
+        return undefined;
+      }
+      let cancelled = false;
+      fetchFriendStatus(sessionToken, userId).then(status => {
+        if (!cancelled) {
+          setFriendStatus(status);
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [isOwnProfile, sessionToken, userId])
+  );
+
+  const handleFriendAction = async () => {
+    if (friendActionBusy || !sessionToken || !userId) {
+      return;
+    }
+    setFriendActionBusy(true);
+    try {
+      if (friendStatus.status === 'none') {
+        await sendFriendRequest(sessionToken, userId);
+        setFriendStatus({ status: 'pending_sent', requestId: null });
+      } else if (friendStatus.status === 'pending_received' && friendStatus.requestId) {
+        await respondToFriendRequest(sessionToken, friendStatus.requestId, true);
+        setFriendStatus({ status: 'friends', requestId: null });
+      }
+    } catch {
+      // Leaves friendStatus as-is — the user can just try again.
+    } finally {
+      setFriendActionBusy(false);
+    }
+  };
+
+  const handleChat = async () => {
+    if (startingChat || !sessionToken || !userId || isOwnProfile) {
+      return;
+    }
+    setStartingChat(true);
+    try {
+      const conversation = await startConversation(sessionToken, userId);
+      navigation.navigate(routes.conversation, {
+        conversationId: conversation.id,
+        name: displayName,
+        avatar: userAvatar,
+        participantId: userId,
+        frameUrl: userFrameUrl
+      });
+    } catch {
+      // Nothing to recover to here — the user can just tap Chat again.
+    } finally {
+      setStartingChat(false);
+    }
+  };
+
+  const friendButtonLabel = {
+    none: '+ Add Friend',
+    pending_sent: 'Request Sent',
+    pending_received: 'Accept Request',
+    friends: 'Friends ✓'
+  }[friendStatus.status];
+  const friendButtonDisabled = friendActionBusy || friendStatus.status === 'pending_sent' || friendStatus.status === 'friends';
 
   return <Screen>
       <View style={styles.header}>
@@ -122,21 +199,23 @@ export function UserProfileScreen() {
         </SectionCard>
       </ScrollView>
 
-      <View style={[styles.actionBar, { borderTopColor: theme.colors.cardBorder }]}>
-        <Pressable style={[styles.chatButton, {
-          backgroundColor: theme.surfaces.card,
-          borderColor: theme.colors.cardBorder
-        }]}>
-          <MessageIcon size={18} color={theme.text.primary} />
-          <Text style={[styles.chatButtonText, { color: theme.text.primary }]}>Chat</Text>
-        </Pressable>
-        <Pressable style={[styles.followButton, { backgroundColor: theme.colors.followOrange }]}>
-          <Text style={styles.followButtonText}>+ Follow</Text>
-        </Pressable>
-        <Pressable style={[styles.giftButton, { backgroundColor: theme.colors.giftAccent }]}>
-          <Text style={styles.giftButtonEmoji}>🎁</Text>
-        </Pressable>
-      </View>
+      {!isOwnProfile ? <View style={[styles.actionBar, { borderTopColor: theme.colors.cardBorder }]}>
+          <Pressable disabled={startingChat} onPress={handleChat} style={[styles.chatButton, {
+            backgroundColor: theme.surfaces.card,
+            borderColor: theme.colors.cardBorder
+          }]}>
+            {startingChat ? <ActivityIndicator size="small" color={theme.text.primary} /> : <MessageIcon size={18} color={theme.text.primary} />}
+            <Text style={[styles.chatButtonText, { color: theme.text.primary }]}>Chat</Text>
+          </Pressable>
+          <Pressable disabled={friendButtonDisabled} onPress={handleFriendAction} style={[styles.followButton, {
+            backgroundColor: friendButtonDisabled && friendStatus.status !== 'pending_received' ? theme.colors.cardBorder : theme.colors.followOrange
+          }]}>
+            {friendActionBusy ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.followButtonText}>{friendButtonLabel}</Text>}
+          </Pressable>
+          <Pressable style={[styles.giftButton, { backgroundColor: theme.colors.giftAccent }]}>
+            <Text style={styles.giftButtonEmoji}>🎁</Text>
+          </Pressable>
+        </View> : null}
     </Screen>;
 }
 

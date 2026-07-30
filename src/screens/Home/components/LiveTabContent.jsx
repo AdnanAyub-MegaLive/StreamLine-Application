@@ -1,7 +1,6 @@
 import React from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { SearchIcon } from '../../../assets';
 import { useTheme } from '../../../theme';
 import { routes } from '../../../navigation/routes';
 import { scaleFont, scaleModerate } from '../../../utils';
@@ -28,7 +27,16 @@ const DEMO_LIVE_ROOMS = [
   { id: 'demo-live-6', hostName: 'Danish Iqbal', hostTag: '@danishgaming', viewers: '201', accent: demoAccentForIndex(1) }
 ];
 
-const countryFilters = ['All', 'SA KSA', 'AE UAE', 'EG Egypt', 'KW Kuwait'];
+// Grouped by region instead of individual countries — each chip's flags
+// are just the representative countries for that region, not an
+// exhaustive list of every country actually included in it.
+const regionFilters = [
+  { id: 'all', label: 'All', flags: '' },
+  { id: 'middle-east', label: 'Middle East', flags: '🇸🇦🇦🇪🇰🇼🇶🇦' },
+  { id: 'south-asia', label: 'South Asia', flags: '🇵🇰🇮🇳🇧🇩' },
+  { id: 'africa', label: 'Africa', flags: '🇪🇬🇳🇬🇰🇪' },
+  { id: 'global', label: 'Global', flags: '🌍' }
+];
 
 function LiveBadge() {
   const theme = useTheme();
@@ -100,30 +108,81 @@ function LiveRoomCard({
     </Pressable>;
 }
 
-function CountryFilterRow({
-  activeFilter,
-  onSelect
-}) {
-  const theme = useTheme();
-  return <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-      <Pressable style={[styles.filterSearchButton, {
-      backgroundColor: theme.colors.teal700
-    }]}>
-        <SearchIcon size={16} color={theme.cta.primary.text} />
-      </Pressable>
+// Same manual tap-detection as PartyBanner's carousel, and for the same
+// reason: the row wrapper below has to disable HomeScreen's tab pager the
+// instant a touch starts (see onFilterRowScrolling), otherwise the pager
+// (also horizontal, one level up) wins the drag before this row's own
+// ScrollView ever sees it and the region chips can't be scrolled at all.
+// But flipping the pager's native scrollEnabled prop mid-touch makes
+// Android cancel any Pressable's in-progress responder chain, so a normal
+// <Pressable onPress> here would silently stop registering taps — exactly
+// what broke the banner before it switched to tracking touches directly.
+const CHIP_TAP_MAX_MOVEMENT = 10;
+const CHIP_TAP_MAX_DURATION = 300;
 
-      {countryFilters.map(filter => {
-      const active = filter === activeFilter;
-      return <Pressable key={filter} onPress={() => onSelect(filter)} style={[styles.filterChip, {
+function FilterChip({ region, active, theme, onSelect }) {
+  const touchStartRef = React.useRef(null);
+  const handleTouchStart = event => {
+    touchStartRef.current = {
+      x: event.nativeEvent.pageX,
+      y: event.nativeEvent.pageY,
+      time: Date.now()
+    };
+  };
+  const handleTouchEnd = event => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) {
+      return;
+    }
+    const dx = Math.abs(event.nativeEvent.pageX - start.x);
+    const dy = Math.abs(event.nativeEvent.pageY - start.y);
+    const duration = Date.now() - start.time;
+    if (dx < CHIP_TAP_MAX_MOVEMENT && dy < CHIP_TAP_MAX_MOVEMENT && duration < CHIP_TAP_MAX_DURATION) {
+      onSelect(region.id);
+    }
+  };
+  return <View
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={() => {
+        touchStartRef.current = null;
+      }}
+      style={[styles.filterChip, {
         backgroundColor: active ? theme.colors.teal700 : theme.surfaces.card,
         borderColor: active ? theme.colors.teal700 : theme.colors.cardBorder
-      }]}>
-            <Text style={[styles.filterChipText, {
-          color: active ? theme.cta.primary.text : theme.text.secondary
-        }]}>{filter}</Text>
-          </Pressable>;
-    })}
-    </ScrollView>;
+      }]}
+    >
+      <Text style={[styles.filterChipText, {
+      color: active ? theme.cta.primary.text : theme.text.secondary
+    }]}>{region.flags ? `${region.flags} ${region.label}` : region.label}</Text>
+    </View>;
+}
+
+function CountryFilterRow({
+  activeFilter,
+  onSelect,
+  onFilterRowScrolling
+}) {
+  const theme = useTheme();
+  const pausedRef = React.useRef(false);
+  const handleRowTouchStart = () => {
+    if (!pausedRef.current) {
+      pausedRef.current = true;
+      onFilterRowScrolling?.(true);
+    }
+  };
+  const handleRowTouchEnd = () => {
+    if (pausedRef.current) {
+      pausedRef.current = false;
+      onFilterRowScrolling?.(false);
+    }
+  };
+  return <View onTouchStart={handleRowTouchStart} onTouchEnd={handleRowTouchEnd} onTouchCancel={handleRowTouchEnd}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+        {regionFilters.map(region => <FilterChip key={region.id} region={region} active={region.id === activeFilter} theme={theme} onSelect={onSelect} />)}
+      </ScrollView>
+    </View>;
 }
 
 function LiveEmptyState() {
@@ -135,12 +194,12 @@ function LiveEmptyState() {
     </View>;
 }
 
-export function LiveTabContent() {
-  const [activeFilter, setActiveFilter] = React.useState('All');
+export function LiveTabContent({ onFilterRowScrolling }) {
+  const [activeFilter, setActiveFilter] = React.useState('all');
   // Falls back to DEMO_LIVE_ROOMS above whenever the real list is empty —
   // see the comment on that constant.
   const data = liveRooms.length ? liveRooms : DEMO_LIVE_ROOMS;
-  return <FlatList data={data} keyExtractor={item => item.id} numColumns={2} columnWrapperStyle={data.length ? styles.liveRow : undefined} contentContainerStyle={styles.liveList} ListHeaderComponent={<CountryFilterRow activeFilter={activeFilter} onSelect={setActiveFilter} />} ListEmptyComponent={<LiveEmptyState />} renderItem={({
+  return <FlatList data={data} keyExtractor={item => item.id} numColumns={2} columnWrapperStyle={data.length ? styles.liveRow : undefined} contentContainerStyle={styles.liveList} ListHeaderComponent={<CountryFilterRow activeFilter={activeFilter} onSelect={setActiveFilter} onFilterRowScrolling={onFilterRowScrolling} />} ListEmptyComponent={<LiveEmptyState />} renderItem={({
     item
   }) => <LiveRoomCard item={item} />} />;
 }
@@ -154,13 +213,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: scaleModerate(8),
     paddingBottom: scaleModerate(16)
-  },
-  filterSearchButton: {
-    width: scaleModerate(32),
-    height: scaleModerate(32),
-    borderRadius: scaleModerate(16),
-    alignItems: 'center',
-    justifyContent: 'center'
   },
   filterChip: {
     borderWidth: 1,
