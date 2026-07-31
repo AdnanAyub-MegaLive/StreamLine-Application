@@ -188,6 +188,7 @@ function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmpt
   const avatarInnerSize = circleSize - 4;
   const ringSize = circleSize + 4;
   const micBadgeSize = Math.max(scaleModerate(16), Math.round(circleSize * 0.36));
+  const avatarInnerBackground = draggable && myFrameUri ? 'transparent' : theme.surfaces.card;
 
   // Only the seat belonging to the current user (draggable) gets a pan
   // gesture, so people can move their own tile around the room — this
@@ -299,11 +300,7 @@ function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmpt
               width: avatarInnerSize,
               height: avatarInnerSize,
               borderRadius: avatarInnerSize / 2,
-              // Transparent instead of the usual card-color plate when a
-              // frame is showing — that background circle is smaller than
-              // the frame, so it was visibly peeking out around/behind the
-              // frame's edges instead of just the photo + frame artwork.
-              backgroundColor: draggable && myFrameUri ? 'transparent' : theme.surfaces.card
+              backgroundColor: avatarInnerBackground
             }
           ]}
         >
@@ -441,24 +438,42 @@ function MoreMenuModal({ visible, onClose, theme, isSpeakerMuted, onToggleSpeake
 
 function EntranceBanner({ entrance }) {
   const theme = useTheme();
-  const translateY = React.useRef(new Animated.Value(-60)).current;
-  const opacity = React.useRef(new Animated.Value(0)).current;
+  const { width } = useWindowDimensions();
+  const translateX = React.useRef(new Animated.Value(width)).current;
 
   React.useEffect(() => {
     if (!entrance) {
       return undefined;
     }
-    translateY.setValue(-60);
-    opacity.setValue(0);
-    Animated.parallel([
-      Animated.timing(translateY, { toValue: 0, duration: 260, useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 1, duration: 260, useNativeDriver: true })
+    translateX.setValue(width);
+    Animated.sequence([
+      Animated.timing(translateX, { toValue: 0, duration: 350, useNativeDriver: true }),
+      Animated.delay(1000),
+      Animated.timing(translateX, { toValue: -width, duration: 350, useNativeDriver: true })
     ]).start();
     return undefined;
-  }, [entrance, translateY, opacity]);
+  }, [entrance, translateX, width]);
 
   if (!entrance) {
     return null;
+  }
+
+  const label = `${entrance.name} has entered the room`;
+
+  if (entrance.entranceUrl) {
+    return (
+      <Animated.View pointerEvents="none" style={{ transform: [{ translateX }] }}>
+        <ImageBackground
+          source={{ uri: entrance.entranceUrl }}
+          resizeMode="stretch"
+          style={styles.entranceArtBg}
+          imageStyle={styles.entranceArtBgImage}
+          onError={event => console.log('[Entrance] art image FAILED', entrance.entranceUrl, event.nativeEvent.error)}
+        >
+          <Text style={styles.entranceArtText} numberOfLines={1}>{label}</Text>
+        </ImageBackground>
+      </Animated.View>
+    );
   }
 
   return (
@@ -466,12 +481,11 @@ function EntranceBanner({ entrance }) {
       pointerEvents="none"
       style={[
         styles.entranceBanner,
-        { backgroundColor: theme.surfaces.card, borderColor: theme.colors.teal700, transform: [{ translateY }], opacity }
+        { backgroundColor: theme.surfaces.card, borderColor: theme.colors.teal700, transform: [{ translateX }] }
       ]}
     >
-      {entrance.entranceUrl ? <Image source={{ uri: entrance.entranceUrl }} style={styles.entranceArt} resizeMode="contain" /> : null}
       <Avatar value={entrance.profileImage} fullName={entrance.name} size={scaleModerate(26)} />
-      <Text style={[styles.entranceText, { color: theme.text.primary }]} numberOfLines={1}>{entrance.name} has entered</Text>
+      <Text style={[styles.entranceText, { color: theme.text.primary }]} numberOfLines={1}>{label}</Text>
     </Animated.View>
   );
 }
@@ -744,7 +758,7 @@ export function RoomScreen() {
     }
     isShowingEntranceRef.current = true;
     setCurrentEntrance(next);
-    entranceTimerRef.current = setTimeout(() => showNextEntranceRef.current?.(), 3200);
+    entranceTimerRef.current = setTimeout(() => showNextEntranceRef.current?.(), 1800);
   };
   const pushEntranceRef = React.useRef(null);
   pushEntranceRef.current = data => {
@@ -1371,6 +1385,7 @@ export function RoomScreen() {
 
   const hasCustomBackground = Boolean(assignedRoomBackgroundSource) && !customBackgroundFailed;
   const backgroundSource = hasCustomBackground ? assignedRoomBackgroundSource : roomBackgroundImage;
+  const identityAvatarBackground = myFrameUri ? 'transparent' : theme.colors.teal50;
   // No white scrim overlay at all — both backgrounds dim through image
   // opacity alone against the card-colored surface behind them (custom
   // uploads at 0.5, the bundled default at its original 0.35).
@@ -1390,14 +1405,14 @@ export function RoomScreen() {
     >
 
       <View style={[styles.foreground, { paddingTop: insets.top }]}>
-        <View style={[styles.entranceBannerWrap, { top: insets.top + scaleModerate(8) }]}>
+        <View style={styles.entranceBannerWrap} pointerEvents="none">
           <EntranceBanner entrance={currentEntrance} />
         </View>
         <View style={styles.header}>
           <View style={styles.identityCenterWrap} pointerEvents="box-none">
             <View style={styles.identityPanel}>
               <View style={styles.identityAvatarOuter}>
-                <View style={[styles.identityAvatarWrap, { backgroundColor: myFrameUri ? 'transparent' : theme.colors.teal50 }]}>
+                <View style={[styles.identityAvatarWrap, { backgroundColor: identityAvatarBackground }]}>
                   <Avatar
                     value={session?.user?.profileImage || `${AVATAR_PLACEHOLDER}?seed=${ownerAvatarSeed}`}
                     fullName={ownerName}
@@ -1612,28 +1627,48 @@ const styles = StyleSheet.create({
   },
   entranceBannerWrap: {
     position: 'absolute',
+    top: 0,
+    bottom: 0,
     left: scaleModerate(16),
     right: scaleModerate(16),
     zIndex: 20,
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   entranceBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: scaleModerate(8),
+    gap: scaleModerate(14),
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: scaleModerate(12),
-    paddingVertical: scaleModerate(6),
+    paddingHorizontal: scaleModerate(22),
+    paddingVertical: scaleModerate(16),
     maxWidth: '100%'
-  },
-  entranceArt: {
-    width: scaleModerate(28),
-    height: scaleModerate(28)
   },
   entranceText: {
     fontSize: scaleFont(12.5),
     fontWeight: '700'
+  },
+  entranceArtBg: {
+    alignSelf: 'center',
+    minWidth: scaleModerate(320),
+    maxWidth: scaleModerate(576),
+    paddingHorizontal: scaleModerate(50),
+    paddingVertical: scaleModerate(33),
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden'
+  },
+  entranceArtBgImage: {
+    borderRadius: scaleModerate(10)
+  },
+  entranceArtText: {
+    color: '#FFFFFF',
+    fontSize: scaleFont(13),
+    fontWeight: '800',
+    textShadowColor: 'rgba(0,0,0,0.65)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3
   },
   header: {
     position: 'relative',
@@ -1660,7 +1695,7 @@ const styles = StyleSheet.create({
     paddingVertical: scaleModerate(4),
     gap: scaleModerate(8),
     maxWidth: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.65)'
+    backgroundColor: 'rgba(0, 0, 0, 0.5)'
   },
   identityAvatarOuter: {
     width: scaleModerate(34),
@@ -1716,7 +1751,7 @@ const styles = StyleSheet.create({
     borderRadius: scaleModerate(17),
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.65)'
+    backgroundColor: 'rgba(0, 0, 0, 0.5)'
   },
   viewersPanel: {
     flexDirection: 'row',
@@ -1725,7 +1760,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: scaleModerate(10),
     paddingVertical: scaleModerate(6),
     gap: scaleModerate(6),
-    backgroundColor: 'rgba(255, 255, 255, 0.65)'
+    backgroundColor: 'rgba(0, 0, 0, 0.5)'
   },
   liveDot: {
     width: scaleModerate(8),
@@ -1862,7 +1897,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)'
+    backgroundColor: 'rgba(0, 0, 0, 0.55)'
   },
   chatSystemLabel: {
     fontSize: scaleFont(12),
@@ -1899,7 +1934,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: scaleModerate(8),
-    backgroundColor: 'rgba(255, 255, 255, 0.7)'
+    backgroundColor: 'rgba(0, 0, 0, 0.55)'
   },
   bottomBar: {
     flexDirection: 'row',
@@ -1916,7 +1951,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: scaleModerate(16),
     gap: scaleModerate(8),
-    backgroundColor: 'rgba(255, 255, 255, 0.65)'
+    backgroundColor: 'rgba(0, 0, 0, 0.5)'
   },
   textInput: {
     flex: 1,
