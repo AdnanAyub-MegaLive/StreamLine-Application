@@ -1,4 +1,5 @@
 export * from './Avatar';
+export * from './AssetPreview';
 export * from './GenderAgeChip';
 export * from './Screen';
 export * from './BrandMark';
@@ -11,6 +12,7 @@ export * from './StreamOptionModal';
 export * from './RoomTitleModal';
 export * from './EmojiPickerModal';
 export * from './SeatLayoutModal';
+export * from './GiftPickerModal';
 export * from './ThemedAlert';
 export * from './VerifiedTick';
 export * from './VerifiedName';
