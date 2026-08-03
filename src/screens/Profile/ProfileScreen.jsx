@@ -70,7 +70,7 @@ export function ProfileScreen() {
     { emoji: '🛍️', label: 'Shop', onPress: () => navigation.navigate(routes.store) },
     { emoji: '🎖️', label: 'Badges' },
     { emoji: '✅', label: 'Verified' },
-    { emoji: '🏢', label: 'Agency', onPress: () => navigation.navigate(routes.createAgency) },
+    { emoji: '🏢', label: 'Agency', onPress: () => navigation.navigate(routes.agencyChoice) },
     { emoji: '🎒', label: 'Bag' },
     { emoji: '🖥️', label: 'Monitor' },
     { emoji: '⚙️', label: 'Settings', onPress: () => navigation.navigate(routes.settings) }

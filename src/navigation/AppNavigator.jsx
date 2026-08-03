@@ -14,7 +14,10 @@ import { BannedScreen } from '../screens/Banned';
 import { SettingsScreen } from '../screens/Settings';
 import { EditProfileScreen } from '../screens/EditProfile';
 import { BannerDetailScreen } from '../screens/BannerDetail';
+import { AgencyChoiceScreen } from '../screens/AgencyChoice';
 import { CreateAgencyScreen } from '../screens/CreateAgency';
+import { JoinAgencyScreen } from '../screens/JoinAgency';
+import { AgencyDashboardScreen } from '../screens/AgencyDashboard';
 import { ChangeAvatarScreen } from '../screens/ChangeAvatar';
 import { DemoRoomScreen } from '../screens/DemoRoom';
 import { UserProfileScreen } from '../screens/UserProfile';
@@ -25,6 +28,7 @@ import { UserSearchScreen } from '../screens/UserSearch';
 import { FriendRequestsScreen } from '../screens/FriendRequests';
 import { ConnectionsScreen } from '../screens/Connections';
 import { StoreScreen } from '../screens/Store';
+import { CreatePostScreen } from '../screens/CreatePost';
 const Stack = createNativeStackNavigator();
 export function AppNavigator() {
   return <Stack.Navigator screenOptions={{
@@ -46,7 +50,10 @@ export function AppNavigator() {
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="BannerDetail" component={BannerDetailScreen} />
+      <Stack.Screen name="AgencyChoice" component={AgencyChoiceScreen} />
       <Stack.Screen name="CreateAgency" component={CreateAgencyScreen} />
+      <Stack.Screen name="JoinAgency" component={JoinAgencyScreen} />
+      <Stack.Screen name="AgencyDashboard" component={AgencyDashboardScreen} />
       <Stack.Screen name="ChangeAvatar" component={ChangeAvatarScreen} />
       <Stack.Screen name="DemoRoom" component={DemoRoomScreen} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
@@ -57,6 +64,7 @@ export function AppNavigator() {
       <Stack.Screen name="FriendRequests" component={FriendRequestsScreen} />
       <Stack.Screen name="Connections" component={ConnectionsScreen} />
       <Stack.Screen name="Store" component={StoreScreen} />
+      <Stack.Screen name="CreatePost" component={CreatePostScreen} />
     </Stack.Navigator>;
 }
 export default AppNavigator;

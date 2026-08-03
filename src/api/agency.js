@@ -62,3 +62,92 @@ export async function fetchMyAgencyApplication(sessionToken) {
     return null;
   }
 }
+
+export class AgencyJoinError extends Error {
+  code;
+  constructor(message, code) {
+    super(message);
+    this.name = 'AgencyJoinError';
+    this.code = code;
+  }
+}
+
+// GET /api/agencies — see docs/join-agency-api-spec.md (requested, not yet
+// built on StreamLine-Portal as of this writing). Lists active agencies a
+// user can request to join, optionally filtered by a search string. Throws
+// on failure (unlike fetchMyAgencyApplication) since JoinAgencyScreen needs
+// to show a real "couldn't load" state rather than silently rendering an
+// empty list, which would look identical to "no agencies exist yet".
+export async function fetchAgencies(sessionToken, query) {
+  const response = await apiClient.get('/api/agencies', {
+    headers: { Authorization: `Bearer ${sessionToken}` },
+    params: query ? { q: query } : undefined
+  });
+  return response.data?.data?.agencies ?? [];
+}
+
+// POST /api/agencies/:agencyId/join — see docs/join-agency-api-spec.md.
+// Requests to join an existing agency as a host; like submitAgencyApplication,
+// this is a request that needs approval (by the agency owner or an admin),
+// not an instant join.
+export async function requestJoinAgency(sessionToken, agencyId) {
+  try {
+    const response = await apiClient.post(`/api/agencies/${agencyId}/join`, {}, {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+    return response.data?.data ?? {};
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data?.error) {
+      const { code, message } = error.response.data.error;
+      throw new AgencyJoinError(message ?? 'Request failed.', code);
+    }
+    throw new AgencyJoinError('Could not reach the server. Try again.', 'NETWORK');
+  }
+}
+
+// GET /api/agencies/my-join-request — same idea as fetchMyAgencyApplication,
+// mirrored for the join-an-existing-agency flow. Fails silently (returns
+// null) so an older/unreachable backend just falls back to no pending
+// request instead of erroring.
+export async function fetchMyAgencyJoinRequest(sessionToken) {
+  try {
+    const response = await apiClient.get('/api/agencies/my-join-request', {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+    return response.data?.data?.request ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// GET /api/agencies/mine — see docs/agency-dashboard-api-spec.md (requested,
+// not yet built). Only meaningful for an approved agency owner; returns
+// null if the caller doesn't own one so the screen can fall back cleanly.
+export async function fetchMyAgencyDashboard(sessionToken) {
+  try {
+    const response = await apiClient.get('/api/agencies/mine', {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+    return response.data?.data?.agency ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// POST /api/agencies/join-requests/:requestId/respond — see
+// docs/agency-dashboard-api-spec.md. The agency owner accepting/rejecting
+// one of their own pending join requests, straight from the app.
+export async function respondToAgencyJoinRequest(sessionToken, requestId, accept) {
+  try {
+    const response = await apiClient.post(`/api/agencies/join-requests/${requestId}/respond`, { accept }, {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+    return response.data?.data ?? {};
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data?.error) {
+      const { code, message } = error.response.data.error;
+      throw new AgencyJoinError(message ?? 'Request failed.', code);
+    }
+    throw new AgencyJoinError('Could not reach the server. Try again.', 'NETWORK');
+  }
+}

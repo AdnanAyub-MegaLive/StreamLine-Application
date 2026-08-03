@@ -12,7 +12,10 @@ export const routes = {
   settings: 'Settings',
   editProfile: 'EditProfile',
   bannerDetail: 'BannerDetail',
+  agencyChoice: 'AgencyChoice',
   createAgency: 'CreateAgency',
+  joinAgency: 'JoinAgency',
+  agencyDashboard: 'AgencyDashboard',
   changeAvatar: 'ChangeAvatar',
   demoRoom: 'DemoRoom',
   userProfile: 'UserProfile',
@@ -22,5 +25,6 @@ export const routes = {
   userSearch: 'UserSearch',
   friendRequests: 'FriendRequests',
   connections: 'Connections',
-  store: 'Store'
+  store: 'Store',
+  createPost: 'CreatePost'
 };

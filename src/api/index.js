@@ -6,5 +6,6 @@ export * from './agency';
 export * from './friends';
 export * from './gifts';
 export * from './messaging';
+export * from './posts';
 export * from './store';
 export * from './users';

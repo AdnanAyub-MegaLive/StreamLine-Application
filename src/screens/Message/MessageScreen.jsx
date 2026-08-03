@@ -1,7 +1,8 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { SearchIcon, UserIcon } from '../../assets';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { messageBackgroundImage, SearchIcon, UserIcon } from '../../assets';
 import { useTheme } from '../../theme';
 import { Avatar, Screen, VerifiedTick } from '../../components';
 import { fetchIncomingFriendRequests, startConversation } from '../../api';
@@ -99,6 +100,7 @@ function EmptyRecent({ hasQuery }) {
 
 export function MessageScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const sessionToken = useAppStore(state => state.session?.token);
   const { systemNotification, worldChat, recentChats, messagableFriends } = useMessaging();
@@ -170,7 +172,8 @@ export function MessageScreen() {
       setStartingChatFor(null);
     }
   };
-  return <Screen>
+  return <Screen transparent>
+      <ImageBackground source={messageBackgroundImage} style={[styles.background, { paddingTop: insets.top }]} resizeMode="cover">
       <HeaderBar
         searchOpen={searchOpen}
         query={query}
@@ -212,10 +215,14 @@ export function MessageScreen() {
             </> : <EmptyRecent hasQuery={Boolean(trimmedQuery)} />}
         </View>
       </ScrollView>
+      </ImageBackground>
     </Screen>;
 }
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1
+  },
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -872,6 +872,15 @@ export function RoomScreen() {
     const columnWidth = Math.max(scaleModerate(44), Math.min(scaleModerate(68), fitWidth));
     return { columnWidth, circleSize: Math.round(columnWidth * 0.82) };
   }, [seatRows, windowWidth]);
+  // The owner's own "island" avatar (top identity panel) is based on
+  // whatever size the seat circles actually are on this screen (instead of
+  // a fixed 34px) — two successive 10% reductions then a 5% increase from
+  // that — same proportions Seat itself uses for its frame overlay and mic
+  // badge, just derived here since the owner never occupies an actual
+  // numbered seat.
+  const ownerCircleSize = Math.round((seatSizing?.circleSize ?? scaleModerate(56)) * 0.9 * 0.9 * 1.05);
+  const ownerFrameSize = ownerCircleSize + 12;
+  const ownerMicBadgeSize = Math.max(scaleModerate(16), Math.round(ownerCircleSize * 0.36));
   const occupiedSeatCount = seatRows ? seatRows.flat().filter(seat => seat.occupied).length : 0;
   const viewerCount = occupiedSeatCount + 1;
   const [draft, setDraft] = React.useState('');
@@ -1655,12 +1664,12 @@ export function RoomScreen() {
         <View style={styles.header}>
           <View style={styles.identityCenterWrap} pointerEvents="box-none">
             <View style={styles.identityPanel}>
-              <View style={styles.identityAvatarOuter}>
-                <View style={[styles.identityAvatarWrap, { backgroundColor: identityAvatarBackground }]}>
+              <View style={[styles.identityAvatarOuter, { width: ownerCircleSize, height: ownerCircleSize }]}>
+                <View style={[styles.identityAvatarWrap, { width: ownerCircleSize, height: ownerCircleSize, borderRadius: ownerCircleSize / 2, backgroundColor: identityAvatarBackground }]}>
                   <Avatar
                     value={session?.user?.profileImage || `${AVATAR_PLACEHOLDER}?seed=${ownerAvatarSeed}`}
                     fullName={ownerName}
-                    size={34}
+                    size={ownerCircleSize}
                   />
                 </View>
                 {myFrameUri ? (
@@ -1668,11 +1677,16 @@ export function RoomScreen() {
                   // buildSeatRowsFromGroups) — their identity only ever
                   // shows here, so this was the one place an owner's own
                   // assigned frame never appeared at all. Sized a bit
-                  // larger than the 34px avatar and centered over it, same
-                  // proportions as everywhere else the frame renders.
+                  // larger than the avatar itself and centered over it,
+                  // same proportions as everywhere else the frame renders.
                   <Image
                     source={{ uri: myFrameUri }}
-                    style={styles.identityFrameOverlay}
+                    style={[styles.identityFrameOverlay, {
+                      top: -(ownerFrameSize - ownerCircleSize) / 2,
+                      left: -(ownerFrameSize - ownerCircleSize) / 2,
+                      width: ownerFrameSize,
+                      height: ownerFrameSize
+                    }]}
                     resizeMode="contain"
                     pointerEvents="none"
                   />
@@ -1680,10 +1694,16 @@ export function RoomScreen() {
                 <View
                   style={[
                     styles.identityMicBadge,
-                    { backgroundColor: isMicMuted ? theme.colors.giftAccent : theme.colors.teal700, borderColor: theme.surfaces.card }
+                    {
+                      width: ownerMicBadgeSize,
+                      height: ownerMicBadgeSize,
+                      borderRadius: ownerMicBadgeSize / 2,
+                      backgroundColor: isMicMuted ? theme.colors.giftAccent : theme.colors.teal700,
+                      borderColor: theme.surfaces.card
+                    }
                   ]}
                 >
-                  <MicIcon size={9} muted={isMicMuted} color={theme.cta.primary.text} />
+                  <MicIcon size={Math.round(ownerMicBadgeSize * 0.6)} muted={isMicMuted} color={theme.cta.primary.text} />
                 </View>
               </View>
               <View style={styles.identityText}>
@@ -2040,7 +2060,11 @@ const styles = StyleSheet.create({
   },
   seatRows: {
     paddingHorizontal: scaleModerate(20),
-    marginTop: scaleModerate(18),
+    // Extra breathing room below the owner's identity island — its avatar
+    // is now sized to match the seat circles (see ownerCircleSize), so it
+    // can be noticeably taller than the old fixed 34px, and needs more
+    // clearance before the seat grid starts.
+    marginTop: scaleModerate(34),
     gap: scaleModerate(5)
   },
   loadingText: {
@@ -2133,7 +2157,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: scaleModerate(2),
-    marginTop: scaleModerate(5),
+    marginTop: scaleModerate(2),
     maxWidth: '100%'
   },
   seatNameText: {

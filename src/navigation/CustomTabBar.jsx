@@ -73,6 +73,12 @@ export function CustomTabBar({
     if (isCheckingRoom) {
       return;
     }
+    // Discover is a photo+description feed, not a room — "+" there opens
+    // Create Post instead of the audio/video room flow below.
+    if (state.routes[state.index]?.name === 'DiscoverTab') {
+      navigation.navigate(routes.createPost);
+      return;
+    }
     if (!sessionToken) {
       setStreamOptionsVisible(true);
       return;

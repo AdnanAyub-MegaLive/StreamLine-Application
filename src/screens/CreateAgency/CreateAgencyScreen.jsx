@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { AgencyApplicationError, fetchMyAgencyApplication, submitAgencyApplication } from '../../api';
 import { FormField, PrimaryButton, Screen, showAlert } from '../../components';
@@ -55,6 +55,15 @@ export function CreateAgencyScreen() {
     };
   }, [session?.token, statusChecked, submittedAt, user?.publicId, markAgencyApplicationSubmitted, clearAgencyApplicationSubmitted]);
 
+  // Approved goes straight to the dashboard — no intermediate "Approved"
+  // page or button to tap. replace (not navigate) so backing out of the
+  // dashboard doesn't land back on this now-pointless screen.
+  React.useEffect(() => {
+    if (applicationStatus === 'APPROVED') {
+      navigation.replace(routes.agencyDashboard);
+    }
+  }, [applicationStatus, navigation]);
+
   const [agencyName, setAgencyName] = React.useState('');
   const [whatsapp, setWhatsapp] = React.useState('');
   const [adminId, setAdminId] = React.useState('');
@@ -102,8 +111,8 @@ export function CreateAgencyScreen() {
         markAgencyApplicationSubmitted(user?.publicId);
         showAlert('Already Applied', 'You already have a pending agency application on file.');
       } else if (error instanceof AgencyApplicationError && error.code === 'ALREADY_HAS_AGENCY') {
-        // Same idea, but an already-APPROVED agency — show the "approved"
-        // submitted view instead of the "pending" one.
+        // Same idea, but an already-APPROVED agency — setting this triggers
+        // the redirect-to-dashboard effect above instead of a submitted view.
         setApplicationStatus('APPROVED');
         markAgencyApplicationSubmitted(user?.publicId);
         showAlert('Already Have an Agency', 'You already have an approved agency application.');
@@ -132,8 +141,17 @@ export function CreateAgencyScreen() {
     ]);
   };
 
+  if (applicationStatus === 'APPROVED') {
+    // Mid-flight to the dashboard (the effect above fires the redirect) —
+    // nothing meaningful to show for the one render this happens on.
+    return <Screen>
+        <View style={styles.loaderWrap}>
+          <ActivityIndicator color={theme.colors.teal700} />
+        </View>
+      </Screen>;
+  }
+
   if (submittedAt) {
-    const isApproved = applicationStatus === 'APPROVED';
     return <Screen>
         <View style={styles.headerRow}>
           <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
@@ -146,13 +164,9 @@ export function CreateAgencyScreen() {
           <View style={[styles.submittedBadge, { backgroundColor: theme.colors.teal50 }]}>
             <Text style={[styles.submittedBadgeTick, { color: theme.colors.teal700 }]}>✓</Text>
           </View>
-          <Text style={[styles.submittedTitle, { color: theme.text.primary }]}>
-            {isApproved ? 'Application Approved' : 'Application Submitted'}
-          </Text>
+          <Text style={[styles.submittedTitle, { color: theme.text.primary }]}>Application Submitted</Text>
           <Text style={[styles.submittedSubtitle, { color: theme.text.secondary }]}>
-            {isApproved
-              ? "Your agency application has been approved. You're all set — there's no need to apply again."
-              : "You've already applied to become an agency. We'll get back to you soon — there's no need to apply again."}
+            You've already applied to become an agency. We'll get back to you soon — there's no need to apply again.
           </Text>
         </View>
       </Screen>;
@@ -276,6 +290,11 @@ const styles = StyleSheet.create({
     fontSize: scaleFont(14),
     lineHeight: 20,
     textAlign: 'center'
+  },
+  loaderWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
   }
 });
 
