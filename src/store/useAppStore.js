@@ -19,14 +19,24 @@ export const useAppStore = create()(persist(set => ({
   banInfo: null,
   // Keyed by the user's publicId (not global) so multiple accounts signing
   // in on the same device each get their own submitted/not-submitted state.
-  // There's no backend endpoint yet to check application status server-side
-  // (see docs/agency-application-spec.md), so this locally remembers a
-  // successful submission and blocks the Create Agency form from being
-  // shown again for that account on this device.
+  // This is only a fast local cache of "I successfully submitted just now"
+  // — CreateAgencyScreen always re-verifies against the real backend status
+  // (GET /api/agencies/my-application) and clears this flag via
+  // clearAgencyApplicationSubmitted when the backend says there's no
+  // PENDING/APPROVED application after all (e.g. it was REJECTED, or this
+  // got set incorrectly), so a stale local flag can't permanently hide the
+  // form.
   agencyApplications: {},
   markAgencyApplicationSubmitted: userId => set(state => ({
     agencyApplications: userId ? { ...state.agencyApplications, [userId]: new Date().toISOString() } : state.agencyApplications
   })),
+  clearAgencyApplicationSubmitted: userId => set(state => {
+    if (!userId || !(userId in state.agencyApplications)) {
+      return state;
+    }
+    const { [userId]: _removed, ...rest } = state.agencyApplications;
+    return { agencyApplications: rest };
+  }),
   setSession: session => set({
     session
   }),
