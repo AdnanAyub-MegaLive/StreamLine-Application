@@ -1,8 +1,8 @@
 import React from 'react';
-import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme';
-import { Screen } from '../../components';
+import { AssetPreview, Screen, showAlert } from '../../components';
 import { equipProp, fetchMyProps, fetchStoreCatalog, purchaseStoreAsset, unequipProp } from '../../api';
 import { getSessionSocket } from '../../services/socket';
 import { useAppStore } from '../../store';
@@ -30,12 +30,9 @@ function CategoryChip({ category, active, onPress }) {
 
 function StoreAssetCard({ asset, busy, onBuy, onEquip }) {
   const theme = useTheme();
-  const [imageFailed, setImageFailed] = React.useState(false);
   return <View style={[styles.assetCard, { backgroundColor: theme.surfaces.card, borderColor: theme.colors.cardBorder }]}>
       <View style={[styles.assetImageWrap, { backgroundColor: theme.state.soft, borderColor: theme.colors.cardBorder }]}>
-        {asset.url && !imageFailed
-          ? <Image source={{ uri: asset.url }} style={styles.assetImage} resizeMode="contain" onError={() => setImageFailed(true)} />
-          : <Text style={styles.assetImageFallback}>🖼️</Text>}
+        <AssetPreview uri={asset.url} mimeType={asset.mimeType} style={styles.assetImage} fallbackStyle={styles.assetImageFallback} />
       </View>
       <Text style={[styles.assetName, { color: theme.text.primary }]} numberOfLines={1}>{asset.name}</Text>
 
@@ -57,12 +54,9 @@ function StoreAssetCard({ asset, busy, onBuy, onEquip }) {
 
 function MyPropRow({ prop, busy, onEquip, onRemove }) {
   const theme = useTheme();
-  const [imageFailed, setImageFailed] = React.useState(false);
   return <View style={[styles.propRow, { borderColor: theme.colors.cardBorder }]}>
       <View style={[styles.propImageWrap, { backgroundColor: theme.state.soft, borderColor: theme.colors.cardBorder }]}>
-        {prop.url && !imageFailed
-          ? <Image source={{ uri: prop.url }} style={styles.propImage} resizeMode="contain" onError={() => setImageFailed(true)} />
-          : <Text style={styles.propImageFallback}>🖼️</Text>}
+        <AssetPreview uri={prop.url} mimeType={prop.mimeType} style={styles.propImage} fallbackStyle={styles.propImageFallback} fallbackEmoji={prop.mimeType?.startsWith('video/') ? '🎬' : '🖼️'} interactive={false} />
       </View>
       <View style={styles.propBody}>
         <Text style={[styles.propName, { color: theme.text.primary }]} numberOfLines={1}>{prop.name}</Text>
@@ -97,6 +91,7 @@ export function StoreScreen() {
       fetchStoreCatalog(sessionToken, category),
       fetchMyProps(sessionToken)
     ]);
+    console.log('[Store] my props equipped map', JSON.stringify(propsData.equipped));
     setCatalog(storeData);
     setMyProps(propsData);
     setLoading(false);
@@ -128,8 +123,8 @@ export function StoreScreen() {
     try {
       await purchaseStoreAsset(sessionToken, asset.id);
       await reload();
-    } catch {
-      // Nothing to recover to — the button just returns to its Buy state.
+    } catch (error) {
+      showAlert('Purchase Failed', error?.message || 'Unable to buy this item. Please try again.');
     } finally {
       setBusyId(null);
     }
@@ -140,8 +135,8 @@ export function StoreScreen() {
     try {
       await equipProp(sessionToken, asset.id);
       await reload();
-    } catch {
-      // Ditto.
+    } catch (error) {
+      showAlert('Equip Failed', error?.response?.data?.error?.message || 'Unable to equip this item. Please try again.');
     } finally {
       setBusyId(null);
     }
@@ -152,8 +147,8 @@ export function StoreScreen() {
     try {
       await unequipProp(sessionToken, prop.category);
       await reload();
-    } catch {
-      // Ditto.
+    } catch (error) {
+      showAlert('Remove Failed', error?.response?.data?.error?.message || 'Unable to remove this item. Please try again.');
     } finally {
       setBusyId(null);
     }
