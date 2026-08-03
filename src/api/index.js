@@ -4,6 +4,7 @@ export * from './audioRooms';
 export * from './uploads';
 export * from './agency';
 export * from './friends';
+export * from './gifts';
 export * from './messaging';
 export * from './store';
 export * from './users';
