@@ -15,34 +15,45 @@ export function CreateAgencyScreen() {
   const user = session?.user;
   const submittedAt = useAppStore(state => state.agencyApplications?.[user?.publicId]);
   const markAgencyApplicationSubmitted = useAppStore(state => state.markAgencyApplicationSubmitted);
+  const clearAgencyApplicationSubmitted = useAppStore(state => state.clearAgencyApplicationSubmitted);
   // Independent of the persisted flag above — just drives which message the
   // submitted view shows. Defaults to PENDING (the only status possible
   // right after this device's own submit/ALREADY_APPLIED); the status-check
-  // effect below fills in the real value (PENDING or APPROVED — the backend
-  // never returns a REJECTED one here, since that doesn't block reapplying).
+  // effect below fills in the real value.
   const [applicationStatus, setApplicationStatus] = React.useState('PENDING');
+  // Only true for the very first check after mount — once resolved, the
+  // local flag (kept in sync with the backend by this same effect) is
+  // trusted so navigating around doesn't re-trigger a network call.
+  const [statusChecked, setStatusChecked] = React.useState(false);
 
-  // Catches an application that exists in the database but this device's
-  // local flag doesn't know about yet (submitted from another device,
-  // before a reinstall, or added directly for testing) — without this, the
-  // form would show as if nothing had ever been applied for. Silently does
-  // nothing if the backend doesn't have this endpoint yet
-  // (fetchMyAgencyApplication returns null on any failure).
+  // Always reconciles against the real backend status on mount — the local
+  // `submittedAt` flag is just a fast cache and used as the immediate
+  // render decision, but it's re-verified here every time so a stale flag
+  // (e.g. left over from a REJECTED application, which allows reapplying,
+  // or from a bug) can't permanently hide the form. If the backend says
+  // there's no active PENDING/APPROVED application, the local flag is
+  // cleared instead of trusted.
   React.useEffect(() => {
-    if (!session?.token || submittedAt) {
-      return;
+    if (!session?.token || statusChecked) {
+      return undefined;
     }
     let cancelled = false;
     fetchMyAgencyApplication(session.token).then(application => {
-      if (!cancelled && application) {
+      if (cancelled) {
+        return;
+      }
+      setStatusChecked(true);
+      if (application) {
         setApplicationStatus(application.status);
         markAgencyApplicationSubmitted(user?.publicId);
+      } else if (submittedAt) {
+        clearAgencyApplicationSubmitted(user?.publicId);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [session?.token, submittedAt, user?.publicId, markAgencyApplicationSubmitted]);
+  }, [session?.token, statusChecked, submittedAt, user?.publicId, markAgencyApplicationSubmitted, clearAgencyApplicationSubmitted]);
 
   const [agencyName, setAgencyName] = React.useState('');
   const [whatsapp, setWhatsapp] = React.useState('');
@@ -75,7 +86,6 @@ export function CreateAgencyScreen() {
     try {
       await submitAgencyApplication(session?.token, {
         agencyName,
-        email: user?.email,
         whatsapp,
         bdCode: adminId
       });
@@ -91,6 +101,19 @@ export function CreateAgencyScreen() {
       if (error instanceof AgencyApplicationError && error.code === 'ALREADY_APPLIED') {
         markAgencyApplicationSubmitted(user?.publicId);
         showAlert('Already Applied', 'You already have a pending agency application on file.');
+      } else if (error instanceof AgencyApplicationError && error.code === 'ALREADY_HAS_AGENCY') {
+        // Same idea, but an already-APPROVED agency — show the "approved"
+        // submitted view instead of the "pending" one.
+        setApplicationStatus('APPROVED');
+        markAgencyApplicationSubmitted(user?.publicId);
+        showAlert('Already Have an Agency', 'You already have an approved agency application.');
+      } else if (error instanceof AgencyApplicationError && error.code === 'ADMIN_ID_ATTEMPT_LIMIT_REACHED') {
+        // Not a submitted state — the form stays open so they can retype a
+        // different Admin ID and try again.
+        showAlert('Admin ID Limit Reached', error.message);
+      } else if (error instanceof AgencyApplicationError && error.fields) {
+        const firstFieldMessage = Object.values(error.fields)[0];
+        showAlert('Submission failed', firstFieldMessage || error.message);
       } else {
         showAlert('Submission failed', error.message);
       }
