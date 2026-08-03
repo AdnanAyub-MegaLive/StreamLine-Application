@@ -1,9 +1,9 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { MessageIcon } from '../../assets';
 import { useTheme } from '../../theme';
-import { Avatar, Screen } from '../../components';
+import { Avatar, GenderAgeChip, Screen, VerifiedTick } from '../../components';
 import { fetchFriendStatus, respondToFriendRequest, sendFriendRequest, startConversation } from '../../api';
 import { useUserAssets } from '../../hooks';
 import { routes } from '../../navigation/routes';
@@ -58,17 +58,27 @@ export function UserProfileScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
   const route = useRoute();
-  const { userId, userName, userAvatar, userFrameUrl } = route.params ?? {};
+  const { userId, userName, userAvatar, userFrameUrl, userBadgeUrl, userGender, userDob, userIsOfficial } = route.params ?? {};
   const displayName = userName || 'User';
   const session = useAppStore(state => state.session);
   const sessionToken = session?.token;
   const isOwnProfile = Boolean(userId) && userId === (session?.user?.displayId || session?.user?.publicId);
-  // frameUrl is only ever populated for someone else's profile once the
-  // caller passes it through route.params (i.e. once the backend starts
-  // including it on search results / conversation participants — see
-  // docs/asset-centralization-spec.md). For your own profile, useUserAssets
-  // resolves it from the upload catalog as usual.
-  const { frameUri } = useUserAssets(isOwnProfile ? undefined : { userId: userId ?? 'unknown-user', frameUrl: userId ? userFrameUrl : null });
+  // Same convention as frameUrl/badgeUrl — own profile reads gender/dob
+  // straight from the session, someone else's comes from whatever the
+  // caller passed through route.params (see
+  // docs/public-profile-gender-dob-spec.md for the backend fields this
+  // depends on).
+  const profileGender = isOwnProfile ? session?.user?.gender : userGender;
+  const profileDob = isOwnProfile ? session?.user?.dob : userDob;
+  const profileIsOfficial = isOwnProfile ? session?.user?.isOfficial : userIsOfficial;
+  // frameUrl/badgeUrl are only ever populated for someone else's profile
+  // once the caller passes them through route.params (i.e. once the
+  // backend includes them on search results / conversation participants /
+  // room seats — see docs/asset-centralization-spec.md). For your own
+  // profile, useUserAssets resolves them from My Props as usual.
+  const { frameUri, badgeUri } = useUserAssets(
+    isOwnProfile ? undefined : { userId: userId ?? 'unknown-user', frameUrl: userId ? userFrameUrl : null, badgeUrl: userId ? userBadgeUrl : null }
+  );
 
   // See docs/friends-api-spec.md — resolves to "none" until the backend
   // ships the friend system, so the button just always offers "Add Friend"
@@ -161,16 +171,15 @@ export function UserProfileScreen() {
 
           <View style={styles.nameRow}>
             <Text style={[styles.name, { color: theme.text.primary }]}>{displayName}</Text>
-            <View style={[styles.verifiedBadge, { backgroundColor: theme.colors.teal700 }]}>
-              <Text style={styles.verifiedTick}>✓</Text>
-            </View>
+            {profileIsOfficial ? <VerifiedTick size={16} /> : null}
+            {badgeUri ? <Image source={{ uri: badgeUri }} style={styles.profileBadge} resizeMode="contain" /> : null}
           </View>
           {userId ? <Text style={[styles.idText, { color: theme.text.secondary }]}>ID: {userId}</Text> : null}
 
           <View style={styles.chipRow}>
             <Chip label="⚡ 1" background={theme.colors.teal50} color={theme.colors.teal700} />
             <Chip label="👑 VIP 0" background={theme.colors.vipGoldBackground} color={theme.colors.vipGoldText} />
-            <Chip label="🎮 Pro Gamer" background={theme.colors.proGamerBackground} color={theme.colors.vipPurple} />
+            <GenderAgeChip gender={profileGender} dob={profileDob} />
           </View>
 
           <View style={[styles.statsRow, { borderTopColor: theme.colors.cardBorder }]}>
@@ -256,17 +265,9 @@ const styles = StyleSheet.create({
     fontSize: scaleFont(20),
     fontWeight: '800'
   },
-  verifiedBadge: {
-    width: scaleModerate(16),
-    height: scaleModerate(16),
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  verifiedTick: {
-    color: '#FFFFFF',
-    fontSize: scaleFont(10),
-    fontWeight: '800'
+  profileBadge: {
+    width: scaleModerate(20),
+    height: scaleModerate(20)
   },
   idText: {
     marginTop: scaleModerate(4),

@@ -134,6 +134,18 @@ export function useSessionGuard() {
           specialIdExpiresAt: status.specialIdExpiresAt ?? null
         });
       }
+      // Same idea for isVerified/isOfficial/role(s) — an admin marking this
+      // account official (or changing its role) from the portal should show
+      // up here on the next poll, not just after the user logs out and back
+      // in.
+      if (status.isOfficial !== undefined || status.isVerified !== undefined || status.role !== undefined) {
+        updateSessionUser({
+          isVerified: Boolean(status.isVerified),
+          isOfficial: Boolean(status.isOfficial),
+          role: status.role,
+          roles: status.roles ?? []
+        });
+      }
     };
     // See docs/mobile-special-id.md — the account key (publicId) never
     // changes here, only the cosmetic display fields.

@@ -2,7 +2,7 @@ import React from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme';
-import { Avatar, Screen } from '../../components';
+import { Avatar, Screen, VerifiedTick } from '../../components';
 import { searchUsers } from '../../api';
 import { useUserAssets } from '../../hooks';
 import { routes } from '../../navigation/routes';
@@ -17,7 +17,10 @@ function UserRow({ user, onPress }) {
   return <Pressable onPress={onPress} style={styles.row}>
       <Avatar value={user.profileImage} fullName={user.name} size={scaleModerate(46)} frameUri={frameUri} />
       <View style={styles.rowBody}>
-        <Text style={[styles.rowName, { color: theme.text.primary }]} numberOfLines={1}>{user.name}</Text>
+        <View style={styles.rowNameLine}>
+          <Text style={[styles.rowName, { color: theme.text.primary }]} numberOfLines={1}>{user.name}</Text>
+          {user.isOfficial ? <VerifiedTick size={13} /> : null}
+        </View>
         <Text style={[styles.rowId, { color: theme.text.secondary }]} numberOfLines={1}>ID: {user.publicId}</Text>
       </View>
     </Pressable>;
@@ -70,7 +73,11 @@ export function UserSearchScreen() {
       userId: user.publicId,
       userName: user.name,
       userAvatar: user.profileImage,
-      userFrameUrl: user.frameUrl ?? null
+      userFrameUrl: user.frameUrl ?? null,
+      userBadgeUrl: user.badgeUrl ?? null,
+      userGender: user.gender ?? null,
+      userDob: user.dob ?? null,
+      userIsOfficial: user.isOfficial ?? false
     });
   };
 
@@ -141,7 +148,13 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: scaleModerate(2)
   },
+  rowNameLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(4)
+  },
   rowName: {
+    flexShrink: 1,
     fontSize: scaleFont(14),
     fontWeight: '700'
   },

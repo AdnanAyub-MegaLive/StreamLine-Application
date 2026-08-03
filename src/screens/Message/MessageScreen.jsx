@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { SearchIcon, UserIcon } from '../../assets';
 import { useTheme } from '../../theme';
-import { Avatar, Screen } from '../../components';
+import { Avatar, Screen, VerifiedTick } from '../../components';
 import { fetchIncomingFriendRequests, startConversation } from '../../api';
 import { useMessaging, useUserAssets } from '../../hooks';
 import { getSessionSocket } from '../../services/socket';
@@ -74,7 +74,10 @@ function ChatRow({ chat, onPress, onOpenProfile }) {
       </Pressable>
       <View style={styles.rowBody}>
         <View style={styles.rowTopLine}>
-          <Text style={[styles.rowName, { color: theme.text.primary }]} numberOfLines={1}>{chat.name}</Text>
+          <View style={styles.rowNameLine}>
+            <Text style={[styles.rowName, { color: theme.text.primary }]} numberOfLines={1}>{chat.name}</Text>
+            {chat.isOfficial ? <VerifiedTick size={12} /> : null}
+          </View>
           <Text style={[styles.rowTime, { color: theme.text.mutedIcon }]}>{chat.time}</Text>
         </View>
         <Text style={[styles.rowPreview, { color: theme.text.secondary }]} numberOfLines={1}>{chat.preview}</Text>
@@ -144,14 +147,14 @@ export function MessageScreen() {
     ? messagableFriends.filter(friend => friend.name.toLowerCase().includes(trimmedQuery))
     : [];
   const worldChatMatches = !trimmedQuery || worldChat?.name.toLowerCase().includes(trimmedQuery) || worldChat?.preview.toLowerCase().includes(trimmedQuery);
-  const openConversation = ({ id, name, avatar, participantId, frameUrl }) => {
-    navigation.navigate(routes.conversation, { conversationId: id, name, avatar, participantId, frameUrl });
+  const openConversation = ({ id, name, avatar, participantId, frameUrl, badgeUrl, gender, dob, isOfficial }) => {
+    navigation.navigate(routes.conversation, { conversationId: id, name, avatar, participantId, frameUrl, badgeUrl, gender, dob, isOfficial });
   };
-  const openProfile = ({ participantId, name, avatar, frameUrl }) => {
+  const openProfile = ({ participantId, name, avatar, frameUrl, badgeUrl, gender, dob, isOfficial }) => {
     if (!participantId) {
       return;
     }
-    navigation.navigate(routes.userProfile, { userId: participantId, userName: name, userAvatar: avatar, userFrameUrl: frameUrl });
+    navigation.navigate(routes.userProfile, { userId: participantId, userName: name, userAvatar: avatar, userFrameUrl: frameUrl, userBadgeUrl: badgeUrl, userGender: gender, userDob: dob, userIsOfficial: isOfficial });
   };
   const openFriendConversation = async friend => {
     if (startingChatFor || !sessionToken) {
@@ -160,7 +163,7 @@ export function MessageScreen() {
     setStartingChatFor(friend.id);
     try {
       const conversation = await startConversation(sessionToken, friend.id);
-      openConversation({ id: conversation.id, name: friend.name, avatar: friend.avatar, participantId: friend.id, frameUrl: friend.frameUrl });
+      openConversation({ id: conversation.id, name: friend.name, avatar: friend.avatar, participantId: friend.id, frameUrl: friend.frameUrl, badgeUrl: friend.badgeUrl, gender: friend.gender, dob: friend.dob, isOfficial: friend.isOfficial });
     } catch {
       // Nothing to recover to — the user can just tap the row again.
     } finally {
@@ -193,16 +196,16 @@ export function MessageScreen() {
               {filteredChats.map((chat, index) => <View key={chat.id}>
                   <ChatRow
                     chat={chat}
-                    onPress={() => openConversation({ id: chat.id, name: chat.name, avatar: chat.avatar, participantId: chat.participantId, frameUrl: chat.frameUrl })}
-                    onOpenProfile={() => openProfile({ participantId: chat.participantId, name: chat.name, avatar: chat.avatar, frameUrl: chat.frameUrl })}
+                    onPress={() => openConversation({ id: chat.id, name: chat.name, avatar: chat.avatar, participantId: chat.participantId, frameUrl: chat.frameUrl, badgeUrl: chat.badgeUrl, gender: chat.gender, dob: chat.dob, isOfficial: chat.isOfficial })}
+                    onOpenProfile={() => openProfile({ participantId: chat.participantId, name: chat.name, avatar: chat.avatar, frameUrl: chat.frameUrl, badgeUrl: chat.badgeUrl, gender: chat.gender, dob: chat.dob, isOfficial: chat.isOfficial })}
                   />
                   {index < filteredChats.length - 1 || matchingFriends.length ? <View style={[styles.rowDivider, { backgroundColor: theme.colors.cardBorder }]} /> : null}
                 </View>)}
               {matchingFriends.map((friend, index) => <View key={friend.id}>
                   <ChatRow
-                    chat={{ id: friend.id, participantId: friend.id, name: friend.name, avatar: friend.avatar, frameUrl: friend.frameUrl, time: '', preview: 'Friend — tap to start chatting', unreadCount: 0 }}
+                    chat={{ id: friend.id, participantId: friend.id, name: friend.name, avatar: friend.avatar, frameUrl: friend.frameUrl, badgeUrl: friend.badgeUrl, gender: friend.gender, dob: friend.dob, isOfficial: friend.isOfficial, time: '', preview: 'Friend — tap to start chatting', unreadCount: 0 }}
                     onPress={() => openFriendConversation(friend)}
-                    onOpenProfile={() => openProfile({ participantId: friend.id, name: friend.name, avatar: friend.avatar, frameUrl: friend.frameUrl })}
+                    onOpenProfile={() => openProfile({ participantId: friend.id, name: friend.name, avatar: friend.avatar, frameUrl: friend.frameUrl, badgeUrl: friend.badgeUrl, gender: friend.gender, dob: friend.dob, isOfficial: friend.isOfficial })}
                   />
                   {index < matchingFriends.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: theme.colors.cardBorder }]} /> : null}
                 </View>)}
@@ -323,8 +326,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: scaleModerate(8)
   },
-  rowName: {
+  rowNameLine: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(4)
+  },
+  rowName: {
+    flexShrink: 1,
     fontSize: scaleFont(14),
     fontWeight: '700'
   },

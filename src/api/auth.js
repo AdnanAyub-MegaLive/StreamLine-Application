@@ -151,6 +151,9 @@ export async function registerUser(input) {
       specialId: user.specialId ?? null,
       specialIdExpiresAt: user.specialIdExpiresAt ?? null,
       role: user.role,
+      roles: user.roles ?? [],
+      isVerified: Boolean(user.isVerified),
+      isOfficial: Boolean(user.isOfficial),
       status: user.status,
       vipLevel: user.vipLevel,
       country: user.country ?? undefined,
@@ -226,6 +229,9 @@ export async function loginWithPassword(input) {
       gender: data.user.gender ?? undefined,
       dob: data.user.dob ?? undefined,
       role: data.user.role,
+      roles: data.user.roles ?? [],
+      isVerified: Boolean(data.user.isVerified),
+      isOfficial: Boolean(data.user.isOfficial),
       status: data.user.status,
       vipLevel: data.user.vipLevel,
       createdAt: data.user.createdAt,
@@ -293,6 +299,9 @@ export async function updateProfile(sessionToken, input) {
       specialId: user.specialId ?? null,
       specialIdExpiresAt: user.specialIdExpiresAt ?? null,
       role: user.role,
+      roles: user.roles ?? [],
+      isVerified: Boolean(user.isVerified),
+      isOfficial: Boolean(user.isOfficial),
       status: user.status,
       vipLevel: user.vipLevel,
       country: user.country ?? undefined,
@@ -378,6 +387,26 @@ export async function checkPhoneRegistered(phone) {
     return Boolean(response.data?.data?.exists);
   } catch {
     return null;
+  }
+}
+// Used by the social/skip-login buttons on AuthScreen, which don't hit any
+// real backend endpoint of their own (see createDummySocialSession) — this
+// gives them the same "block login when the server is unreachable" behavior
+// loginWithPassword already has, instead of letting them fabricate a
+// session regardless of connectivity. /api/users/check-phone is public and
+// cheap, so it doubles as a reachability probe here; any HTTP response at
+// all (even an error one) still means the server was reached.
+export async function assertServerReachable() {
+  try {
+    await apiClient.get('/api/users/check-phone', {
+      params: { phone: '0' },
+      timeout: AUTH_REQUEST_TIMEOUT
+    });
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      return;
+    }
+    throw classifyAuthError(error, LoginUserError);
   }
 }
 const TEMP_OTP = '123456';

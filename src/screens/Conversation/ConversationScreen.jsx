@@ -2,7 +2,7 @@ import React from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme';
-import { Avatar, Screen } from '../../components';
+import { Avatar, Screen, VerifiedTick } from '../../components';
 import { fetchMessages, markConversationRead } from '../../api';
 import { useUserAssets } from '../../hooks';
 import { routes } from '../../navigation/routes';
@@ -29,14 +29,14 @@ export function ConversationScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
   const route = useRoute();
-  const { conversationId, name, avatar, participantId, frameUrl } = route.params ?? {};
+  const { conversationId, name, avatar, participantId, frameUrl, badgeUrl, gender, dob, isOfficial } = route.params ?? {};
   const sessionToken = useAppStore(state => state.session?.token);
   const myPublicId = useAppStore(state => state.session?.user?.publicId);
   // 'world-chat' is a fake, never-real userId — passing undefined here
   // would make useUserAssets fall back to resolving the signed-in user's
   // own frame for the World Chat header (and clear their real cached
   // frame while doing it), instead of just showing no frame.
-  const { frameUri } = useUserAssets({ userId: participantId ?? 'world-chat', frameUrl: participantId ? frameUrl : null });
+  const { frameUri } = useUserAssets({ userId: participantId ?? 'world-chat', frameUrl: participantId ? frameUrl : null, badgeUrl: participantId ? badgeUrl : null });
   const [messages, setMessages] = React.useState([]);
   const [draft, setDraft] = React.useState('');
   const [sending, setSending] = React.useState(false);
@@ -94,12 +94,13 @@ export function ConversationScreen() {
           <Text style={[styles.backChevron, { color: theme.text.primary }]}>‹</Text>
         </Pressable>
         <Pressable
-          onPress={() => participantId && navigation.navigate(routes.userProfile, { userId: participantId, userName: name, userAvatar: avatar, userFrameUrl: frameUrl })}
+          onPress={() => participantId && navigation.navigate(routes.userProfile, { userId: participantId, userName: name, userAvatar: avatar, userFrameUrl: frameUrl, userBadgeUrl: badgeUrl, userGender: gender, userDob: dob, userIsOfficial: isOfficial })}
           disabled={!participantId}
         >
           <Avatar value={avatar} fullName={name} size={scaleModerate(34)} frameUri={frameUri} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: theme.text.primary }]} numberOfLines={1}>{name}</Text>
+        {isOfficial ? <VerifiedTick size={13} /> : null}
       </View>
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={scaleModerate(12)}>

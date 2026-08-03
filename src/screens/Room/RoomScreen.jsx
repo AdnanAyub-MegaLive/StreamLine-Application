@@ -440,6 +440,8 @@ function EntranceBanner({ entrance }) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const translateX = React.useRef(new Animated.Value(width)).current;
+  const isRide = entrance?.kind === 'ride';
+  const artUrl = isRide ? entrance?.rideUrl : entrance?.entranceUrl;
 
   React.useEffect(() => {
     if (!entrance) {
@@ -458,19 +460,19 @@ function EntranceBanner({ entrance }) {
     return null;
   }
 
-  const label = `${entrance.name} has entered the room`;
+  const label = isRide ? `${entrance.name} is riding in!` : `${entrance.name} has entered the room`;
 
-  if (entrance.entranceUrl) {
+  if (artUrl) {
     return (
       <Animated.View pointerEvents="none" style={{ transform: [{ translateX }] }}>
         <ImageBackground
-          source={{ uri: entrance.entranceUrl }}
+          source={{ uri: artUrl }}
           resizeMode="stretch"
           style={styles.entranceArtBg}
           imageStyle={styles.entranceArtBgImage}
-          onError={event => console.log('[Entrance] art image FAILED', entrance.entranceUrl, event.nativeEvent.error)}
+          onError={event => console.log('[Entrance] art image FAILED', artUrl, event.nativeEvent.error)}
         >
-          <Text style={styles.entranceArtText} numberOfLines={1}>{label}</Text>
+          <Text style={[styles.entranceArtText, { color: theme.cta.primary.text }]} numberOfLines={1}>{label}</Text>
         </ImageBackground>
       </Animated.View>
     );
@@ -481,7 +483,7 @@ function EntranceBanner({ entrance }) {
       pointerEvents="none"
       style={[
         styles.entranceBanner,
-        { backgroundColor: theme.surfaces.card, borderColor: theme.colors.teal700, transform: [{ translateX }] }
+        { backgroundColor: theme.surfaces.card, borderColor: isRide ? theme.colors.vipPurple : theme.colors.teal700, transform: [{ translateX }] }
       ]}
     >
       <Avatar value={entrance.profileImage} fullName={entrance.name} size={scaleModerate(26)} />
@@ -649,10 +651,10 @@ export function RoomScreen() {
   // Applies a seat assignment to local state — used once the owner (this
   // device, on request-acceptance) or a viewer (on receiving an accepted
   // audio-room:seat-response) actually has permission to occupy the seat.
-  const applySeatAssignment = (seatId, { name, avatarSeed, avatarUri, muted }) => {
+  const applySeatAssignment = (seatId, { name, avatarSeed, avatarUri, muted, frameUrl, badgeUrl, gender, dob, isOfficial }) => {
     setSeatRows(current =>
       (current ?? []).map(row =>
-        row.map(seat => (seat.id === seatId ? { ...seat, occupied: true, name, avatarSeed, avatarUri, muted } : seat))
+        row.map(seat => (seat.id === seatId ? { ...seat, occupied: true, name, avatarSeed, avatarUri, muted, frameUrl, badgeUrl, gender, dob, isOfficial } : seat))
       )
     );
   };
@@ -694,7 +696,12 @@ export function RoomScreen() {
     navigation.navigate(routes.userProfile, {
       userId: seat.avatarSeed,
       userName: seat.name,
-      userAvatar: seat.avatarUri
+      userAvatar: seat.avatarUri,
+      userFrameUrl: seat.frameUrl ?? null,
+      userBadgeUrl: seat.badgeUrl ?? null,
+      userGender: seat.gender ?? null,
+      userDob: seat.dob ?? null,
+      userIsOfficial: seat.isOfficial ?? false
     });
   };
 
@@ -1025,6 +1032,22 @@ export function RoomScreen() {
           }
           return;
         }
+        if (
+          startError instanceof AudioRoomError &&
+          (startError.code === 'HOST_AGENCY_REQUIRED' || startError.code === 'AGENCY_INACTIVE')
+        ) {
+          if (!cancelled) {
+            roomEndedRef.current = true;
+            showAlert(
+              'Agency Required',
+              startError.code === 'HOST_AGENCY_REQUIRED'
+                ? 'You need to be a host linked to an active agency to start a room. Apply for an agency to unlock streaming.'
+                : "This host's agency is not currently active — streaming is unavailable until it's reactivated.",
+              [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+          }
+          return;
+        }
         // Any other failure (network blip, validation error, expired
         // session, etc.) is only "best-effort, still try to join" when
         // we're resuming an ALREADY-known room (activeRoomId was set on a
@@ -1131,7 +1154,12 @@ export function RoomScreen() {
                 name: requesterName,
                 avatarSeed: data.requesterId,
                 avatarUri: data.requesterProfileImage || null,
-                muted: false
+                muted: false,
+                frameUrl: data.requesterFrameUrl || null,
+                badgeUrl: data.requesterBadgeUrl || null,
+                gender: data.requesterGender || null,
+                dob: data.requesterDob || null,
+                isOfficial: Boolean(data.requesterIsOfficial)
               });
               respondToSeatRequest(activeRoomId, data.requestId, data.requesterId, data.seatId, true, null);
             }
@@ -1157,7 +1185,31 @@ export function RoomScreen() {
         name: ownerName,
         avatarSeed: ownerAvatarSeed,
         avatarUri: session?.user?.profileImage || null,
-        muted: isMicMutedRef.current
+        muted: isMicMutedRef.current,
+        frameUrl: null,
+        badgeUrl: null,
+        gender: null,
+        dob: null,
+        isOfficial: false
+      });
+    };
+
+    const pushRideIfAny = data => {
+      if (!data.rideUrl) {
+        return;
+      }
+      const fixedRideUrl = fixLocalhostOrigin(data.rideUrl);
+      const rideIdentity = assetIdentity(fixedRideUrl);
+      const cachedRideUri = getCachedAssetByIdentity('RIDE_ART', rideIdentity);
+      if (cachedRideUri) {
+        pushEntranceRef.current?.({ ...data, kind: 'ride', rideUrl: cachedRideUri });
+        return;
+      }
+      pushEntranceRef.current?.({ ...data, kind: 'ride', rideUrl: fixedRideUrl });
+      fetchAssetDataUri({ url: fixedRideUrl }, session?.token).then(uri => {
+        if (uri) {
+          setCachedAssetByIdentity('RIDE_ART', rideIdentity, uri);
+        }
       });
     };
 
@@ -1169,17 +1221,20 @@ export function RoomScreen() {
         return;
       }
       if (!data.entranceUrl) {
-        pushEntranceRef.current?.(data);
+        pushEntranceRef.current?.({ ...data, kind: 'entrance' });
+        pushRideIfAny(data);
         return;
       }
       const fixedUrl = fixLocalhostOrigin(data.entranceUrl);
       const identity = assetIdentity(fixedUrl);
       const cachedUri = getCachedAssetByIdentity('ENTRANCE_ART', identity);
       if (cachedUri) {
-        pushEntranceRef.current?.({ ...data, entranceUrl: cachedUri });
+        pushEntranceRef.current?.({ ...data, kind: 'entrance', entranceUrl: cachedUri });
+        pushRideIfAny(data);
         return;
       }
-      pushEntranceRef.current?.({ ...data, entranceUrl: fixedUrl });
+      pushEntranceRef.current?.({ ...data, kind: 'entrance', entranceUrl: fixedUrl });
+      pushRideIfAny(data);
       fetchAssetDataUri({ url: fixedUrl }, session?.token).then(uri => {
         if (uri) {
           setCachedAssetByIdentity('ENTRANCE_ART', identity, uri);
@@ -1663,9 +1718,10 @@ const styles = StyleSheet.create({
     borderRadius: scaleModerate(10)
   },
   entranceArtText: {
-    color: '#FFFFFF',
     fontSize: scaleFont(13),
     fontWeight: '800',
+    textAlign: 'center',
+    textAlignVertical: 'center',
     textShadowColor: 'rgba(0,0,0,0.65)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3

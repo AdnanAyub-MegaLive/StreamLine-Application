@@ -4,4 +4,5 @@ export * from './useAssignedRoomBackground';
 export * from './useBannerAssets';
 export * from './useMessaging';
 export * from './useSessionGuard';
+export * from './useUnreadBadgeCount';
 export * from './useUserAssets';

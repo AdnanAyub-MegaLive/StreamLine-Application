@@ -2,7 +2,7 @@ import React from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme';
-import { Avatar, Screen } from '../../components';
+import { Avatar, Screen, VerifiedTick } from '../../components';
 import { fetchFriends } from '../../api';
 import { useUserAssets } from '../../hooks';
 import { routes } from '../../navigation/routes';
@@ -21,7 +21,10 @@ function ConnectionRow({ user, onPress }) {
   return <Pressable onPress={onPress} style={styles.row}>
       <Avatar value={user.profileImage} fullName={user.name} size={scaleModerate(46)} frameUri={frameUri} />
       <View style={styles.rowBody}>
-        <Text style={[styles.rowName, { color: theme.text.primary }]} numberOfLines={1}>{user.name}</Text>
+        <View style={styles.rowNameLine}>
+          <Text style={[styles.rowName, { color: theme.text.primary }]} numberOfLines={1}>{user.name}</Text>
+          {user.isOfficial ? <VerifiedTick size={13} /> : null}
+        </View>
         <Text style={[styles.rowId, { color: theme.text.secondary }]} numberOfLines={1}>ID: {user.id}</Text>
       </View>
     </Pressable>;
@@ -67,7 +70,7 @@ export function ConnectionsScreen() {
   );
 
   const openProfile = user => {
-    navigation.navigate(routes.userProfile, { userId: user.id, userName: user.name, userAvatar: user.profileImage, userFrameUrl: user.frameUrl });
+    navigation.navigate(routes.userProfile, { userId: user.id, userName: user.name, userAvatar: user.profileImage, userFrameUrl: user.frameUrl, userBadgeUrl: user.badgeUrl, userGender: user.gender, userDob: user.dob, userIsOfficial: user.isOfficial });
   };
 
   return <Screen>
@@ -120,7 +123,13 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: scaleModerate(2)
   },
+  rowNameLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(4)
+  },
   rowName: {
+    flexShrink: 1,
     fontSize: scaleFont(14),
     fontWeight: '700'
   },

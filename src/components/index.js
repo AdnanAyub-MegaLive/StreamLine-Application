@@ -1,4 +1,5 @@
 export * from './Avatar';
+export * from './GenderAgeChip';
 export * from './Screen';
 export * from './BrandMark';
 export * from './PrimaryButton';
@@ -11,4 +12,6 @@ export * from './RoomTitleModal';
 export * from './EmojiPickerModal';
 export * from './SeatLayoutModal';
 export * from './ThemedAlert';
+export * from './VerifiedTick';
+export * from './VerifiedName';
 export * from './locationErrorAlert';

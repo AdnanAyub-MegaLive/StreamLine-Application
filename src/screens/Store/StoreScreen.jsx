@@ -11,6 +11,7 @@ import { scaleFont, scaleModerate } from '../../utils';
 const CATEGORIES = [
   { key: 'FRAMES', label: '🖼️ Frames' },
   { key: 'ENTRANCES', label: '🚪 Entrances' },
+  { key: 'RIDES', label: '🏎️ Rides' },
   { key: 'TAIL_LIGHTS', label: '🚗 Tail Lights' },
   { key: 'BADGES', label: '🎖️ Badges' },
   { key: 'CHAT_BOXES', label: '💬 Chat Boxes' },

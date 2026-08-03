@@ -1,13 +1,14 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { DiscoverIcon, FamilyIcon, HomeIcon, MessageIcon, PlusIcon, UserIcon } from '../assets';
 import { fetchAudioRoom } from '../api';
 import { RoomTitleModal, SEAT_LAYOUT_OPTIONS, SeatLayoutModal, StreamOptionModal } from '../components';
+import { useUnreadBadgeCount } from '../hooks';
 import { useAppStore } from '../store';
 import { useTheme } from '../theme';
-import { getCachedSeatState, scaleModerate } from '../utils';
+import { getCachedSeatState, scaleFont, scaleModerate } from '../utils';
 import { routes } from './routes';
 const ICONS = {
   HomeTab: HomeIcon,
@@ -47,6 +48,7 @@ export function CustomTabBar({
   const insets = useSafeAreaInsets();
   const session = useAppStore(store => store.session);
   const sessionToken = session?.token;
+  const unreadBadgeCount = useUnreadBadgeCount();
   const [barWidth, setBarWidth] = React.useState(0);
   const [streamOptionsVisible, setStreamOptionsVisible] = React.useState(false);
   const [roomTitleVisible, setRoomTitleVisible] = React.useState(false);
@@ -184,8 +186,12 @@ export function CustomTabBar({
                   </View>
                 </Pressable>;
           }
+          const badgeCount = route.name === 'MessageTab' ? unreadBadgeCount : 0;
           return <Pressable key={route.key} onPress={onPress} style={styles.item}>
                 <Icon size={26} color={isFocused ? theme.colors.teal700 : theme.text.mutedIcon} />
+                {badgeCount ? <View style={[styles.badge, { backgroundColor: theme.colors.liveBadge }]}>
+                    <Text style={styles.badgeText}>{badgeCount > 99 ? '99+' : badgeCount}</Text>
+                  </View> : null}
                 {isFocused ? <View style={[styles.dot, {
               backgroundColor: theme.colors.teal700
             }]} /> : null}
@@ -231,6 +237,22 @@ const styles = StyleSheet.create({
     width: scaleModerate(6),
     height: scaleModerate(6),
     borderRadius: scaleModerate(3)
+  },
+  badge: {
+    position: 'absolute',
+    top: scaleModerate(-2),
+    right: scaleModerate(4),
+    minWidth: scaleModerate(16),
+    height: scaleModerate(16),
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: scaleModerate(3)
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: scaleFont(9),
+    fontWeight: '800'
   },
   centerButton: {
     width: scaleModerate(66),

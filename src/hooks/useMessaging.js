@@ -42,6 +42,9 @@ function toRecentChat(conversation) {
     avatar: conversation.participant?.profileImage ?? null,
     frameUrl: conversation.participant?.frameUrl ?? null,
     badgeUrl: conversation.participant?.badgeUrl ?? null,
+    gender: conversation.participant?.gender ?? null,
+    dob: conversation.participant?.dob ?? null,
+    isOfficial: conversation.participant?.isOfficial ?? false,
     time: formatRelativeTime(conversation.lastMessageAt),
     preview: conversation.lastMessage?.body ?? '',
     unreadCount: conversation.unreadCount ?? 0
@@ -150,7 +153,11 @@ export function useMessaging() {
         id: friend.id,
         name: friend.name,
         avatar: friend.profileImage ?? null,
-        frameUrl: friend.frameUrl ?? null
+        frameUrl: friend.frameUrl ?? null,
+        badgeUrl: friend.badgeUrl ?? null,
+        gender: friend.gender ?? null,
+        dob: friend.dob ?? null,
+        isOfficial: friend.isOfficial ?? false
       }));
   }, [friends, recentChats]);
 

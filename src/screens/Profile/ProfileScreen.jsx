@@ -3,25 +3,12 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { SettingsIcon } from '../../assets';
 import { useTheme } from '../../theme';
-import { Avatar, Screen } from '../../components';
+import { Avatar, GenderAgeChip, Screen, VerifiedTick } from '../../components';
 import { fetchFriends, fetchStoreCatalog } from '../../api';
 import { useAssignedBadge, useAssignedFrame } from '../../hooks';
 import { useAppStore } from '../../store';
 import { scaleFont, scaleModerate } from '../../utils';
 import { routes } from '../../navigation/routes';
-
-// Matches the approved profile mockup: header card (avatar / name / ID /
-// PRO / share), Friends-Fans-Following stats, VIP upgrade banner, Wallet
-// and Earn Coins cards, then the Services & Tools grid. Stats, wallet
-// balance, and most tools have no backend yet — they render zeros or are
-// visual-only until those endpoints exist.
-//
-// Friends is backed by the real friend-request system (see
-// docs/friends-api-spec.md) — dynamic below. Fans/Following have no
-// backend concept at all: the only "followers" field in the portal's
-// schema belongs to the agency Talent model (a static admin-facing
-// counter), not a real follow relationship between app users, so these
-// two stay at 0 until a real follow system exists.
 
 function StatItem({ label, value, onPress }) {
   const theme = useTheme();
@@ -106,8 +93,12 @@ export function ProfileScreen() {
             <Avatar value={user?.profileImage} fullName={user?.fullName} size={scaleModerate(56)} frameUri={frameUri} />
           </Pressable>
           <View style={styles.headerInfo}>
-            <Text style={[styles.name, { color: theme.text.primary }]} numberOfLines={2}>{user?.fullName || 'Guest'}</Text>
+            <View style={styles.nameRow}>
+              <Text style={[styles.name, { color: theme.text.primary }]} numberOfLines={2}>{user?.fullName || 'Guest'}</Text>
+              {user?.isOfficial ? <VerifiedTick size={14} /> : null}
+            </View>
             <Text style={[styles.idText, { color: theme.text.secondary }]}>ID: {user?.displayId || user?.publicId || '—'}</Text>
+            <GenderAgeChip gender={user?.gender} dob={user?.dob} style={styles.genderAgeChipSpacing} />
           </View>
           {badgeUri ? (
             // Replaces the old hardcoded "PRO" label — an actual
@@ -199,6 +190,11 @@ const styles = StyleSheet.create({
   headerInfo: {
     flex: 1
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(6)
+  },
   name: {
     fontSize: scaleFont(17),
     fontWeight: '800'
@@ -206,7 +202,12 @@ const styles = StyleSheet.create({
   idText: {
     marginTop: scaleModerate(2),
     fontSize: scaleFont(11),
-    fontWeight: '600'
+    fontWeight: '600',
+    height: scaleModerate(20),
+    lineHeight: scaleModerate(20)
+  },
+  genderAgeChipSpacing: {
+    marginTop: scaleModerate(6)
   },
   profileBadge: {
     width: scaleModerate(28),

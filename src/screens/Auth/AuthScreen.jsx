@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { EyeIcon, FacebookIcon, GoogleIcon } from '../../assets';
-import { checkPhoneRegistered, loginWithPassword, LoginUserError } from '../../api';
+import { assertServerReachable, checkPhoneRegistered, loginWithPassword, LoginUserError } from '../../api';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { BrandMark, FormField, PrimaryButton, Screen, showAlert, showLocationErrorAlert, TermsCheckbox } from '../../components';
@@ -105,10 +105,26 @@ export function AuthScreen() {
       }]
     });
   };
-  const handleSocialLogin = provider => {
-    if (!termsAccepted) {
+  const handleSocialLogin = async provider => {
+    if (!termsAccepted || isSubmitting) {
       return;
     }
+    setIsSubmitting(true);
+    try {
+      // Neither social provider is really wired up yet (createDummySocialSession
+      // just fabricates a session) — without this check, tapping the button
+      // would "log in" successfully even with no server connection at all.
+      await assertServerReachable();
+    } catch (reachabilityError) {
+      setIsSubmitting(false);
+      if (reachabilityError instanceof LoginUserError && reachabilityError.code === 'TIMEOUT') {
+        showAlert('Request Timed Out', reachabilityError.message);
+      } else {
+        showAlert('Unable to Connect', reachabilityError.message ?? 'Unable to connect to the server. Check your internet connection and try again.');
+      }
+      return;
+    }
+    setIsSubmitting(false);
     setSession(createDummySocialSession(provider));
     navigation.reset({
       index: 0,
@@ -231,8 +247,8 @@ export function AuthScreen() {
           }]} />
           </View>
 
-          <SocialButton provider="google" disabled={!termsAccepted} onPress={() => handleSocialLogin('google')} />
-          <SocialButton provider="facebook" disabled={!termsAccepted} onPress={() => handleSocialLogin('facebook')} />
+          <SocialButton provider="google" disabled={!termsAccepted || isSubmitting} onPress={() => handleSocialLogin('google')} />
+          <SocialButton provider="facebook" disabled={!termsAccepted || isSubmitting} onPress={() => handleSocialLogin('facebook')} />
 
           <TermsCheckbox accepted={termsAccepted} onToggle={() => setTermsAccepted(value => !value)} onOpenTerms={() => navigation.navigate(routes.terms)} style={styles.termsWrap} />
 
