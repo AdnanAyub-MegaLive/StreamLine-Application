@@ -18,6 +18,7 @@ export function FormField({
   secureTextEntry,
   editable = true,
   keyboardType,
+  autoCapitalize,
   rightElement
 }) {
   const theme = useTheme();
@@ -31,7 +32,7 @@ export function FormField({
       borderColor: theme.colors.cardBorder
     }]}>
         {Icon ? <Icon size={18} color={theme.text.mutedIcon} /> : null}
-        <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={theme.text.mutedIcon} secureTextEntry={secureTextEntry} editable={editable} keyboardType={keyboardType} style={[styles.input, {
+        <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={theme.text.mutedIcon} secureTextEntry={secureTextEntry} editable={editable} keyboardType={keyboardType} autoCapitalize={autoCapitalize} style={[styles.input, {
         color: theme.text.primary
       }]} />
         {rightElement ? <View style={styles.fieldAction}>{rightElement}</View> : null}
