@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Animated,
   AppState,
+  Dimensions,
   FlatList,
   Image,
   ImageBackground,
@@ -18,10 +19,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import Svg, { Path } from 'react-native-svg';
+import Video from 'react-native-video';
 import { useTheme } from '../../theme';
 import { LockIcon, roomBackgroundImage } from '../../assets';
-import { Avatar, EmojiPickerModal, SeatLayoutModal, showAlert } from '../../components';
-import { AudioRoomError, endAudioRoom as endAudioRoomRecord, fetchAssetDataUri, fixLocalhostOrigin, startAudioRoom, updateAudioRoom } from '../../api';
+import { Avatar, EmojiPickerModal, GiftPickerModal, SeatLayoutModal, showAlert } from '../../components';
+import { AudioRoomError, endAudioRoom as endAudioRoomRecord, fetchAssetDataUri, fixLocalhostOrigin, GiftSendError, sendGift, startAudioRoom, updateAudioRoom } from '../../api';
 import { assetIdentity, useAssignedFrame, useAssignedRoomBackground } from '../../hooks';
 import {
   emitSeatUpdate,
@@ -45,6 +47,26 @@ import {
   setCachedSeatState,
   showLiveRoomNotification
 } from '../../utils';
+
+// Store/props assets aren't always static images — Rides in particular are
+// short video clips (see src/components/AssetPreview.jsx). The backend
+// doesn't send a mimeType alongside entranceUrl/rideUrl, so this sniffs the
+// file extension instead — good enough for the CDN URLs these come from.
+function isVideoUrl(url) {
+  return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url ?? '');
+}
+
+// How long a queued entrance/ride item stays on screen (the slide-in-hold-
+// slide-out animation's middle "hold" portion) — a plain text/image banner
+// only ever needed a beat to be read, but a video needs real time to
+// actually play, not just flash by mid-slide.
+const BANNER_SLIDE_MS = 350;
+const BANNER_TEXT_HOLD_MS = 1000;
+const BANNER_VIDEO_HOLD_MS = 3000;
+function bannerHoldMs(item) {
+  const artUrl = item?.kind === 'ride' ? item?.rideUrl : item?.entranceUrl;
+  return artUrl && isVideoUrl(artUrl) ? BANNER_VIDEO_HOLD_MS : BANNER_TEXT_HOLD_MS;
+}
 
 function MicIcon({ size = 12, color, muted = false }) {
   return (
@@ -436,31 +458,70 @@ function MoreMenuModal({ visible, onClose, theme, isSpeakerMuted, onToggleSpeake
   );
 }
 
-function EntranceBanner({ entrance }) {
+function EntranceBanner({ entrance, onFinished }) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const translateX = React.useRef(new Animated.Value(width)).current;
-  const isRide = entrance?.kind === 'ride';
-  const artUrl = isRide ? entrance?.rideUrl : entrance?.entranceUrl;
+  const artUrl = entrance?.entranceUrl;
+  const [videoFailed, setVideoFailed] = React.useState(false);
+  const isVideo = Boolean(artUrl && !videoFailed && isVideoUrl(artUrl));
+  const finishedRef = React.useRef(false);
+
+  const slideOutAndFinish = React.useCallback(() => {
+    if (finishedRef.current) {
+      return;
+    }
+    finishedRef.current = true;
+    Animated.timing(translateX, { toValue: -width, duration: BANNER_SLIDE_MS, useNativeDriver: true }).start(() => {
+      onFinished?.();
+    });
+  }, [translateX, width, onFinished]);
+
+  React.useEffect(() => {
+    finishedRef.current = false;
+    setVideoFailed(false);
+  }, [entrance]);
 
   React.useEffect(() => {
     if (!entrance) {
       return undefined;
     }
     translateX.setValue(width);
-    Animated.sequence([
-      Animated.timing(translateX, { toValue: 0, duration: 350, useNativeDriver: true }),
-      Animated.delay(1000),
-      Animated.timing(translateX, { toValue: -width, duration: 350, useNativeDriver: true })
-    ]).start();
-    return undefined;
-  }, [entrance, translateX, width]);
+    Animated.timing(translateX, { toValue: 0, duration: BANNER_SLIDE_MS, useNativeDriver: true }).start();
+    if (isVideo) {
+      return undefined;
+    }
+    const timer = setTimeout(slideOutAndFinish, bannerHoldMs(entrance));
+    return () => clearTimeout(timer);
+  }, [entrance, translateX, width, isVideo, slideOutAndFinish]);
 
   if (!entrance) {
     return null;
   }
 
-  const label = isRide ? `${entrance.name} is riding in!` : `${entrance.name} has entered the room`;
+  const label = `${entrance.name} has entered the room`;
+
+  if (isVideo) {
+    return (
+      <Animated.View pointerEvents="none" style={[styles.entranceArtBg, { transform: [{ translateX }] }]}>
+        <Video
+          source={{ uri: artUrl }}
+          style={[StyleSheet.absoluteFill, styles.entranceArtBgImage]}
+          resizeMode="cover"
+          repeat={false}
+          volume={1.0}
+          ignoreSilentSwitch="ignore"
+          useTextureView
+          onEnd={slideOutAndFinish}
+          onError={event => {
+            console.log('[Entrance] art video FAILED', artUrl, JSON.stringify(event));
+            setVideoFailed(true);
+          }}
+        />
+        <Text style={[styles.entranceArtText, { color: theme.cta.primary.text }]} numberOfLines={1}>{label}</Text>
+      </Animated.View>
+    );
+  }
 
   if (artUrl) {
     return (
@@ -483,12 +544,89 @@ function EntranceBanner({ entrance }) {
       pointerEvents="none"
       style={[
         styles.entranceBanner,
-        { backgroundColor: theme.surfaces.card, borderColor: isRide ? theme.colors.vipPurple : theme.colors.teal700, transform: [{ translateX }] }
+        { backgroundColor: theme.surfaces.card, borderColor: theme.colors.teal700, transform: [{ translateX }] }
       ]}
     >
       <Avatar value={entrance.profileImage} fullName={entrance.name} size={scaleModerate(26)} />
       <Text style={[styles.entranceText, { color: theme.text.primary }]} numberOfLines={1}>{label}</Text>
     </Animated.View>
+  );
+}
+
+// A ride never slides or shows text — it takes over the whole screen the
+// instant it's up, plays (with sound) for exactly as long as the clip
+// actually runs (its own onEnd, not a guessed duration), then disappears
+// and the room is visible again. onError clears it immediately too, so a
+// broken clip can't freeze the room on this screen.
+function RideFullscreen({ entrance, onFinished }) {
+  const theme = useTheme();
+  // useWindowDimensions() returns the "window" size, which on Android can
+  // exclude the status bar area — leaving a black gap at the top instead
+  // of truly covering the whole physical display. Dimensions.get('screen')
+  // is the full display size regardless of system bars.
+  const [screenSize, setScreenSize] = React.useState(() => Dimensions.get('screen'));
+  React.useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ screen }) => setScreenSize(screen));
+    return () => subscription.remove();
+  }, []);
+  const artUrl = entrance?.rideUrl;
+  const finishedRef = React.useRef(false);
+  const [videoFailed, setVideoFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    finishedRef.current = false;
+    setVideoFailed(false);
+  }, [entrance]);
+
+  const finishOnce = React.useCallback(() => {
+    if (finishedRef.current) {
+      return;
+    }
+    finishedRef.current = true;
+    onFinished?.();
+  }, [onFinished]);
+
+  React.useEffect(() => {
+    if (entrance && (!artUrl || videoFailed)) {
+      finishOnce();
+    }
+  }, [entrance, artUrl, videoFailed, finishOnce]);
+
+  if (!entrance || !artUrl || videoFailed) {
+    return null;
+  }
+
+  const statusBarHeight = StatusBar.currentHeight ?? 0;
+  const fullBleedHeight = screenSize.height + statusBarHeight;
+
+  return (
+    <View
+      collapsable={false}
+      style={[
+        styles.rideFullscreen,
+        {
+          backgroundColor: theme.surfaces.dark,
+          top: -statusBarHeight,
+          width: screenSize.width,
+          height: fullBleedHeight
+        }
+      ]}
+    >
+      <Video
+        source={{ uri: artUrl }}
+        style={{ width: screenSize.width, height: fullBleedHeight }}
+        resizeMode="cover"
+        repeat={false}
+        volume={1.0}
+        ignoreSilentSwitch="ignore"
+        useTextureView
+        onEnd={finishOnce}
+        onError={event => {
+          console.log('[Ride] video FAILED to load/play', artUrl, JSON.stringify(event));
+          setVideoFailed(true);
+        }}
+      />
+    </View>
   );
 }
 
@@ -541,29 +679,12 @@ export function RoomScreen() {
   const session = useAppStore(state => state.session);
   const ownerName = session?.user?.fullName || 'You';
   const ownerAvatarSeed = session?.user?.publicId || ownerName;
-  // Shows the active Special ID (e.g. "VIP55") in place of the plain user
-  // ID once one is assigned — same displayId field already used on
-  // Profile/Settings, kept live via useSessionGuard's special-id socket
-  // handling. See docs/mobile-special-id.md.
-  const ownerDisplayId = session?.user?.displayId || session?.user?.publicId;
-  // The backend now owns room identity — each user has exactly one
-  // persistent, system-assigned room ID (see
-  // StreamLine-Portal/docs/mobile-audio-room-api.md). route.params.roomId is
-  // only present when returning to an already-started room (notification
-  // tap or a backgrounded-room resume); a brand-new room has no ID until the
-  // START call below responds.
+    const ownerDisplayId = session?.user?.displayId || session?.user?.publicId;
+  
   const [roomId, setRoomId] = React.useState(route.params?.roomId ?? null);
-  // A room background is a perk an admin specifically assigns to a user
-  // (see StreamLine-Portal's mobile upload catalog docs) — there's no
-  // self-service picker for it yet, so this just uses one if the current
-  // account has one, otherwise the bundled default further down keeps
-  // working exactly as before.
   const { source: assignedRoomBackgroundSource } = useAssignedRoomBackground();
   const myFrameUri = useAssignedFrame();
   const [customBackgroundFailed, setCustomBackgroundFailed] = React.useState(false);
-  // Reset whenever the source itself changes — otherwise a stale failure
-  // from a previous asset would keep this screen on the bundled default
-  // forever even after a working background comes through.
   React.useEffect(() => {
     setCustomBackgroundFailed(false);
   }, [assignedRoomBackgroundSource]);
@@ -588,16 +709,18 @@ export function RoomScreen() {
   const [seatLayoutModalVisible, setSeatLayoutModalVisible] = React.useState(false);
   const [isSpeakerMuted, setIsSpeakerMuted] = React.useState(false);
   const [emojiPickerVisible, setEmojiPickerVisible] = React.useState(false);
+  const [giftPickerVisible, setGiftPickerVisible] = React.useState(false);
+  const [sendingGift, setSendingGift] = React.useState(false);
   // Trending Parties navigates here with asViewer:true for someone else's
   // room (no seatGroups — the layout is unknown until the owner's first
   // seat-state broadcast arrives). Every other entry point (starting fresh,
   // resuming your own room, the notification tap) is always the owner.
   const isViewerEntry = Boolean(route.params?.asViewer);
-  // Optimistic default so the UI doesn't flash the wrong mode before the
-  // audio-room:join acknowledgement below confirms it server-side (see
-  // StreamLine-Portal/docs/mobile-audio-room-api.md — the ack now always
-  // carries the verified isOwner flag).
   const [isOwner, setIsOwner] = React.useState(!isViewerEntry);
+  // Who a sent gift is credited to — set from the join ack (see setup()
+  // below), which always includes `owner` regardless of whether this
+  // device is the owner or a viewer.
+  const [roomOwner, setRoomOwner] = React.useState(!isViewerEntry ? { id: ownerAvatarSeed, name: ownerName } : null);
   // The room creator always keeps mic access via their fixed header spot.
   // Anyone else only gets the bottom-bar mic control once they've actually
   // taken a seat.
@@ -624,6 +747,10 @@ export function RoomScreen() {
   React.useEffect(() => {
     isOwnerRef.current = isOwner;
   }, [isOwner]);
+  const roomOwnerRef = React.useRef(roomOwner);
+  React.useEffect(() => {
+    roomOwnerRef.current = roomOwner;
+  }, [roomOwner]);
   const seatRowsRef = React.useRef(seatRows);
   React.useEffect(() => {
     seatRowsRef.current = seatRows;
@@ -753,7 +880,6 @@ export function RoomScreen() {
 
   const [currentEntrance, setCurrentEntrance] = React.useState(null);
   const entranceQueueRef = React.useRef([]);
-  const entranceTimerRef = React.useRef(null);
   const isShowingEntranceRef = React.useRef(false);
   const showNextEntranceRef = React.useRef(null);
   showNextEntranceRef.current = () => {
@@ -765,7 +891,11 @@ export function RoomScreen() {
     }
     isShowingEntranceRef.current = true;
     setCurrentEntrance(next);
-    entranceTimerRef.current = setTimeout(() => showNextEntranceRef.current?.(), 1800);
+    console.log('[Entrance] now showing', next.kind, next.kind === 'ride' ? next.rideUrl : next.entranceUrl);
+    // Timing is entirely owned by EntranceBanner now (see its onFinished
+    // prop below) — a plain banner holds for a fixed beat, a video (Ride)
+    // holds for exactly as long as the clip runs — so nothing to schedule
+    // here beyond just showing whatever's next.
   };
   const pushEntranceRef = React.useRef(null);
   pushEntranceRef.current = data => {
@@ -775,11 +905,6 @@ export function RoomScreen() {
       showNextEntranceRef.current?.();
     }
   };
-  React.useEffect(() => () => {
-    if (entranceTimerRef.current) {
-      clearTimeout(entranceTimerRef.current);
-    }
-  }, []);
 
   // See StreamLine-Portal/docs/mobile-audio-room-api.md — a real room record
   // is created/updated on the backend for every audio room, and the room
@@ -803,6 +928,17 @@ export function RoomScreen() {
   // gesture reports the real count at that moment, not whatever it was when
   // the room was created.
   const viewerCountRef = React.useRef(viewerCount);
+  // Debounced seat-count sync (below) needs to know whether this is the
+  // very first seat-state it's seen this screen visit.
+  const isFirstParticipantSyncRef = React.useRef(true);
+  // handleToggleMic/endAudioRoom themselves are defined further down (they
+  // close over a lot of this component's own state), so these two refs
+  // can only be *declared* here with a null placeholder — same pattern as
+  // isOwnerRef above; the actual `.current = ...` assignment has to stay
+  // right after each function's own definition, where it's still kept in
+  // sync on every render (not gated by an effect, so it's never stale).
+  const handleToggleMicRef = React.useRef(null);
+  const endAudioRoomRef = React.useRef(null);
   const canTakeSeat = !isOwner && !mySeatId && !joiningDisabled;
 
   React.useEffect(() => {
@@ -966,6 +1102,9 @@ export function RoomScreen() {
         // over the isViewerEntry-based optimistic default.
         if (typeof result.data?.isOwner === 'boolean') {
           setIsOwner(result.data.isOwner);
+        }
+        if (result.data?.owner?.publicId) {
+          setRoomOwner({ id: result.data.owner.publicId, name: result.data.owner.name });
         }
       });
     };
@@ -1196,21 +1335,17 @@ export function RoomScreen() {
 
     const pushRideIfAny = data => {
       if (!data.rideUrl) {
+        console.log('[Ride] no rideUrl on this entrance payload — nothing equipped/resolved for', data?.userId);
         return;
       }
-      const fixedRideUrl = fixLocalhostOrigin(data.rideUrl);
-      const rideIdentity = assetIdentity(fixedRideUrl);
-      const cachedRideUri = getCachedAssetByIdentity('RIDE_ART', rideIdentity);
-      if (cachedRideUri) {
-        pushEntranceRef.current?.({ ...data, kind: 'ride', rideUrl: cachedRideUri });
-        return;
-      }
-      pushEntranceRef.current?.({ ...data, kind: 'ride', rideUrl: fixedRideUrl });
-      fetchAssetDataUri({ url: fixedRideUrl }, session?.token).then(uri => {
-        if (uri) {
-          setCachedAssetByIdentity('RIDE_ART', rideIdentity, uri);
-        }
-      });
+      console.log('[Ride] pushing ride to queue', data.rideUrl);
+      // Always streamed straight from the CDN URL, never run through the
+      // base64-data-URI cache (fetchAssetDataUri) that entrance art below
+      // uses — that cache is for small static images, and a Ride is always
+      // treated as video (see EntranceBanner's isVideo); a multi-MB video
+      // turned into a base64 string is both slow and often too large for
+      // react-native-video to decode as a data: URI anyway.
+      pushEntranceRef.current?.({ ...data, kind: 'ride', rideUrl: fixLocalhostOrigin(data.rideUrl) });
     };
 
     const handleEntrance = payload => {
@@ -1226,6 +1361,12 @@ export function RoomScreen() {
         return;
       }
       const fixedUrl = fixLocalhostOrigin(data.entranceUrl);
+      // Same reasoning as pushRideIfAny above — never base64-cache a video.
+      if (isVideoUrl(fixedUrl)) {
+        pushEntranceRef.current?.({ ...data, kind: 'entrance', entranceUrl: fixedUrl });
+        pushRideIfAny(data);
+        return;
+      }
       const identity = assetIdentity(fixedUrl);
       const cachedUri = getCachedAssetByIdentity('ENTRANCE_ART', identity);
       if (cachedUri) {
@@ -1242,6 +1383,28 @@ export function RoomScreen() {
       });
     };
 
+    // See StreamLine-Portal/docs/gift-profit-rules-api.md — the backend
+    // settles the transaction and broadcasts this to everyone in the room
+    // (including the sender), so nobody adds their own gift message
+    // optimistically — this single broadcast is the only source of the
+    // chat bubble for every device.
+    const handleGiftBroadcast = payload => {
+      const data = payload?.data;
+      if (!data || data.roomId !== activeRoomId) {
+        return;
+      }
+      const recipientName = data.recipientId === roomOwnerRef.current?.id ? roomOwnerRef.current?.name : data.recipientId;
+      setMessages(current => [
+        ...current,
+        {
+          id: data.transactionId ?? `gift-${Date.now()}`,
+          type: 'gift',
+          author: data.sender?.name ?? 'Someone',
+          text: `sent ${data.gift?.name}${data.gift?.quantity > 1 ? ` x${data.gift.quantity}` : ''} to ${recipientName}`
+        }
+      ]);
+    };
+
     socket?.on('audio-room:joining-disabled', handleJoiningDisabled);
     socket?.on('audio-room:joining-enabled', handleJoiningEnabled);
     socket?.on('audio-room:blocked', handleBlocked);
@@ -1252,6 +1415,7 @@ export function RoomScreen() {
     socket?.on('audio-room:seat-request', handleSeatRequestEvent);
     socket?.on('audio-room:seat-response', handleSeatResponseEvent);
     socket?.on('audio-room:entrance', handleEntrance);
+    socket?.on('gift:received', handleGiftBroadcast);
     console.log('[Entrance] listener registered, socket connected:', socket?.connected);
 
     setup();
@@ -1269,6 +1433,7 @@ export function RoomScreen() {
       socket?.off('audio-room:seat-update', handleSeatUpdate);
       socket?.off('audio-room:seat-sync-request', handleSeatSyncRequest);
       socket?.off('audio-room:entrance', handleEntrance);
+      socket?.off('gift:received', handleGiftBroadcast);
       socket?.off('audio-room:seat-request', handleSeatRequestEvent);
       socket?.off('audio-room:seat-response', handleSeatResponseEvent);
       // If activeRoomId isn't known yet at this point (brand-new room,
@@ -1284,8 +1449,6 @@ export function RoomScreen() {
     // excluded too — this effect is what sets it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAudioRoom]);
-
-  const isFirstParticipantSyncRef = React.useRef(true);
 
   // Debounced — a burst of seats filling/emptying quickly (e.g. several
   // people joining at once) would otherwise fire one API call per change.
@@ -1358,21 +1521,10 @@ export function RoomScreen() {
     return () => subscription.remove();
   }, [isAudioRoom, roomId, roomName, mode, seatGroups, isOwner]);
 
-  // Always call the latest handleToggleMic/endAudioRoom — they close over
-  // per-render values (mySeatId, etc.), but the registration effect below
-  // only re-runs on [isAudioRoom, roomId], so calling them directly from
-  // that effect would freeze whatever closure existed when it first ran.
-  const handleToggleMicRef = React.useRef(handleToggleMic);
   handleToggleMicRef.current = handleToggleMic;
-  const endAudioRoomRef = React.useRef(endAudioRoom);
   endAudioRoomRef.current = endAudioRoom;
 
-  // Wires the notification's "Pause"/"Unmute" and "End" action buttons to
-  // this screen's real mic/end logic while it's mounted (app process
-  // alive, room just backgrounded) — see registerLiveRoomActionHandler in
-  // src/utils/liveRoomNotifications.js for the fully-killed-app fallback.
-  // Owner-only — no notification is ever shown for a viewer, so there's
-  // nothing for these actions to be triggered from on their behalf.
+
   React.useEffect(() => {
     if (!isAudioRoom || !roomId || !isOwner) {
       return undefined;
@@ -1421,6 +1573,43 @@ export function RoomScreen() {
     setDraft('');
   };
 
+
+  const handleSendGift = async (gift, quantity) => {
+    if (!session?.token || !roomOwner?.id || sendingGift) {
+      return;
+    }
+    if (roomOwner.id === (session.user?.publicId || ownerAvatarSeed)) {
+      showAlert('Cannot Send Gift', "You can't send a gift to yourself.");
+      return;
+    }
+    setSendingGift(true);
+    try {
+      await sendGift(session.token, {
+        recipientId: roomOwner.id,
+        giftId: gift.id,
+        quantity,
+        roomId
+      });
+      setGiftPickerVisible(false);
+    } catch (error) {
+      if (error instanceof GiftSendError && error.code === 'INSUFFICIENT_COINS') {
+        showAlert('Insufficient Coins', "You don't have enough coins to send this gift.");
+      } else if (error instanceof GiftSendError && error.code === 'HOST_AGENCY_REQUIRED') {
+        showAlert('Unable to Send Gift', 'This host is not currently eligible to receive gifts.');
+      } else if (error instanceof GiftSendError && error.code === 'GIFT_NOT_FOUND') {
+        showAlert('Unable to Send Gift', 'This gift is no longer available.');
+      } else if (error instanceof GiftSendError && error.code === 'ROOM_NOT_LIVE') {
+        showAlert('Unable to Send Gift', 'This room is no longer live.');
+      } else if (error instanceof GiftSendError) {
+        showAlert('Unable to Send Gift', error.message);
+      } else {
+        showAlert('Unable to Send Gift', 'Something went wrong. Please try again.');
+      }
+    } finally {
+      setSendingGift(false);
+    }
+  };
+
   useFocusEffect(
     React.useCallback(() => {
       StatusBar.setBarStyle('light-content');
@@ -1461,7 +1650,7 @@ export function RoomScreen() {
 
       <View style={[styles.foreground, { paddingTop: insets.top }]}>
         <View style={styles.entranceBannerWrap} pointerEvents="none">
-          <EntranceBanner entrance={currentEntrance} />
+          <EntranceBanner entrance={currentEntrance?.kind === 'ride' ? null : currentEntrance} onFinished={() => showNextEntranceRef.current?.()} />
         </View>
         <View style={styles.header}>
           <View style={styles.identityCenterWrap} pointerEvents="box-none">
@@ -1596,7 +1785,7 @@ export function RoomScreen() {
                 <MicIcon size={18} muted={isMicMuted} color={isMicMuted ? theme.cta.primary.text : theme.text.primary} />
               </Pressable>
             ) : null}
-            <Pressable style={[styles.iconButton, { backgroundColor: theme.colors.teal700 }]}>
+            <Pressable onPress={() => setGiftPickerVisible(true)} style={[styles.iconButton, { backgroundColor: theme.colors.teal700 }]}>
               <GiftIcon color={theme.cta.primary.text} />
             </Pressable>
             <Pressable onPress={() => setMoreMenuVisible(true)} style={styles.iconButton}>
@@ -1639,6 +1828,15 @@ export function RoomScreen() {
         }}
       />
 
+      <GiftPickerModal
+        visible={giftPickerVisible}
+        onClose={() => setGiftPickerVisible(false)}
+        onConfirmSend={handleSendGift}
+        recipientName={roomOwner?.name}
+        sending={sendingGift}
+        sessionToken={session?.token}
+      />
+
       <SeatNoteModal
         visible={noteModal.visible}
         value={noteModal.value}
@@ -1647,6 +1845,10 @@ export function RoomScreen() {
         onSave={handleSaveNote}
         theme={theme}
       />
+
+      {currentEntrance?.kind === 'ride' ? (
+        <RideFullscreen entrance={currentEntrance} onFinished={() => showNextEntranceRef.current?.()} />
+      ) : null}
     </ImageBackground>
   );
 }
@@ -1654,6 +1856,12 @@ export function RoomScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1
+  },
+  rideFullscreen: {
+    position: 'absolute',
+    left: 0,
+    zIndex: 50,
+    elevation: 50
   },
   backgroundImage: {
     // Pinned to the container's exact current size (not just resizeMode
@@ -1702,7 +1910,9 @@ const styles = StyleSheet.create({
   },
   entranceText: {
     fontSize: scaleFont(12.5),
-    fontWeight: '700'
+    fontWeight: '700',
+    textAlignVertical: 'center',
+    includeFontPadding: false
   },
   entranceArtBg: {
     alignSelf: 'center',
@@ -1722,6 +1932,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
     textAlignVertical: 'center',
+    includeFontPadding: false,
     textShadowColor: 'rgba(0,0,0,0.65)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3
