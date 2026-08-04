@@ -1673,12 +1673,6 @@ export function RoomScreen() {
                   />
                 </View>
                 {myFrameUri ? (
-                  // The room owner never occupies a numbered seat (see
-                  // buildSeatRowsFromGroups) — their identity only ever
-                  // shows here, so this was the one place an owner's own
-                  // assigned frame never appeared at all. Sized a bit
-                  // larger than the avatar itself and centered over it,
-                  // same proportions as everywhere else the frame renders.
                   <Image
                     source={{ uri: myFrameUri }}
                     style={[styles.identityFrameOverlay, {
