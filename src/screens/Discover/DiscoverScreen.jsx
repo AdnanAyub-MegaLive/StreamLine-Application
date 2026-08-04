@@ -110,9 +110,6 @@ function timeAgo(isoDate) {
   return `${days}d ago`;
 }
 
-// Same two-layer glass treatment as PostCard's own background (a dark
-// base gradient plus a subtle cyan/purple tint on top) so the header
-// buttons read as the same material as the post cards below them.
 function HeaderGlassButton({ theme, onPress, children, style }) {
   return <Pressable onPress={onPress} style={[styles.headerButton, style]}>
       <LinearGradient

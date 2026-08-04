@@ -224,7 +224,11 @@ export function StoreScreen() {
             renderItem={({ item }) => <CategoryChip category={item} active={item.key === category} onPress={() => setCategory(item.key)} />}
           />
           <FlatList
-            data={catalog?.assets ?? []}
+            // Already-owned items live in the "My Props" tab (with their
+            // own Equip/Remove controls) — showing them here too, still
+            // wearing a "Buy" button's real estate as an "Equipped"/"Equip"
+            // button, just duplicated the same item in both places.
+            data={(catalog?.assets ?? []).filter(asset => !asset.owned)}
             keyExtractor={item => item.id}
             numColumns={2}
             columnWrapperStyle={styles.assetRow}

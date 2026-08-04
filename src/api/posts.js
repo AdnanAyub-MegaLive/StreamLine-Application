@@ -62,9 +62,9 @@ export async function createPost(sessionToken, { description, imageUri, imageTyp
   }
 }
 
-// PATCH /api/posts/:postId — see docs/discover-posts-edit-delete-spec.md
-// (requested, not yet built). Owner-only edit; omit imageUri and
-// removeImage to leave the existing image untouched.
+// PATCH /api/posts/:postId — see docs/discover-posts-edit-delete-spec.md.
+// Owner-only edit; omit imageUri and removeImage to leave the existing
+// image untouched.
 export async function updatePost(sessionToken, postId, { description, imageUri, imageType, imageFileName, removeImage }) {
   const form = new FormData();
   form.append('description', description.trim());
@@ -94,8 +94,8 @@ export async function updatePost(sessionToken, postId, { description, imageUri, 
   }
 }
 
-// DELETE /api/posts/:postId — see docs/discover-posts-edit-delete-spec.md
-// (requested, not yet built). Owner-only.
+// DELETE /api/posts/:postId — see docs/discover-posts-edit-delete-spec.md.
+// Owner-only.
 export async function deletePost(sessionToken, postId) {
   try {
     await apiClient.delete(`/api/posts/${postId}`, {
