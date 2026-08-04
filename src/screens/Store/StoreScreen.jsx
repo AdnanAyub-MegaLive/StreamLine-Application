@@ -83,19 +83,30 @@ export function StoreScreen() {
   const [loading, setLoading] = React.useState(true);
   const [busyId, setBusyId] = React.useState(null);
 
+  // Read via a ref (not a dependency) so switching categories doesn't
+  // change this function's identity — it used to include `category`
+  // directly, which made useFocusEffect below re-run (and flip
+  // `loading` back to true) on every category tap, unmounting and
+  // remounting both FlatLists and resetting their scroll position back
+  // to the start. Category switches are handled by their own lightweight
+  // effect further down instead, which only updates `catalog` in place.
+  const categoryRef = React.useRef(category);
+  React.useEffect(() => {
+    categoryRef.current = category;
+  }, [category]);
+
   const reload = React.useCallback(async () => {
     if (!sessionToken) {
       return;
     }
     const [storeData, propsData] = await Promise.all([
-      fetchStoreCatalog(sessionToken, category),
+      fetchStoreCatalog(sessionToken, categoryRef.current),
       fetchMyProps(sessionToken)
     ]);
-    console.log('[Store] my props equipped map', JSON.stringify(propsData.equipped));
     setCatalog(storeData);
     setMyProps(propsData);
     setLoading(false);
-  }, [sessionToken, category]);
+  }, [sessionToken]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -117,6 +128,31 @@ export function StoreScreen() {
       };
     }, [reload])
   );
+
+  // Category switch — refetches just the catalog for the new category
+  // without touching `loading`, so the category chips and asset grid
+  // stay mounted (and keep their scroll position) instead of being torn
+  // down by the full-screen spinner. Skips its very first run since the
+  // useFocusEffect above already covers the initial load.
+  const isFirstCategoryRunRef = React.useRef(true);
+  React.useEffect(() => {
+    if (isFirstCategoryRunRef.current) {
+      isFirstCategoryRunRef.current = false;
+      return undefined;
+    }
+    if (!sessionToken) {
+      return undefined;
+    }
+    let cancelled = false;
+    fetchStoreCatalog(sessionToken, category).then(storeData => {
+      if (!cancelled) {
+        setCatalog(storeData);
+      }
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionToken, category]);
 
   const handleBuy = async asset => {
     setBusyId(asset.id);

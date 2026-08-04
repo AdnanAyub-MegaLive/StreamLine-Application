@@ -152,9 +152,24 @@ export function CreateAgencyScreen() {
   }
 
   if (submittedAt) {
+    // AgencyChoiceScreen (whichever screen sits right before this one) re-
+    // checks status on every focus and immediately replaces itself with
+    // this same screen if a pending application still exists — so a plain
+    // goBack() here would land on AgencyChoiceScreen just long enough for
+    // it to bounce straight back to this exact view. Skip past it
+    // instead, straight to whatever's behind it.
+    const handleBack = () => {
+      const navState = navigation.getState();
+      const previousRoute = navState.routes[navState.index - 1];
+      if (previousRoute?.name === routes.agencyChoice) {
+        navigation.pop(2);
+      } else {
+        navigation.goBack();
+      }
+    };
     return <Screen>
         <View style={styles.headerRow}>
-          <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
+          <Pressable onPress={handleBack} hitSlop={10}>
             <Text style={[styles.backChevron, { color: theme.text.primary }]}>‹</Text>
           </Pressable>
           <Text style={[styles.title, { color: theme.text.primary }]}>Create Agency</Text>

@@ -98,12 +98,31 @@ function EmptyRecent({ hasQuery }) {
     </View>;
 }
 
+// Shown when the backend can't be reached at all — distinct from a
+// genuinely empty inbox, which looks the same otherwise (both would
+// render EmptyRecent's "No conversations yet"). Same placeholder-feed
+// convention as the Live/Party tabs' demo data.
+const DUMMY_CHATS = [
+  { id: 'dummy-chat-1', participantId: null, name: 'Ayesha K.', avatar: null, isOfficial: true, time: '2m', preview: "Hey! Are you joining the room tonight?", unreadCount: 2 },
+  { id: 'dummy-chat-2', participantId: null, name: 'Bilal R.', avatar: null, isOfficial: false, time: '1h', preview: 'Thanks for the gift 🎁', unreadCount: 0 },
+  { id: 'dummy-chat-3', participantId: null, name: 'Hamza M.', avatar: null, isOfficial: false, time: 'Yesterday', preview: 'That stream was awesome!', unreadCount: 0 }
+];
+
+function ConnectionErrorNotice() {
+  const theme = useTheme();
+  return <View style={[styles.connectionNotice, { backgroundColor: theme.colors.vipGoldBackground, borderColor: theme.colors.cardBorder }]}>
+      <Text style={[styles.connectionNoticeText, { color: theme.colors.vipGoldText }]}>
+        Couldn't connect to the server — showing sample messages.
+      </Text>
+    </View>;
+}
+
 export function MessageScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const sessionToken = useAppStore(state => state.session?.token);
-  const { systemNotification, worldChat, recentChats, messagableFriends } = useMessaging();
+  const { connectionError, systemNotification, worldChat, recentChats, messagableFriends } = useMessaging();
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [requestCount, setRequestCount] = React.useState(0);
@@ -138,9 +157,10 @@ export function MessageScreen() {
     }
   };
   const trimmedQuery = query.trim().toLowerCase();
+  const chatSource = connectionError ? DUMMY_CHATS : recentChats;
   const filteredChats = trimmedQuery
-    ? recentChats.filter(chat => chat.name.toLowerCase().includes(trimmedQuery) || chat.preview.toLowerCase().includes(trimmedQuery))
-    : recentChats;
+    ? chatSource.filter(chat => chat.name.toLowerCase().includes(trimmedQuery) || chat.preview.toLowerCase().includes(trimmedQuery))
+    : chatSource;
   // Friends without an existing conversation only show up once you search
   // for them — this way a newly-accepted friend is findable/messageable
   // right away, without cluttering "Recent" with everyone you're friends
@@ -183,6 +203,7 @@ export function MessageScreen() {
         onOpenFriendRequests={() => navigation.navigate(routes.friendRequests)}
       />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {connectionError ? <ConnectionErrorNotice /> : null}
         {!trimmedQuery && systemNotification ? <BroadcastRow emoji="📣" iconBackground={theme.colors.vipGoldBackground} title="System Notifications" time={systemNotification.time} unreadDot={systemNotification.unread}>
             {systemNotification.preview}
           </BroadcastRow> : null}
@@ -199,8 +220,8 @@ export function MessageScreen() {
               {filteredChats.map((chat, index) => <View key={chat.id}>
                   <ChatRow
                     chat={chat}
-                    onPress={() => openConversation({ id: chat.id, name: chat.name, avatar: chat.avatar, participantId: chat.participantId, frameUrl: chat.frameUrl, badgeUrl: chat.badgeUrl, gender: chat.gender, dob: chat.dob, isOfficial: chat.isOfficial })}
-                    onOpenProfile={() => openProfile({ participantId: chat.participantId, name: chat.name, avatar: chat.avatar, frameUrl: chat.frameUrl, badgeUrl: chat.badgeUrl, gender: chat.gender, dob: chat.dob, isOfficial: chat.isOfficial })}
+                    onPress={connectionError ? () => {} : () => openConversation({ id: chat.id, name: chat.name, avatar: chat.avatar, participantId: chat.participantId, frameUrl: chat.frameUrl, badgeUrl: chat.badgeUrl, gender: chat.gender, dob: chat.dob, isOfficial: chat.isOfficial })}
+                    onOpenProfile={connectionError ? undefined : () => openProfile({ participantId: chat.participantId, name: chat.name, avatar: chat.avatar, frameUrl: chat.frameUrl, badgeUrl: chat.badgeUrl, gender: chat.gender, dob: chat.dob, isOfficial: chat.isOfficial })}
                   />
                   {index < filteredChats.length - 1 || matchingFriends.length ? <View style={[styles.rowDivider, { backgroundColor: theme.colors.cardBorder }]} /> : null}
                 </View>)}
@@ -290,6 +311,17 @@ const styles = StyleSheet.create({
   },
   broadcastEmoji: {
     fontSize: scaleFont(20)
+  },
+  connectionNotice: {
+    borderRadius: scaleModerate(12),
+    borderWidth: 1,
+    paddingHorizontal: scaleModerate(12),
+    paddingVertical: scaleModerate(10)
+  },
+  connectionNoticeText: {
+    fontSize: scaleFont(12),
+    fontWeight: '600',
+    textAlign: 'center'
   },
   sectionLabel: {
     marginTop: scaleModerate(8),

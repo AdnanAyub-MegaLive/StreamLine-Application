@@ -27,9 +27,15 @@ function SessionGuard() {
 // the current route name via the same navigationRef every other
 // cross-cutting nav concern (room notifications, etc.) already uses.
 const VIDEO_BACKGROUND_ROUTES = new Set([routes.splash, routes.auth]);
+// Discover (see MainTabNavigator's "DiscoverTab") draws its own full-bleed
+// ImageBackground with its own top-safe-area padding — an opaque status
+// bar there would paint a solid block over the top of that image instead
+// of letting it show through.
+const TRANSPARENT_STATUS_BAR_ROUTES = new Set([...VIDEO_BACKGROUND_ROUTES, 'DiscoverTab']);
 function AppContent() {
   const theme = useTheme();
   const [showVideoBackground, setShowVideoBackground] = React.useState(true);
+  const [transparentStatusBar, setTransparentStatusBar] = React.useState(true);
 
   React.useEffect(() => {
     const unsubscribe = registerLiveRoomNotificationTapHandler(navigateToRoom);
@@ -39,6 +45,7 @@ function AppContent() {
   const syncVideoBackground = React.useCallback(() => {
     const currentRoute = navigationRef.getCurrentRoute()?.name;
     setShowVideoBackground(!currentRoute || VIDEO_BACKGROUND_ROUTES.has(currentRoute));
+    setTransparentStatusBar(!currentRoute || TRANSPARENT_STATUS_BAR_ROUTES.has(currentRoute));
   }, []);
 
   return <PermissionsGate>
@@ -54,7 +61,7 @@ function AppContent() {
           }}
           onStateChange={syncVideoBackground}
         >
-          <StatusBar barStyle="light-content" backgroundColor={theme.surfaces.page} translucent />
+          <StatusBar barStyle="light-content" backgroundColor={transparentStatusBar ? 'transparent' : theme.surfaces.page} translucent />
           <AppNavigator />
           <SessionGuard />
         </NavigationContainer>

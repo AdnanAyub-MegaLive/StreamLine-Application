@@ -61,3 +61,51 @@ export async function createPost(sessionToken, { description, imageUri, imageTyp
     throw new CreatePostError('Could not reach the server. Try again.', 'NETWORK');
   }
 }
+
+// PATCH /api/posts/:postId — see docs/discover-posts-edit-delete-spec.md
+// (requested, not yet built). Owner-only edit; omit imageUri and
+// removeImage to leave the existing image untouched.
+export async function updatePost(sessionToken, postId, { description, imageUri, imageType, imageFileName, removeImage }) {
+  const form = new FormData();
+  form.append('description', description.trim());
+  if (imageUri) {
+    form.append('image', {
+      uri: imageUri,
+      type: imageType ?? 'image/jpeg',
+      name: imageFileName ?? 'post.jpg'
+    });
+  } else if (removeImage) {
+    form.append('removeImage', 'true');
+  }
+  try {
+    const response = await apiClient.patch(`/api/posts/${postId}`, form, {
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data?.data ?? {};
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data?.error) {
+      const { code, message } = error.response.data.error;
+      throw new CreatePostError(message ?? 'Unable to save changes.', code);
+    }
+    throw new CreatePostError('Could not reach the server. Try again.', 'NETWORK');
+  }
+}
+
+// DELETE /api/posts/:postId — see docs/discover-posts-edit-delete-spec.md
+// (requested, not yet built). Owner-only.
+export async function deletePost(sessionToken, postId) {
+  try {
+    await apiClient.delete(`/api/posts/${postId}`, {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data?.error) {
+      const { code, message } = error.response.data.error;
+      throw new CreatePostError(message ?? 'Unable to delete this post.', code);
+    }
+    throw new CreatePostError('Could not reach the server. Try again.', 'NETWORK');
+  }
+}

@@ -120,9 +120,9 @@ export async function fetchMyAgencyJoinRequest(sessionToken) {
   }
 }
 
-// GET /api/agencies/mine — see docs/agency-dashboard-api-spec.md (requested,
-// not yet built). Only meaningful for an approved agency owner; returns
-// null if the caller doesn't own one so the screen can fall back cleanly.
+// GET /api/agencies/mine — see docs/agency-dashboard-api-spec.md. Only
+// meaningful for an approved agency owner; returns null if the caller
+// doesn't own one so the screen can fall back cleanly.
 export async function fetchMyAgencyDashboard(sessionToken) {
   try {
     const response = await apiClient.get('/api/agencies/mine', {
@@ -147,6 +147,41 @@ export async function respondToAgencyJoinRequest(sessionToken, requestId, accept
     if (axios.isAxiosError(error) && error.response?.data?.error) {
       const { code, message } = error.response.data.error;
       throw new AgencyJoinError(message ?? 'Request failed.', code);
+    }
+    throw new AgencyJoinError('Could not reach the server. Try again.', 'NETWORK');
+  }
+}
+
+// POST /api/agencies/mine/target — see docs/agency-dashboard-extended-spec.md
+// (requested, not yet built). Owner sets the agency's monthly coin target.
+export async function setAgencyMonthlyTarget(sessionToken, targetCoins) {
+  try {
+    const response = await apiClient.post('/api/agencies/mine/target', { targetCoins }, {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+    return response.data?.data ?? {};
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data?.error) {
+      const { code, message } = error.response.data.error;
+      throw new AgencyJoinError(message ?? 'Could not update the target.', code);
+    }
+    throw new AgencyJoinError('Could not reach the server. Try again.', 'NETWORK');
+  }
+}
+
+// DELETE /api/agencies/hosts/:hostId — see
+// docs/agency-dashboard-extended-spec.md (requested, not yet built).
+// Owner removing a host from their agency.
+export async function removeAgencyHost(sessionToken, hostId) {
+  try {
+    const response = await apiClient.delete(`/api/agencies/hosts/${hostId}`, {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+    return response.data?.data ?? {};
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data?.error) {
+      const { code, message } = error.response.data.error;
+      throw new AgencyJoinError(message ?? 'Could not remove this host.', code);
     }
     throw new AgencyJoinError('Could not reach the server. Try again.', 'NETWORK');
   }

@@ -62,6 +62,12 @@ export function useMessaging() {
   const [notifications, setNotifications] = React.useState([]);
   const [friends, setFriends] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  // Distinct from "loaded, genuinely zero conversations" — the backend
+  // being unreachable used to look identical to an empty inbox (same
+  // "No conversations yet" text). MessageScreen uses this to show a
+  // dummy placeholder feed instead, same convention as the Live/Party
+  // tabs' demo-data fallback.
+  const [connectionError, setConnectionError] = React.useState(false);
 
   const reload = React.useCallback(async () => {
     if (!sessionToken) {
@@ -75,6 +81,7 @@ export function useMessaging() {
     setConversations(conversationList);
     setNotifications(notificationList);
     setFriends(friendList);
+    setConnectionError(false);
     setLoading(false);
   }, [sessionToken]);
 
@@ -86,6 +93,7 @@ export function useMessaging() {
           await reload();
         } catch {
           if (!cancelled) {
+            setConnectionError(true);
             setLoading(false);
           }
         }
@@ -173,7 +181,7 @@ export function useMessaging() {
     };
   }, [notifications]);
 
-  return { loading, systemNotification, worldChat, recentChats, messagableFriends, reload };
+  return { loading, connectionError, systemNotification, worldChat, recentChats, messagableFriends, reload };
 }
 
 export default useMessaging;

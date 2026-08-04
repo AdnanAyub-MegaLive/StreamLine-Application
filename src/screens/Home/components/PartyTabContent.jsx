@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { fetchDiscoverRooms } from '../../../api';
 import { agencyApplyBannerImage } from '../../../assets';
@@ -10,11 +10,13 @@ import { useTheme } from '../../../theme';
 import { routes } from '../../../navigation/routes';
 import { scaleFont, scaleModerate } from '../../../utils';
 
-// Cycled by card index — the backend doesn't return a color, this is purely
-// a local visual accent so cards aren't all one flat color.
-const ACCENT_KEYS = ['teal700', 'giftAccent', 'vipPurple', 'facebookBlue'];
-function accentForIndex(index) {
-  return theme => theme.colors[ACCENT_KEYS[index % ACCENT_KEYS.length]];
+// Real (demo/placeholder) human-face photos instead of a flat accent
+// color — pravatar.cc serves a fixed, free-to-use pool of ~70 portrait
+// photos; keyed by index so the same card always gets the same face. The
+// backend doesn't return a room thumbnail at all yet, so this stands in
+// for one on both real-mapped and demo cards.
+function personPhotoForIndex(index) {
+  return `https://i.pravatar.cc/400?img=${(index % 70) + 1}`;
 }
 
 // See StreamLine-Portal/docs/mobile-audio-room-api.md's "Discover live
@@ -29,7 +31,7 @@ function toPartyItem(room, index) {
     hostName: room.owner?.name ?? 'Unknown host',
     hostAvatar: room.owner?.profileImage,
     hostFrameUrl: room.owner?.frameUrl ?? null,
-    accent: accentForIndex(index)
+    photo: personPhotoForIndex(index)
   };
 }
 
@@ -37,9 +39,9 @@ function toPartyItem(room, index) {
 // trending-parties fetch comes back empty (e.g. no rooms live right now).
 // Remove once real data is reliably present, or gate it behind a flag.
 const DEMO_TRENDING_PARTIES = [
-  { id: 'demo-party-1', title: 'Friday Night Karaoke', members: 128, hostName: 'Zara Sheikh', hostAvatar: undefined, accent: accentForIndex(0) },
-  { id: 'demo-party-2', title: 'Weekend Royale Tournament', members: 96, hostName: 'Omar Farooq', hostAvatar: undefined, accent: accentForIndex(1) },
-  { id: 'demo-party-3', title: 'Chill & Chat Lounge', members: 54, hostName: 'Mahnoor Ali', hostAvatar: undefined, accent: accentForIndex(2) }
+  { id: 'demo-party-1', title: 'Friday Night Karaoke', members: 128, hostName: 'Zara Sheikh', hostAvatar: undefined, photo: personPhotoForIndex(21) },
+  { id: 'demo-party-2', title: 'Weekend Royale Tournament', members: 96, hostName: 'Omar Farooq', hostAvatar: undefined, photo: personPhotoForIndex(22) },
+  { id: 'demo-party-3', title: 'Chill & Chat Lounge', members: 54, hostName: 'Mahnoor Ali', hostAvatar: undefined, photo: personPhotoForIndex(23) }
 ];
 
 // Always the first banner, ahead of anything the admin uploads, and not
@@ -341,7 +343,6 @@ function PartyCard({
 }) {
   const theme = useTheme();
   const navigation = useNavigation();
-  const accent = item.accent(theme);
   // A fake, never-real userId for demo cards (no hostId at all) — passing
   // undefined here would make useUserAssets fall back to resolving the
   // *signed-in user's own* frame instead of showing nothing, and would
@@ -374,9 +375,7 @@ function PartyCard({
     backgroundColor: theme.surfaces.card,
     borderColor: theme.colors.cardBorder
   }]} onPress={handlePress}>
-      <View style={[styles.partyThumb, {
-      backgroundColor: accent
-    }]}>
+      <ImageBackground source={{ uri: item.photo }} style={styles.partyThumb} imageStyle={styles.partyThumbImage}>
         <View style={[styles.partyViewerBadge, {
         backgroundColor: theme.colors.teal900
       }]}>
@@ -384,7 +383,7 @@ function PartyCard({
           color: theme.cta.primary.text
         }]}>{item.members}</Text>
         </View>
-      </View>
+      </ImageBackground>
       <Text style={[styles.partyTitle, {
       color: theme.text.primary
     }]} numberOfLines={1}>
@@ -527,10 +526,14 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     borderRadius: scaleModerate(16),
+    overflow: 'hidden',
     marginBottom: scaleModerate(8),
     padding: scaleModerate(6),
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  partyThumbImage: {
+    borderRadius: scaleModerate(16)
   },
   partyViewerBadge: {
     borderRadius: scaleModerate(8),

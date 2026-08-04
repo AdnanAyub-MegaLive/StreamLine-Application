@@ -1,8 +1,8 @@
 import React from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
-import { createPost, CreatePostError } from '../../api';
+import { createPost, CreatePostError, updatePost } from '../../api';
 import { PrimaryButton, Screen, showAlert } from '../../components';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
@@ -13,12 +13,25 @@ import { scaleFont, scaleModerate } from '../../utils';
 // plus an optional photo, Facebook-post style. See
 // docs/discover-posts-api-spec.md for the POST /api/posts endpoint this
 // needs.
+//
+// Also doubles as the edit screen — DiscoverScreen's "⋮" menu on your own
+// post navigates here with { postId, initialDescription, initialImageUrl }
+// (see docs/discover-posts-edit-delete-spec.md's PATCH endpoint), pre-
+// filling the form and switching the Post button to Save.
 export function CreatePostScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
+  const route = useRoute();
+  const { postId, initialDescription, initialImageUrl } = route.params ?? {};
+  const isEditing = Boolean(postId);
   const sessionToken = useAppStore(state => state.session?.token);
-  const [description, setDescription] = React.useState('');
+  const [description, setDescription] = React.useState(initialDescription ?? '');
   const [photo, setPhoto] = React.useState(null);
+  // Only meaningful while editing — the existing image shown until the
+  // user picks a new one or explicitly removes it; distinct from `photo`
+  // (a freshly-picked local file) so the screen knows whether to send a
+  // new image, keep the current one, or clear it.
+  const [existingImageUrl, setExistingImageUrl] = React.useState(initialImageUrl ?? null);
   const [posting, setPosting] = React.useState(false);
 
   const handlePickPhoto = async () => {
@@ -32,28 +45,46 @@ export function CreatePostScreen() {
       return;
     }
     setPhoto(asset);
+    setExistingImageUrl(null);
+  };
+
+  const handleRemovePhoto = () => {
+    setPhoto(null);
+    setExistingImageUrl(null);
   };
 
   const handlePost = async () => {
-    if (!description.trim() && !photo) {
+    if (!description.trim() && !photo && !existingImageUrl) {
       showAlert('Nothing to post', 'Add a description or a photo first.');
       return;
     }
     setPosting(true);
     try {
-      await createPost(sessionToken, {
-        description,
-        imageUri: photo?.uri,
-        imageType: photo?.type,
-        imageFileName: photo?.fileName
-      });
+      if (isEditing) {
+        await updatePost(sessionToken, postId, {
+          description,
+          imageUri: photo?.uri,
+          imageType: photo?.type,
+          imageFileName: photo?.fileName,
+          removeImage: !photo && !existingImageUrl
+        });
+      } else {
+        await createPost(sessionToken, {
+          description,
+          imageUri: photo?.uri,
+          imageType: photo?.type,
+          imageFileName: photo?.fileName
+        });
+      }
       navigation.goBack();
     } catch (error) {
-      showAlert('Couldn\'t post', error instanceof CreatePostError ? error.message : 'Something went wrong. Please try again.');
+      showAlert(isEditing ? "Couldn't save changes" : "Couldn't post", error instanceof CreatePostError ? error.message : 'Something went wrong. Please try again.');
     } finally {
       setPosting(false);
     }
   };
+
+  const previewUri = photo?.uri ?? existingImageUrl;
 
   return <Screen>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -61,7 +92,7 @@ export function CreatePostScreen() {
           <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
             <Text style={[styles.backChevron, { color: theme.text.primary }]}>‹</Text>
           </Pressable>
-          <Text style={[styles.title, { color: theme.text.primary }]}>Create Post</Text>
+          <Text style={[styles.title, { color: theme.text.primary }]}>{isEditing ? 'Edit Post' : 'Create Post'}</Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -74,14 +105,24 @@ export function CreatePostScreen() {
           style={[styles.input, { color: theme.text.primary, backgroundColor: theme.surfaces.card, borderColor: theme.colors.cardBorder }]}
         />
 
-        {photo ? <Image source={{ uri: photo.uri }} style={styles.preview} resizeMode="cover" /> : null}
+        {previewUri ? <View>
+            <Image source={{ uri: previewUri }} style={styles.preview} resizeMode="cover" />
+            <Pressable onPress={handleRemovePhoto} style={[styles.removePhotoButton, { backgroundColor: theme.colors.liveBadge }]}>
+              <Text style={styles.removePhotoText}>✕</Text>
+            </Pressable>
+          </View> : null}
 
-        <Pressable onPress={handlePickPhoto} style={[styles.uploadBox, { backgroundColor: theme.surfaces.card, borderColor: photo ? theme.colors.teal700 : theme.colors.cardBorder }]}>
+        <Pressable onPress={handlePickPhoto} style={[styles.uploadBox, { backgroundColor: theme.surfaces.card, borderColor: previewUri ? theme.colors.teal700 : theme.colors.cardBorder }]}>
           <Text style={[styles.uploadPlus, { color: theme.colors.teal700 }]}>+</Text>
-          <Text style={[styles.uploadHint, { color: theme.text.mutedIcon }]}>{photo ? 'Photo selected — tap to change' : 'Add a photo'}</Text>
+          <Text style={[styles.uploadHint, { color: theme.text.mutedIcon }]}>{previewUri ? 'Photo selected — tap to change' : 'Add a photo'}</Text>
         </Pressable>
 
-        <PrimaryButton label={posting ? 'Posting…' : 'Post'} onPress={handlePost} disabled={posting} style={styles.postButton} />
+        <PrimaryButton
+          label={posting ? (isEditing ? 'Saving…' : 'Posting…') : (isEditing ? 'Save' : 'Post')}
+          onPress={handlePost}
+          disabled={posting}
+          style={styles.postButton}
+        />
       </ScrollView>
     </Screen>;
 }
@@ -122,6 +163,21 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: scaleModerate(16),
     marginTop: scaleModerate(16)
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: scaleModerate(26),
+    right: scaleModerate(10),
+    width: scaleModerate(26),
+    height: scaleModerate(26),
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  removePhotoText: {
+    color: '#FFFFFF',
+    fontSize: scaleFont(13),
+    fontWeight: '800'
   },
   uploadBox: {
     height: scaleModerate(84),

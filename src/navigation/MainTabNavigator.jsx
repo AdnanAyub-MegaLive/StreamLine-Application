@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createBottomTabNavigator, TransitionPresets } from '@react-navigation/bottom-tabs';
 import { CustomTabBar } from './CustomTabBar';
 import { HomeScreen } from '../screens/Home';
 import { DiscoverScreen } from '../screens/Discover';
@@ -12,7 +12,9 @@ function renderTabBar(props) {
 }
 export function MainTabNavigator() {
   return <Tab.Navigator screenOptions={{
-    headerShown: false
+    headerShown: false,
+    animationEnabled: true,
+    ...TransitionPresets.ShiftTransition
   }} tabBar={renderTabBar}>
       <Tab.Screen name="HomeTab" component={HomeScreen} options={{
       title: 'Home'

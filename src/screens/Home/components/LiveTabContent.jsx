@@ -1,5 +1,5 @@
 import React from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../../theme';
 import { routes } from '../../../navigation/routes';
@@ -10,21 +10,24 @@ import { scaleFont, scaleModerate } from '../../../utils';
 // until that listing endpoint exists, instead of showing fake rooms.
 const liveRooms = [];
 
+// Real (demo/placeholder) human-face photos instead of a flat accent
+// color — pravatar.cc serves a fixed, free-to-use pool of ~70 portrait
+// photos; keyed by index so the same card always gets the same face.
+function personPhotoForIndex(index) {
+  return `https://i.pravatar.cc/400?img=${(index % 70) + 1}`;
+}
+
 // DEMO DATA — for a stakeholder walkthrough only, so the Live tab doesn't
 // render empty while there's no real "browse all live rooms" endpoint yet.
 // Remove this block (and the fallback below) once that endpoint ships and
 // liveRooms above is wired up to it.
-const DEMO_ACCENT_KEYS = ['teal700', 'giftAccent', 'vipPurple', 'facebookBlue'];
-function demoAccentForIndex(index) {
-  return theme => theme.colors[DEMO_ACCENT_KEYS[index % DEMO_ACCENT_KEYS.length]];
-}
 const DEMO_LIVE_ROOMS = [
-  { id: 'demo-live-1', hostName: 'Ayesha Khan', hostTag: '@ayeshalive', viewers: '2.4k', accent: demoAccentForIndex(0) },
-  { id: 'demo-live-2', hostName: 'Bilal Ahmed', hostTag: '@bilalvibes', viewers: '1.1k', accent: demoAccentForIndex(1) },
-  { id: 'demo-live-3', hostName: 'Sara Malik', hostTag: '@sara_talks', viewers: '834', accent: demoAccentForIndex(2) },
-  { id: 'demo-live-4', hostName: 'Usman Raza', hostTag: '@usmanmusic', viewers: '612', accent: demoAccentForIndex(3) },
-  { id: 'demo-live-5', hostName: 'Hina Farooq', hostTag: '@hinaspeaks', viewers: '389', accent: demoAccentForIndex(0) },
-  { id: 'demo-live-6', hostName: 'Danish Iqbal', hostTag: '@danishgaming', viewers: '201', accent: demoAccentForIndex(1) }
+  { id: 'demo-live-1', hostName: 'Ayesha Khan', hostTag: '@ayeshalive', viewers: '2.4k', photo: personPhotoForIndex(11) },
+  { id: 'demo-live-2', hostName: 'Bilal Ahmed', hostTag: '@bilalvibes', viewers: '1.1k', photo: personPhotoForIndex(12) },
+  { id: 'demo-live-3', hostName: 'Sara Malik', hostTag: '@sara_talks', viewers: '834', photo: personPhotoForIndex(13) },
+  { id: 'demo-live-4', hostName: 'Usman Raza', hostTag: '@usmanmusic', viewers: '612', photo: personPhotoForIndex(14) },
+  { id: 'demo-live-5', hostName: 'Hina Farooq', hostTag: '@hinaspeaks', viewers: '389', photo: personPhotoForIndex(15) },
+  { id: 'demo-live-6', hostName: 'Danish Iqbal', hostTag: '@danishgaming', viewers: '201', photo: personPhotoForIndex(16) }
 ];
 
 // Grouped by region instead of individual countries — each chip's flags
@@ -54,7 +57,6 @@ function LiveRoomCard({
 }) {
   const theme = useTheme();
   const navigation = useNavigation();
-  const accent = item.accent(theme);
   // DEMO_LIVE_ROOMS ids (see above) route to a static preview screen
   // instead of the real Room screen — a fake roomId there just got stuck
   // "Loading room..." with no seats, since nothing on the backend actually
@@ -76,9 +78,7 @@ function LiveRoomCard({
     backgroundColor: theme.surfaces.card,
     borderColor: theme.colors.cardBorder
   }]} onPress={handlePress}>
-      <View style={[styles.liveThumb, {
-      backgroundColor: accent
-    }]}>
+      <ImageBackground source={{ uri: item.photo }} style={styles.liveThumb}>
         <View style={styles.liveThumbTopRow}>
           <LiveBadge />
           <View style={[styles.liveViewersPill, {
@@ -104,7 +104,7 @@ function LiveRoomCard({
             {item.hostTag}
           </Text>
         </View>
-      </View>
+      </ImageBackground>
     </Pressable>;
 }
 

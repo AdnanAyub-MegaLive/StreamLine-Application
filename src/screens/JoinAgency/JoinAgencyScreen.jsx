@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, Vi
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { AgencyJoinError, fetchAgencies, fetchMyAgencyJoinRequest, requestJoinAgency } from '../../api';
 import { Screen, showAlert } from '../../components';
+import { routes } from '../../navigation/routes';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { scaleFont, scaleModerate } from '../../utils';
@@ -23,10 +24,8 @@ function AgencyRow({ agency, busy, onJoin, theme }) {
     </View>;
 }
 
-// See docs/join-agency-api-spec.md — GET /api/agencies and
-// POST /api/agencies/:agencyId/join don't exist on StreamLine-Portal yet,
-// so this screen's list/request states are fully wired but will show the
-// "couldn't load" error state until the backend ships them.
+// See docs/join-agency-api-spec.md for GET /api/agencies and
+// POST /api/agencies/:agencyId/join.
 export function JoinAgencyScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -106,9 +105,24 @@ export function JoinAgencyScreen() {
 
   if (pendingRequest) {
     const isApproved = pendingRequest.status === 'APPROVED';
+    // AgencyChoiceScreen (whichever screen sits right before this one) re-
+    // checks status on every focus and immediately replaces itself with
+    // this same screen if a pending/approved request still exists — so a
+    // plain goBack() here would land on AgencyChoiceScreen just long
+    // enough for it to bounce straight back to this exact view. Skip past
+    // it instead, straight to whatever's behind it.
+    const handleBack = () => {
+      const navState = navigation.getState();
+      const previousRoute = navState.routes[navState.index - 1];
+      if (previousRoute?.name === routes.agencyChoice) {
+        navigation.pop(2);
+      } else {
+        navigation.goBack();
+      }
+    };
     return <Screen>
         <View style={styles.headerRow}>
-          <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
+          <Pressable onPress={handleBack} hitSlop={10}>
             <Text style={[styles.backChevron, { color: theme.text.primary }]}>‹</Text>
           </Pressable>
           <Text style={[styles.title, { color: theme.text.primary }]}>Join Agency</Text>
