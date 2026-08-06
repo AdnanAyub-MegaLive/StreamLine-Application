@@ -26,5 +26,10 @@ export const routes = {
   friendRequests: 'FriendRequests',
   connections: 'Connections',
   store: 'Store',
-  createPost: 'CreatePost'
+  createPost: 'CreatePost',
+  rankings: 'Rankings',
+  vipMembership: 'VipMembership',
+  notifications: 'Notifications',
+  myLevel: 'MyLevel',
+  myWallet: 'MyWallet'
 };

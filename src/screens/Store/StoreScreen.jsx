@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme';
 import { AssetPreview, Screen, showAlert } from '../../components';
@@ -7,6 +7,8 @@ import { equipProp, fetchMyProps, fetchStoreCatalog, purchaseStoreAsset, unequip
 import { getSessionSocket } from '../../services/socket';
 import { useAppStore } from '../../store';
 import { scaleFont, scaleModerate } from '../../utils';
+
+const PAGE_WIDTH = Dimensions.get('window').width;
 
 const CATEGORIES = [
   { key: 'FRAMES', label: '🖼️ Frames' },
@@ -17,6 +19,8 @@ const CATEGORIES = [
   { key: 'CHAT_BOXES', label: '💬 Chat Boxes' },
   { key: 'ROOM_BACKGROUNDS', label: '🖼️ Room BGs' }
 ];
+
+const MY_PROPS_CATEGORIES = [{ key: 'ALL', label: '✨ All' }, ...CATEGORIES];
 
 function CategoryChip({ category, active, onPress }) {
   const theme = useTheme();
@@ -78,32 +82,49 @@ export function StoreScreen() {
   const sessionToken = useAppStore(state => state.session?.token);
   const [tab, setTab] = React.useState('store');
   const [category, setCategory] = React.useState('FRAMES');
-  const [catalog, setCatalog] = React.useState(null);
+  const [myPropsCategory, setMyPropsCategory] = React.useState('ALL');
+  const [balance, setBalance] = React.useState(null);
+  // One asset list per category, all fetched together — lets the Store
+  // tab page (swipe) between categories the same way Home's Live/Party
+  // tabs do, instead of each category only existing behind its own
+  // separate fetch.
+  const [catalogsByCategory, setCatalogsByCategory] = React.useState({});
   const [myProps, setMyProps] = React.useState({ props: [], equipped: {} });
   const [loading, setLoading] = React.useState(true);
   const [busyId, setBusyId] = React.useState(null);
+  const storeScrollRef = React.useRef(null);
+  const myPropsScrollRef = React.useRef(null);
+  const storeChipsRef = React.useRef(null);
+  const myPropsChipsRef = React.useRef(null);
 
-  // Read via a ref (not a dependency) so switching categories doesn't
-  // change this function's identity — it used to include `category`
-  // directly, which made useFocusEffect below re-run (and flip
-  // `loading` back to true) on every category tap, unmounting and
-  // remounting both FlatLists and resetting their scroll position back
-  // to the start. Category switches are handled by their own lightweight
-  // effect further down instead, which only updates `catalog` in place.
-  const categoryRef = React.useRef(category);
   React.useEffect(() => {
-    categoryRef.current = category;
+    const index = CATEGORIES.findIndex(item => item.key === category);
+    if (index >= 0) {
+      storeChipsRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    }
   }, [category]);
+
+  React.useEffect(() => {
+    const index = MY_PROPS_CATEGORIES.findIndex(item => item.key === myPropsCategory);
+    if (index >= 0) {
+      myPropsChipsRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    }
+  }, [myPropsCategory]);
 
   const reload = React.useCallback(async () => {
     if (!sessionToken) {
       return;
     }
-    const [storeData, propsData] = await Promise.all([
-      fetchStoreCatalog(sessionToken, categoryRef.current),
+    const [categoryResults, propsData] = await Promise.all([
+      Promise.all(CATEGORIES.map(item => fetchStoreCatalog(sessionToken, item.key))),
       fetchMyProps(sessionToken)
     ]);
-    setCatalog(storeData);
+    const nextCatalogs = {};
+    CATEGORIES.forEach((item, index) => {
+      nextCatalogs[item.key] = categoryResults[index]?.assets ?? [];
+    });
+    setCatalogsByCategory(nextCatalogs);
+    setBalance(categoryResults[0]?.balance ?? null);
     setMyProps(propsData);
     setLoading(false);
   }, [sessionToken]);
@@ -128,31 +149,6 @@ export function StoreScreen() {
       };
     }, [reload])
   );
-
-  // Category switch — refetches just the catalog for the new category
-  // without touching `loading`, so the category chips and asset grid
-  // stay mounted (and keep their scroll position) instead of being torn
-  // down by the full-screen spinner. Skips its very first run since the
-  // useFocusEffect above already covers the initial load.
-  const isFirstCategoryRunRef = React.useRef(true);
-  React.useEffect(() => {
-    if (isFirstCategoryRunRef.current) {
-      isFirstCategoryRunRef.current = false;
-      return undefined;
-    }
-    if (!sessionToken) {
-      return undefined;
-    }
-    let cancelled = false;
-    fetchStoreCatalog(sessionToken, category).then(storeData => {
-      if (!cancelled) {
-        setCatalog(storeData);
-      }
-    }).catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionToken, category]);
 
   const handleBuy = async asset => {
     setBusyId(asset.id);
@@ -190,6 +186,28 @@ export function StoreScreen() {
     }
   };
 
+  const handleSelectCategory = key => {
+    const index = CATEGORIES.findIndex(item => item.key === key);
+    setCategory(key);
+    storeScrollRef.current?.scrollTo({ x: index * PAGE_WIDTH, animated: true });
+  };
+
+  const handleStoreScrollEnd = event => {
+    const index = Math.round(event.nativeEvent.contentOffset.x / PAGE_WIDTH);
+    setCategory(CATEGORIES[index]?.key ?? CATEGORIES[0].key);
+  };
+
+  const handleSelectMyPropsCategory = key => {
+    const index = MY_PROPS_CATEGORIES.findIndex(item => item.key === key);
+    setMyPropsCategory(key);
+    myPropsScrollRef.current?.scrollTo({ x: index * PAGE_WIDTH, animated: true });
+  };
+
+  const handleMyPropsScrollEnd = event => {
+    const index = Math.round(event.nativeEvent.contentOffset.x / PAGE_WIDTH);
+    setMyPropsCategory(MY_PROPS_CATEGORIES[index]?.key ?? MY_PROPS_CATEGORIES[0].key);
+  };
+
   return <Screen>
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
@@ -199,50 +217,95 @@ export function StoreScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      {catalog ? <View style={[styles.balanceCard, { backgroundColor: theme.surfaces.card, borderColor: theme.colors.cardBorder }]}>
+      {balance !== null ? <View style={[styles.balanceCard, { backgroundColor: theme.surfaces.card, borderColor: theme.colors.cardBorder }]}>
           <Text style={[styles.balanceLabel, { color: theme.text.secondary }]}>💰 Balance</Text>
-          <Text style={[styles.balanceValue, { color: theme.text.primary }]}>{Number(catalog.balance).toLocaleString()} Coins</Text>
+          <Text style={[styles.balanceValue, { color: theme.text.primary }]}>{Number(balance).toLocaleString()} Coins</Text>
         </View> : null}
 
       <View style={styles.tabRow}>
-        <Pressable onPress={() => setTab('store')} style={[styles.tab, tab === 'store' && { borderBottomColor: theme.colors.teal700, borderBottomWidth: 2 }]}>
+        <Pressable onPress={() => setTab('store')} style={[styles.tab, tab === 'store' && styles.tabActive, tab === 'store' && { borderBottomColor: theme.colors.teal700 }]}>
           <Text style={[styles.tabText, { color: tab === 'store' ? theme.colors.teal700 : theme.text.secondary }]}>Store</Text>
         </Pressable>
-        <Pressable onPress={() => setTab('mine')} style={[styles.tab, tab === 'mine' && { borderBottomColor: theme.colors.teal700, borderBottomWidth: 2 }]}>
+        <Pressable onPress={() => setTab('mine')} style={[styles.tab, tab === 'mine' && styles.tabActive, tab === 'mine' && { borderBottomColor: theme.colors.teal700 }]}>
           <Text style={[styles.tabText, { color: tab === 'mine' ? theme.colors.teal700 : theme.text.secondary }]}>My Props</Text>
         </Pressable>
       </View>
 
-      {loading ? <ActivityIndicator style={styles.loader} color={theme.colors.teal700} /> : tab === 'store' ? <>
+      {loading ? <ActivityIndicator style={styles.loader} color={theme.colors.teal700} /> : tab === 'store' ? <React.Fragment key="store">
           <FlatList
+            ref={storeChipsRef}
             horizontal
             style={styles.categoryList}
             showsHorizontalScrollIndicator={false}
             data={CATEGORIES}
             keyExtractor={item => item.key}
             contentContainerStyle={styles.categoryRow}
-            renderItem={({ item }) => <CategoryChip category={item} active={item.key === category} onPress={() => setCategory(item.key)} />}
+            renderItem={({ item }) => <CategoryChip category={item} active={item.key === category} onPress={() => handleSelectCategory(item.key)} />}
+            onScrollToIndexFailed={info => {
+              storeChipsRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
+            }}
           />
+          {/* Swipeable like Home's Live/Party tabs — one full-width page
+          per category, kept in sync both ways with the chips row above
+          (tapping a chip scrolls here, swiping updates which chip reads
+          active). All categories are preloaded (see reload above) so
+          swiping never hits a loading gap mid-gesture. */}
+          <ScrollView
+            ref={storeScrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={handleStoreScrollEnd}
+          >
+            {CATEGORIES.map(item => <View key={item.key} style={styles.page}>
+                <FlatList
+                  // Already-owned items live in the "My Props" tab (with
+                  // their own Equip/Remove controls) — showing them here
+                  // too, still wearing a "Buy" button's real estate as an
+                  // "Equipped"/"Equip" button, just duplicated the same
+                  // item in both places.
+                  data={(catalogsByCategory[item.key] ?? []).filter(asset => !asset.owned)}
+                  keyExtractor={asset => asset.id}
+                  numColumns={2}
+                  columnWrapperStyle={styles.assetRow}
+                  contentContainerStyle={styles.assetList}
+                  renderItem={({ item: asset }) => <StoreAssetCard asset={asset} busy={busyId === asset.id} onBuy={() => handleBuy(asset)} onEquip={() => handleEquip(asset)} />}
+                  ListEmptyComponent={<Text style={[styles.emptyText, { color: theme.text.secondary }]}>No items in this category yet.</Text>}
+                />
+              </View>)}
+          </ScrollView>
+        </React.Fragment> : <React.Fragment key="mine">
           <FlatList
-            // Already-owned items live in the "My Props" tab (with their
-            // own Equip/Remove controls) — showing them here too, still
-            // wearing a "Buy" button's real estate as an "Equipped"/"Equip"
-            // button, just duplicated the same item in both places.
-            data={(catalog?.assets ?? []).filter(asset => !asset.owned)}
-            keyExtractor={item => item.id}
-            numColumns={2}
-            columnWrapperStyle={styles.assetRow}
-            contentContainerStyle={styles.assetList}
-            renderItem={({ item }) => <StoreAssetCard asset={item} busy={busyId === item.id} onBuy={() => handleBuy(item)} onEquip={() => handleEquip(item)} />}
-            ListEmptyComponent={<Text style={[styles.emptyText, { color: theme.text.secondary }]}>No items in this category yet.</Text>}
+            ref={myPropsChipsRef}
+            horizontal
+            style={styles.categoryList}
+            showsHorizontalScrollIndicator={false}
+            data={MY_PROPS_CATEGORIES}
+            keyExtractor={item => item.key}
+            contentContainerStyle={styles.categoryRow}
+            renderItem={({ item }) => <CategoryChip category={item} active={item.key === myPropsCategory} onPress={() => handleSelectMyPropsCategory(item.key)} />}
+            onScrollToIndexFailed={info => {
+              myPropsChipsRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
+            }}
           />
-        </> : <FlatList
-          data={myProps.props}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.propList}
-          renderItem={({ item }) => <MyPropRow prop={item} busy={busyId === item.id} onEquip={() => handleEquip(item)} onRemove={() => handleRemove(item)} />}
-          ListEmptyComponent={<Text style={[styles.emptyText, { color: theme.text.secondary }]}>You don't own any props yet.</Text>}
-        />}
+          <ScrollView
+            ref={myPropsScrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={handleMyPropsScrollEnd}
+          >
+            {MY_PROPS_CATEGORIES.map(item => <View key={item.key} style={styles.page}>
+                <FlatList
+                  data={item.key === 'ALL' ? myProps.props : myProps.props.filter(prop => prop.category === item.key)}
+                  keyExtractor={prop => prop.id}
+                  contentContainerStyle={styles.propList}
+                  renderItem={({ item: prop }) => <MyPropRow prop={prop} busy={busyId === prop.id} onEquip={() => handleEquip(prop)} onRemove={() => handleRemove(prop)} />}
+                  ListEmptyComponent={<Text style={[styles.emptyText, { color: theme.text.secondary }]}>{item.key === 'ALL' ? "You don't own any props yet." : 'No owned props in this category.'}</Text>}
+                />
+              </View>)}
+          </ScrollView>
+        </React.Fragment>}
     </Screen>;
 }
 
@@ -293,12 +356,18 @@ const styles = StyleSheet.create({
   tab: {
     paddingBottom: scaleModerate(10)
   },
+  tabActive: {
+    borderBottomWidth: 2
+  },
   tabText: {
     fontSize: scaleFont(14),
     fontWeight: '700'
   },
   loader: {
     marginTop: scaleModerate(24)
+  },
+  page: {
+    width: PAGE_WIDTH
   },
   categoryList: {
     flexGrow: 0,

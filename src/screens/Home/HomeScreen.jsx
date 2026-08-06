@@ -19,7 +19,9 @@ function HeaderBar() {
       <Text style={[styles.headerTitle, {
       color: theme.colors.teal700
     }]}>Streamline</Text>
-      <TrophyIcon size={22} color={theme.text.secondary} />
+      <Pressable onPress={() => navigation.navigate(routes.rankings)} hitSlop={10}>
+        <TrophyIcon size={22} color={theme.text.secondary} />
+      </Pressable>
     </View>;
 }
 

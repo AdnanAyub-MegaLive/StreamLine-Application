@@ -29,6 +29,11 @@ import { FriendRequestsScreen } from '../screens/FriendRequests';
 import { ConnectionsScreen } from '../screens/Connections';
 import { StoreScreen } from '../screens/Store';
 import { CreatePostScreen } from '../screens/CreatePost';
+import { RankingsScreen } from '../screens/Rankings';
+import { VipMembershipScreen } from '../screens/VipMembership';
+import { NotificationsScreen } from '../screens/Notifications';
+import { MyLevelScreen } from '../screens/MyLevel';
+import { MyWalletScreen } from '../screens/MyWallet';
 const Stack = createNativeStackNavigator();
 export function AppNavigator() {
   return <Stack.Navigator screenOptions={{
@@ -65,6 +70,11 @@ export function AppNavigator() {
       <Stack.Screen name="Connections" component={ConnectionsScreen} />
       <Stack.Screen name="Store" component={StoreScreen} />
       <Stack.Screen name="CreatePost" component={CreatePostScreen} />
+      <Stack.Screen name="Rankings" component={RankingsScreen} />
+      <Stack.Screen name="VipMembership" component={VipMembershipScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="MyLevel" component={MyLevelScreen} />
+      <Stack.Screen name="MyWallet" component={MyWalletScreen} />
     </Stack.Navigator>;
 }
 export default AppNavigator;

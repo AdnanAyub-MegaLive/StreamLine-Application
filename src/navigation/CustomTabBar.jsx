@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import { DiscoverIcon, FamilyIcon, HomeIcon, MessageIcon, PlusIcon, UserIcon } from '../assets';
 import { fetchAudioRoom } from '../api';
-import { RoomTitleModal, SEAT_LAYOUT_OPTIONS, SeatLayoutModal, StreamOptionModal } from '../components';
+import { CreateContentModal, RoomTitleModal, SEAT_LAYOUT_OPTIONS, SeatLayoutModal, StreamOptionModal } from '../components';
 import { useUnreadBadgeCount } from '../hooks';
 import { useAppStore } from '../store';
 import { useTheme } from '../theme';
@@ -138,6 +138,7 @@ export function CustomTabBar({
   const sessionToken = session?.token;
   const unreadBadgeCount = useUnreadBadgeCount();
   const [streamOptionsVisible, setStreamOptionsVisible] = React.useState(false);
+  const [createContentVisible, setCreateContentVisible] = React.useState(false);
   const [roomTitleVisible, setRoomTitleVisible] = React.useState(false);
   const [seatLayoutVisible, setSeatLayoutVisible] = React.useState(false);
   const [pendingRoomTitle, setPendingRoomTitle] = React.useState(null);
@@ -190,12 +191,24 @@ export function CustomTabBar({
   const closeStreamOptions = () => setStreamOptionsVisible(false);
   const closeRoomTitle = () => setRoomTitleVisible(false);
   const closeSeatLayout = () => setSeatLayoutVisible(false);
+  const closeCreateContent = () => setCreateContentVisible(false);
+  const handleSelectCreatePost = () => {
+    closeCreateContent();
+    navigation.navigate(routes.createPost);
+  };
+  const handleSelectCreateReel = () => {
+    closeCreateContent();
+    navigation.navigate(routes.comingSoon, {
+      title: 'Create Reel',
+      message: "Reel creation is still in development. We're working on it — check back soon!"
+    });
+  };
   const handleCenterPress = async () => {
     if (isCheckingRoom) {
       return;
     }
     if (state.routes[state.index]?.name === 'DiscoverTab') {
-      navigation.navigate(routes.createPost);
+      setCreateContentVisible(true);
       return;
     }
     if (!sessionToken) {
@@ -247,6 +260,12 @@ export function CustomTabBar({
         onClose={closeStreamOptions}
         onSelectAudio={handleSelectAudio}
         onSelectVideo={handleSelectVideo}
+      />
+      <CreateContentModal
+        visible={createContentVisible}
+        onClose={closeCreateContent}
+        onSelectPost={handleSelectCreatePost}
+        onSelectReel={handleSelectCreateReel}
       />
       <RoomTitleModal
         visible={roomTitleVisible}

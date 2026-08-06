@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Animated, Dimensions, Easing, FlatList, Image, ImageBackground, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Dimensions, Easing, FlatList, Image, ImageBackground, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
@@ -22,8 +22,6 @@ const DISCOVER_TABS = [
   { id: 'reels', label: 'Reels' }
 ];
 
-const GRADIENT_RING = ['#FF4DA3', '#7000FF', '#00F2FF'];
-
 function personPhotoForIndex(index) {
   return `https://i.pravatar.cc/300?img=${(index % 70) + 1}`;
 }
@@ -35,14 +33,16 @@ const DUMMY_STORIES = [
 ];
 
 // Same reels-thumbnail-grid placeholder idea used for the posts feed —
-// no Reels model/endpoint exists yet either.
+// no Reels model/endpoint exists yet either. Demo-only, so the "reel" is
+// just its thumbnail photo blown up full-screen — no real video file
+// (avoids depending on large remote video downloads just to demo the UI).
 const DUMMY_REELS = [
-  { id: 'reel-1', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel1/400/700', views: '12.4K' },
-  { id: 'reel-2', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel2/400/700', views: '3.1K' },
-  { id: 'reel-3', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel3/400/700', views: '842' },
-  { id: 'reel-4', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel4/400/700', views: '9.7K' },
-  { id: 'reel-5', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel5/400/700', views: '221' },
-  { id: 'reel-6', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel6/400/700', views: '5.6K' }
+  { id: 'reel-1', authorName: 'Obaid Zafar', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel1/400/700', views: '12.4K' },
+  { id: 'reel-2', authorName: 'Midnight Grind', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel2/400/700', views: '3.1K' },
+  { id: 'reel-3', authorName: 'Vaporwave Vibes', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel3/400/700', views: '842' },
+  { id: 'reel-4', authorName: 'Obaid Zafar', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel4/400/700', views: '9.7K' },
+  { id: 'reel-5', authorName: 'Midnight Grind', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel5/400/700', views: '221' },
+  { id: 'reel-6', authorName: 'Vaporwave Vibes', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel6/400/700', views: '5.6K' }
 ];
 
 // Shown whenever the real feed comes back empty — just for demo purposes
@@ -130,23 +130,86 @@ function HeaderGlassButton({ theme, onPress, children, style }) {
     </Pressable>;
 }
 
-function HeaderBar({ theme, onSearch, onOpenNotifications, hasUnreadNotifications }) {
+function HeaderBar({ theme, onOpenNotifications, hasUnreadNotifications, searchActive, searchQuery, onChangeSearchQuery, onOpenSearch, onCloseSearch }) {
+  // Both rows stay mounted the whole time and cross-fade/slide against
+  // each other — swapping one for the other via a plain conditional
+  // render (what this used to do) snaps instantly with no way to
+  // animate between the two layouts.
+  const searchAnim = React.useRef(new Animated.Value(searchActive ? 1 : 0)).current;
+  const searchInputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    Animated.timing(searchAnim, {
+      toValue: searchActive ? 1 : 0,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true
+    }).start();
+    if (searchActive) {
+      // The bar is still mid-slide at this point — a hair of delay lets
+      // the animation actually be visible before the keyboard shoves the
+      // layout around, instead of both happening in the same frame.
+      const timer = setTimeout(() => searchInputRef.current?.focus(), 80);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [searchActive, searchAnim]);
+
+  const titleOpacity = searchAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const titleTranslateX = searchAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -24] });
+  const searchOpacity = searchAnim;
+  const searchTranslateX = searchAnim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] });
+
   return <View style={styles.headerBar}>
-      <Text style={[styles.screenTitle, { color: theme.text.primary }]}>Discover</Text>
-      <View style={styles.headerActions}>
-        <HeaderGlassButton theme={theme} onPress={onSearch}>
-          <SearchIcon size={19} color={theme.text.primary} />
-        </HeaderGlassButton>
-        <HeaderGlassButton theme={theme} onPress={onOpenNotifications}>
-          <BellIcon size={19} color={theme.text.primary} />
-          {hasUnreadNotifications ? <View style={[styles.headerDot, { backgroundColor: theme.colors.liveBadge, borderColor: theme.surfaces.card }]} /> : null}
-        </HeaderGlassButton>
-      </View>
+      <Animated.View
+        pointerEvents={searchActive ? 'none' : 'auto'}
+        style={[styles.headerBarRow, { opacity: titleOpacity, transform: [{ translateX: titleTranslateX }] }]}
+      >
+        <Text style={[styles.screenTitle, { color: theme.text.primary }]}>Discover</Text>
+        <View style={styles.headerActions}>
+          <HeaderGlassButton theme={theme} onPress={onOpenSearch}>
+            <SearchIcon size={19} color={theme.text.primary} />
+          </HeaderGlassButton>
+          <HeaderGlassButton theme={theme} onPress={onOpenNotifications}>
+            <BellIcon size={19} color={theme.text.primary} />
+            {hasUnreadNotifications ? <View style={[styles.headerDot, { backgroundColor: theme.colors.liveBadge, borderColor: theme.surfaces.card }]} /> : null}
+          </HeaderGlassButton>
+        </View>
+      </Animated.View>
+
+      <Animated.View
+        pointerEvents={searchActive ? 'auto' : 'none'}
+        style={[styles.headerBarRow, styles.headerBarRowAbsolute, { opacity: searchOpacity, transform: [{ translateX: searchTranslateX }] }]}
+      >
+        <View style={styles.searchBarWrap}>
+          <LinearGradient
+            colors={[hexToRgba(theme.surfaces.card, 0.7), hexToRgba(theme.surfaces.card, 0.45)]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.searchBar}
+          >
+            <SearchIcon size={16} color={theme.text.secondary} />
+            <TextInput
+              ref={searchInputRef}
+              value={searchQuery}
+              onChangeText={onChangeSearchQuery}
+              placeholder="Search by name…"
+              placeholderTextColor={theme.text.secondary}
+              style={[styles.searchInput, { color: theme.text.primary }]}
+              returnKeyType="search"
+            />
+          </LinearGradient>
+        </View>
+        <Pressable onPress={onCloseSearch} hitSlop={10}>
+          <Text style={[styles.searchCancel, { color: theme.colors.teal700 }]}>Cancel</Text>
+        </Pressable>
+      </Animated.View>
     </View>;
 }
 
 function GradientRing({ size, children }) {
-  return <LinearGradient colors={GRADIENT_RING} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.gradientRing, { width: size, height: size, borderRadius: size / 2 }]}>
+  const theme = useTheme();
+  return <LinearGradient colors={[theme.colors.teal200, theme.colors.tertiary, theme.colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.gradientRing, { width: size, height: size, borderRadius: size / 2 }]}>
       {children}
     </LinearGradient>;
 }
@@ -387,13 +450,111 @@ function TabBar({ activeTab, onSelectTab, theme }) {
     </View>;
 }
 
-function ReelCard({ reel, theme }) {
-  return <View style={styles.reelCard}>
-      <Image source={{ uri: reel.thumbnailUrl }} style={styles.reelThumbnail} resizeMode="cover" />
-      <View style={styles.reelViewsBadge}>
-        <Text style={styles.reelViewsText}>▶ {reel.views}</Text>
+// Premium border/badge treatment — same teal700→teal700→vipGoldText
+// (pink dominant, gold accent) gradient as CustomTabBar's center "+"
+// button, so Reels reads as belonging to the same "premium" visual
+// language as the navbar instead of a plain thumbnail grid.
+function ReelCard({ reel, theme, onPress }) {
+  return <LinearGradient
+      colors={[theme.colors.teal700, theme.colors.teal700, theme.colors.vipGoldText]}
+      locations={[0, 0.7, 1]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.reelCardBorder, { shadowColor: theme.colors.teal700 }]}
+    >
+      <Pressable onPress={onPress} style={styles.reelCard}>
+        <Image source={{ uri: reel.thumbnailUrl }} style={styles.reelThumbnail} resizeMode="cover" />
+        <LinearGradient
+          colors={['transparent', hexToRgba('#000000', 0.6)]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.reelShade}
+          pointerEvents="none"
+        />
+        <View style={styles.reelPlayGlyph}>
+          <PlayIcon size={16} color="#FFFFFF" />
+        </View>
+        <LinearGradient
+          colors={[theme.colors.teal700, theme.colors.vipGoldText]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.reelViewsBadge}
+        >
+          <Text style={styles.reelViewsText}>▶ {reel.views}</Text>
+        </LinearGradient>
+      </Pressable>
+    </LinearGradient>;
+}
+
+function ReelActionButton({ Icon, color, filled, onPress }) {
+  return <Pressable onPress={onPress} style={[styles.reelPageActionButton, { borderColor: color, shadowColor: color }]}>
+      <Icon size={20} color={color} filled={filled} />
+    </Pressable>;
+}
+
+// One full-screen photo per page, exactly the source data's height so a
+// vertical FlatList with pagingEnabled swipes cleanly between them — a
+// demo stand-in for real reel playback (no Reels video model/endpoint
+// exists yet), so this is just the thumbnail blown up full-screen rather
+// than an actual video.
+function ReelPage({ reel, insets, pageHeight }) {
+  const [liked, setLiked] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+  const theme = useTheme();
+
+  const actions = [
+    { key: 'like', Icon: HeartIcon, color: theme.colors.teal200, filled: liked, onPress: () => setLiked(value => !value) },
+    { key: 'comment', Icon: MessageIcon, color: theme.colors.secondary },
+    { key: 'share', Icon: RepostIcon, color: theme.colors.tertiary },
+    { key: 'save', Icon: BookmarkIcon, color: theme.colors.teal200, filled: saved, onPress: () => setSaved(value => !value) }
+  ];
+
+  return <View style={[styles.reelPage, { height: pageHeight }]}>
+      <Image source={{ uri: reel.thumbnailUrl }} style={styles.reelPreviewPlayer} resizeMode="cover" />
+      <LinearGradient colors={['rgba(0,0,0,0.45)', 'transparent']} style={[styles.reelPageTopShade, { height: insets.top + scaleModerate(60) }]} pointerEvents="none" />
+      <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']} style={styles.reelPageBottomShade} pointerEvents="none" />
+
+      <View style={[styles.reelPageInfo, { paddingBottom: insets.bottom + scaleModerate(20) }]}>
+        <Text style={styles.reelPageViews}>▶ {reel.views} views</Text>
+      </View>
+
+      <View style={[styles.reelPageActions, { bottom: insets.bottom + scaleModerate(24) }]}>
+        {actions.map(action => <ReelActionButton key={action.key} Icon={action.Icon} color={action.color} filled={action.filled} onPress={action.onPress} />)}
       </View>
     </View>;
+}
+
+function ReelPreviewModal({ reels, initialIndex, onClose }) {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  // Measured off the actual backdrop instead of Dimensions.get('window'/
+  // 'screen') — those two disagree by exactly the system bar height on
+  // Android, and picking the wrong one either leaves a gap at the bottom
+  // of each page or overshoots it (FlatList's initialScrollIndex lands
+  // past the real content, rendering nothing). The real on-screen height
+  // is neither of those constants — it's whatever this View actually
+  // measures at, so use that.
+  const [pageHeight, setPageHeight] = React.useState(0);
+  const listRef = React.useRef(null);
+
+  return <Modal visible={initialIndex !== null} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.reelPreviewBackdrop} onLayout={event => setPageHeight(event.nativeEvent.layout.height)}>
+        <Pressable onPress={onClose} style={[styles.reelPreviewClose, { top: insets.top + scaleModerate(10), borderColor: theme.colors.teal200, shadowColor: theme.colors.teal200 }]} hitSlop={12}>
+          <Text style={styles.reelPreviewCloseText}>✕</Text>
+        </Pressable>
+
+        {initialIndex !== null && pageHeight > 0 ? <FlatList
+            ref={listRef}
+            data={reels}
+            keyExtractor={item => item.id}
+            initialScrollIndex={initialIndex}
+            getItemLayout={(_, index) => ({ length: pageHeight, offset: pageHeight * index, index })}
+            pagingEnabled
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => <ReelPage reel={item} insets={insets} pageHeight={pageHeight} />}
+          /> : null}
+      </View>
+    </Modal>;
 }
 
 // Swipeable like the "Live / Party / Games" tabs elsewhere in the app —
@@ -416,6 +577,9 @@ export function DiscoverScreen() {
   const [loadingPosts, setLoadingPosts] = React.useState(true);
   const [postsLoadError, setPostsLoadError] = React.useState(false);
   const [refreshingPosts, setRefreshingPosts] = React.useState(false);
+  const [previewIndex, setPreviewIndex] = React.useState(null);
+  const [searchActive, setSearchActive] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
 
   // "Go Live" on the stories row — same create-room flow the tab bar's "+"
   // uses on every tab except Discover (see CustomTabBar's handleCenterPress).
@@ -428,6 +592,11 @@ export function DiscoverScreen() {
 
   const loadPosts = React.useCallback(() => {
     if (!sessionToken) {
+      // No session yet (e.g. still hydrating) — fall back to the sample
+      // feed immediately instead of leaving the spinner stuck forever,
+      // same as the fetch-failure path below.
+      setPostsLoadError(true);
+      setLoadingPosts(false);
       return;
     }
     setPostsLoadError(false);
@@ -486,14 +655,24 @@ export function DiscoverScreen() {
   };
 
   const handleOpenSearch = () => {
-    navigation.navigate(routes.userSearch);
+    setSearchActive(true);
   };
 
+  const handleCloseSearch = () => {
+    setSearchActive(false);
+    setSearchQuery('');
+  };
+
+  const searchQueryLower = searchQuery.trim().toLowerCase();
+  const visiblePosts = searchQueryLower
+    ? (posts.length ? posts : DUMMY_POSTS).filter(post => post.author?.fullName?.toLowerCase().includes(searchQueryLower))
+    : (posts.length ? posts : DUMMY_POSTS);
+  const visibleReels = searchQueryLower
+    ? DUMMY_REELS.filter(reel => reel.authorName?.toLowerCase().includes(searchQueryLower))
+    : DUMMY_REELS;
+
   const handleOpenNotifications = () => {
-    navigation.navigate(routes.comingSoon, {
-      title: 'Notifications',
-      message: "Discover notifications are still in development. We're working on it — check back soon!"
-    });
+    navigation.navigate(routes.notifications);
   };
 
   const handleGoLive = async () => {
@@ -561,7 +740,16 @@ export function DiscoverScreen() {
       <SeatLayoutModal visible={seatLayoutVisible} onClose={() => setSeatLayoutVisible(false)} onConfirm={handleConfirmSeatLayout} />
 
       <ImageBackground source={discoverBackgroundImage} style={[styles.background, { paddingTop: insets.top }]} resizeMode="cover">
-        <HeaderBar theme={theme} onSearch={handleOpenSearch} onOpenNotifications={handleOpenNotifications} hasUnreadNotifications />
+        <HeaderBar
+          theme={theme}
+          onOpenSearch={handleOpenSearch}
+          onCloseSearch={handleCloseSearch}
+          searchActive={searchActive}
+          searchQuery={searchQuery}
+          onChangeSearchQuery={setSearchQuery}
+          onOpenNotifications={handleOpenNotifications}
+          hasUnreadNotifications
+        />
         <TabBar activeTab={activeTab} onSelectTab={handleSelectTab} theme={theme} />
         <ScrollView
           ref={scrollRef}
@@ -573,10 +761,8 @@ export function DiscoverScreen() {
           <View style={styles.page}>
             {loadingPosts ? <View style={styles.centerWrap}>
                 <ActivityIndicator color={theme.colors.teal700} />
-              </View> : postsLoadError ? <View style={styles.centerWrap}>
-                <Text style={[styles.emptyText, { color: theme.text.secondary }]}>Couldn't load Discover right now. Pull down to try again.</Text>
               </View> : <FlatList
-                data={posts.length ? posts : DUMMY_POSTS}
+                data={visiblePosts}
                 keyExtractor={item => item.id}
                 contentContainerStyle={styles.list}
                 showsVerticalScrollIndicator={false}
@@ -590,22 +776,27 @@ export function DiscoverScreen() {
                   onEdit={handleEditPost}
                   onDelete={handleDeletePost}
                 />}
-                ListHeaderComponent={<StoriesRow theme={theme} onGoLive={handleGoLive} />}
+                ListHeaderComponent={<>
+                  <StoriesRow theme={theme} onGoLive={handleGoLive} />
+                  {postsLoadError ? <Text style={[styles.connectionNotice, { color: theme.text.secondary }]}>Couldn't connect to the server — showing sample posts.</Text> : null}
+                </>}
               />}
           </View>
           <View style={styles.page}>
             <FlatList
-              data={DUMMY_REELS}
+              data={visibleReels}
               keyExtractor={item => item.id}
               numColumns={2}
               contentContainerStyle={styles.reelsList}
               columnWrapperStyle={styles.reelsRow}
               showsVerticalScrollIndicator={false}
-              renderItem={({ item }) => <ReelCard reel={item} theme={theme} />}
+              renderItem={({ item, index }) => <ReelCard reel={item} theme={theme} onPress={() => setPreviewIndex(index)} />}
             />
           </View>
         </ScrollView>
       </ImageBackground>
+
+      <ReelPreviewModal reels={visibleReels} initialIndex={previewIndex} onClose={() => setPreviewIndex(null)} />
     </Screen>;
 }
 
@@ -628,12 +819,22 @@ const styles = StyleSheet.create({
     gap: scaleModerate(14)
   },
   headerBar: {
+    height: scaleModerate(54),
+    justifyContent: 'center',
+    paddingTop: scaleModerate(10)
+  },
+  headerBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: scaleModerate(16),
-    paddingTop: scaleModerate(10),
-    paddingBottom: scaleModerate(4)
+    paddingHorizontal: scaleModerate(16)
+  },
+  headerBarRowAbsolute: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0
   },
   screenTitle: {
     fontSize: scaleFont(26),
@@ -642,6 +843,27 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     gap: scaleModerate(10)
+  },
+  searchBarWrap: {
+    flex: 1,
+    marginRight: scaleModerate(10)
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(8),
+    borderRadius: 999,
+    paddingHorizontal: scaleModerate(14),
+    height: scaleModerate(40)
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: scaleFont(14),
+    padding: 0
+  },
+  searchCancel: {
+    fontSize: scaleFont(13),
+    fontWeight: '700'
   },
   headerButton: {
     width: scaleModerate(40),
@@ -927,10 +1149,19 @@ const styles = StyleSheet.create({
   reelsRow: {
     gap: scaleModerate(10)
   },
-  reelCard: {
+  reelCardBorder: {
     flex: 1,
     aspectRatio: 0.62,
-    borderRadius: scaleModerate(14),
+    borderRadius: scaleModerate(16),
+    padding: scaleModerate(1.5),
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 6
+  },
+  reelCard: {
+    flex: 1,
+    borderRadius: scaleModerate(15),
     overflow: 'hidden',
     position: 'relative'
   },
@@ -938,11 +1169,28 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%'
   },
+  reelShade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '45%'
+  },
+  reelPlayGlyph: {
+    position: 'absolute',
+    top: '42%',
+    left: '42%',
+    width: scaleModerate(30),
+    height: scaleModerate(30),
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   reelViewsBadge: {
     position: 'absolute',
     left: scaleModerate(8),
     bottom: scaleModerate(8),
-    backgroundColor: 'rgba(0,0,0,0.55)',
     borderRadius: 999,
     paddingHorizontal: scaleModerate(8),
     paddingVertical: scaleModerate(3)
@@ -951,6 +1199,91 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: scaleFont(11),
     fontWeight: '700'
+  },
+  reelPreviewBackdrop: {
+    flex: 1,
+    backgroundColor: '#000000'
+  },
+  reelPreviewClose: {
+    position: 'absolute',
+    right: scaleModerate(20),
+    zIndex: 2,
+    width: scaleModerate(36),
+    height: scaleModerate(36),
+    borderRadius: 999,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    elevation: 6
+  },
+  reelPreviewCloseText: {
+    color: '#FFFFFF',
+    fontSize: scaleFont(16),
+    fontWeight: '700'
+  },
+  reelPreviewPlayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0
+  },
+  reelPage: {
+    width: '100%',
+    backgroundColor: '#000000'
+  },
+  reelPageTopShade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0
+  },
+  reelPageBottomShade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '30%'
+  },
+  reelPageInfo: {
+    position: 'absolute',
+    left: scaleModerate(16),
+    right: scaleModerate(80),
+    bottom: 0
+  },
+  reelPageViews: {
+    color: '#FFFFFF',
+    fontSize: scaleFont(13),
+    fontWeight: '700'
+  },
+  reelPageActions: {
+    position: 'absolute',
+    right: scaleModerate(14),
+    alignItems: 'center',
+    gap: scaleModerate(18)
+  },
+  reelPageActionButton: {
+    width: scaleModerate(44),
+    height: scaleModerate(44),
+    borderRadius: 999,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    elevation: 6
+  },
+  connectionNotice: {
+    marginBottom: scaleModerate(12),
+    fontSize: scaleFont(12),
+    fontWeight: '600',
+    textAlign: 'center'
   },
   emptyText: {
     marginTop: scaleModerate(40),

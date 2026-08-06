@@ -9,6 +9,7 @@ export * from './TermsCheckbox';
 export * from './VideoBackground';
 export * from './PermissionsGate';
 export * from './StreamOptionModal';
+export * from './CreateContentModal';
 export * from './RoomTitleModal';
 export * from './EmojiPickerModal';
 export * from './SeatLayoutModal';
