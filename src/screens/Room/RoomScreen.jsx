@@ -47,26 +47,17 @@ import {
   setCachedSeatState,
   showLiveRoomNotification
 } from '../../utils';
+import { bannerHoldMs, buildSeatRowsFromGroups, CHAT_MESSAGE_MAX_LENGTH, isVideoUrl, SEAT_NOTE_MAX_LENGTH } from './roomUtils';
 
 // Store/props assets aren't always static images — Rides in particular are
 // short video clips (see src/components/AssetPreview.jsx). The backend
 // doesn't send a mimeType alongside entranceUrl/rideUrl, so this sniffs the
 // file extension instead — good enough for the CDN URLs these come from.
-function isVideoUrl(url) {
-  return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url ?? '');
-}
-
 // How long a queued entrance/ride item stays on screen (the slide-in-hold-
 // slide-out animation's middle "hold" portion) — a plain text/image banner
 // only ever needed a beat to be read, but a video needs real time to
 // actually play, not just flash by mid-slide.
 const BANNER_SLIDE_MS = 350;
-const BANNER_TEXT_HOLD_MS = 1000;
-const BANNER_VIDEO_HOLD_MS = 3000;
-function bannerHoldMs(item) {
-  const artUrl = item?.kind === 'ride' ? item?.rideUrl : item?.entranceUrl;
-  return artUrl && isVideoUrl(artUrl) ? BANNER_VIDEO_HOLD_MS : BANNER_TEXT_HOLD_MS;
-}
 
 function MicIcon({ size = 12, color, muted = false }) {
   return (
@@ -190,21 +181,11 @@ function SeatsIcon({ size = 18, color }) {
 }
 
 const AVATAR_PLACEHOLDER = 'https://api.dicebear.com/7.x/avataaars/svg';
-const CHAT_MESSAGE_MAX_LENGTH = 200;
 
 // Builds the seat rows for a freshly created audio room from the chosen
 // seat-layout tiers (e.g. [2, 3, 5, 5]). The room owner has their own fixed
 // spot in the header identity panel — they never occupy a numbered seat —
 // so every seat starts open for other participants to take.
-function buildSeatRowsFromGroups(seatGroups) {
-  let seatIndex = 0;
-  return seatGroups.map((count, rowIndex) =>
-    Array.from({ length: count }, () => {
-      seatIndex += 1;
-      return { id: `row${rowIndex}-seat${seatIndex}`, name: null, occupied: false };
-    })
-  );
-}
 
 function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmptySeatPress, pressEnabled, draggable, note, onAvatarPress, myFrameUri }) {
   const avatarInnerSize = circleSize - 4;
@@ -387,7 +368,6 @@ function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmpt
   );
 }
 
-const SEAT_NOTE_MAX_LENGTH = 40;
 
 // Shown when the owner taps an empty seat — instead of taking the seat
 // (which the owner can never do), they can pin any short custom text to
