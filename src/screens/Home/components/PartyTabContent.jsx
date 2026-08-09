@@ -10,11 +10,6 @@ import { useTheme } from '../../../theme';
 import { routes } from '../../../navigation/routes';
 import { scaleFont, scaleModerate } from '../../../utils';
 
-// Real (demo/placeholder) human-face photos instead of a flat accent
-// color — pravatar.cc serves a fixed, free-to-use pool of ~70 portrait
-// photos; keyed by index so the same card always gets the same face. The
-// backend doesn't return a room thumbnail at all yet, so this stands in
-// for one on both real-mapped and demo cards.
 function personPhotoForIndex(index) {
   return `https://i.pravatar.cc/400?img=${(index % 70) + 1}`;
 }
@@ -35,21 +30,13 @@ function toPartyItem(room, index) {
   };
 }
 
-// DEMO DATA — for a stakeholder walkthrough only, shown when the real
-// trending-parties fetch comes back empty (e.g. no rooms live right now).
-// Remove once real data is reliably present, or gate it behind a flag.
 const DEMO_TRENDING_PARTIES = [
   { id: 'demo-party-1', title: 'Friday Night Karaoke', members: 128, hostName: 'Zara Sheikh', hostAvatar: undefined, photo: personPhotoForIndex(21) },
   { id: 'demo-party-2', title: 'Weekend Royale Tournament', members: 96, hostName: 'Omar Farooq', hostAvatar: undefined, photo: personPhotoForIndex(22) },
   { id: 'demo-party-3', title: 'Chill & Chat Lounge', members: 54, hostName: 'Mahnoor Ali', hostAvatar: undefined, photo: personPhotoForIndex(23) }
 ];
 
-// Always the first banner, ahead of anything the admin uploads, and not
-// something the portal can remove or reorder — it's bundled into the app
-// itself (src/assets/images/Agency-Apply.png), not fetched from the
-// upload catalog. Tapping it opens the in-app Create Agency form, same as
-// an admin-uploaded banner literally named "Create Agency" (see
-// handleSlidePress).
+
 const AGENCY_BANNER_ID = 'agency-apply-fixed';
 // Deliberately NOT Image.resolveAssetSource(...).uri — in dev builds that
 // resolves to an http://localhost:8081/... URL pointing at the Metro
@@ -189,7 +176,7 @@ function PartyBanner({ onBannerScrolling }) {
   // the bundled text-promo fallbacks pass their text instead.
   const handleSlidePress = item => {
     if (item.id === AGENCY_BANNER_ID || /create\s*agency/i.test(item.title ?? '')) {
-      navigation.navigate(routes.createAgency);
+      navigation.navigate(routes.agencyChoice);
       return;
     }
     if (item.actionUrl) {
@@ -376,12 +363,9 @@ function PartyCard({
     borderColor: theme.colors.cardBorder
   }]} onPress={handlePress}>
       <ImageBackground source={{ uri: item.photo }} style={styles.partyThumb} imageStyle={styles.partyThumbImage}>
-        <View style={[styles.partyViewerBadge, {
-        backgroundColor: theme.colors.teal900
-      }]}>
-          <Text style={[styles.partyViewerBadgeText, {
-          color: theme.cta.primary.text
-        }]}>{item.members}</Text>
+        <View style={styles.partyViewerBadge}>
+          <Text style={styles.partyViewerBadgeIcon}>👥</Text>
+          <Text style={styles.partyViewerBadgeText}>{item.members}</Text>
         </View>
       </ImageBackground>
       <Text style={[styles.partyTitle, {
@@ -528,19 +512,27 @@ const styles = StyleSheet.create({
     borderRadius: scaleModerate(16),
     overflow: 'hidden',
     marginBottom: scaleModerate(8),
-    padding: scaleModerate(6),
-    alignItems: 'center',
-    justifyContent: 'center'
+    padding: scaleModerate(8),
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end'
   },
   partyThumbImage: {
     borderRadius: scaleModerate(16)
   },
   partyViewerBadge: {
-    borderRadius: scaleModerate(8),
-    paddingHorizontal: scaleModerate(6),
-    paddingVertical: scaleModerate(2)
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(3),
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: scaleModerate(8),
+    paddingVertical: scaleModerate(3)
+  },
+  partyViewerBadgeIcon: {
+    fontSize: scaleFont(10)
   },
   partyViewerBadgeText: {
+    color: '#FFFFFF',
     fontSize: scaleFont(10),
     fontWeight: '800'
   },
