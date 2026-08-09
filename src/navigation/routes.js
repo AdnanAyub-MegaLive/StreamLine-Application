@@ -31,5 +31,7 @@ export const routes = {
   vipMembership: 'VipMembership',
   notifications: 'Notifications',
   myLevel: 'MyLevel',
-  myWallet: 'MyWallet'
+  myWallet: 'MyWallet',
+  officials: 'Officials',
+  createReel: 'CreateReel'
 };
