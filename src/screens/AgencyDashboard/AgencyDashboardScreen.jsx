@@ -184,6 +184,10 @@ export function AgencyDashboardScreen() {
 
   const reload = React.useCallback(async () => {
     if (!sessionToken) {
+      // No session (still hydrating, or backend unreachable) — stop
+      // spinning and just render the page empty instead of hanging on
+      // the loading indicator forever.
+      setLoading(false);
       return;
     }
     const data = await fetchMyAgencyDashboard(sessionToken);
@@ -194,7 +198,7 @@ export function AgencyDashboardScreen() {
   useFocusEffect(
     React.useCallback(() => {
       setLoading(true);
-      reload();
+      reload().catch(() => setLoading(false));
     }, [reload])
   );
 
