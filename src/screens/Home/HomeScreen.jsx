@@ -9,19 +9,31 @@ import { routes } from '../../navigation/routes';
 import { scaleFont, scaleModerate } from '../../utils';
 import { LiveTabContent, PartyTabContent, GamesTabContent } from './components';
 
+const LOGO_BAR_COLORS = ['#00F2FF', '#7000FF', '#FF007F', '#7000FF', '#00F2FF'];
+const LOGO_BAR_HEIGHTS = [8, 14, 20, 14, 8];
+
+function LogoMark() {
+  return <View style={styles.logoBars}>
+      {LOGO_BAR_COLORS.map((color, index) => <View key={index} style={[styles.logoBar, { backgroundColor: color, height: scaleModerate(LOGO_BAR_HEIGHTS[index]) }]} />)}
+    </View>;
+}
+
 function HeaderBar() {
   const theme = useTheme();
   const navigation = useNavigation();
   return <View style={styles.headerBar}>
-      <Pressable onPress={() => navigation.navigate(routes.userSearch)} hitSlop={10}>
-        <SearchIcon size={22} color={theme.text.secondary} />
-      </Pressable>
-      <Text style={[styles.headerTitle, {
-      color: theme.colors.teal700
-    }]}>Streamline</Text>
-      <Pressable onPress={() => navigation.navigate(routes.rankings)} hitSlop={10}>
-        <TrophyIcon size={22} color={theme.text.secondary} />
-      </Pressable>
+      <View style={styles.logoRow}>
+        <LogoMark />
+        <Text style={[styles.headerTitle, { color: theme.colors.teal700 }]}>STREAMLINE</Text>
+      </View>
+      <View style={styles.headerActions}>
+        <Pressable onPress={() => navigation.navigate(routes.userSearch)} hitSlop={10}>
+          <SearchIcon size={22} color={theme.text.secondary} />
+        </Pressable>
+        <Pressable onPress={() => navigation.navigate(routes.rankings)} hitSlop={10}>
+          <TrophyIcon size={22} color={theme.text.secondary} />
+        </Pressable>
+      </View>
     </View>;
 }
 
@@ -134,9 +146,29 @@ const styles = StyleSheet.create({
     paddingTop: scaleModerate(14),
     paddingBottom: scaleModerate(6)
   },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(8)
+  },
+  logoBars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(2.5)
+  },
+  logoBar: {
+    width: scaleModerate(3.5),
+    borderRadius: 999
+  },
   headerTitle: {
-    fontSize: scaleFont(18),
-    fontWeight: '800'
+    fontSize: scaleFont(16),
+    fontWeight: '800',
+    letterSpacing: 1.5
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(18)
   },
   header: {
     flexDirection: 'row',
