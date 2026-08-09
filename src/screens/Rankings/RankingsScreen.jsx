@@ -2,7 +2,6 @@ import React from 'react';
 import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
 import { SvgXml } from 'react-native-svg';
 import { rankingBackgroundImage } from '../../assets';
 import { RANK1_CROP, RANK1_GOLDEN_CARD_SVG } from '../../assets/rank1GoldenCardSvg';
@@ -11,6 +10,7 @@ import { RANK3_CARD_SVG, RANK3_CROP } from '../../assets/rank3CardSvg';
 import { useTheme } from '../../theme';
 import { Avatar, Screen, VerifiedTick } from '../../components';
 import { scaleFont, scaleModerate } from '../../utils';
+import { FilterPill, GlassPanel, hexToRgba, PeriodPill } from './components/RankingControls';
 
 const FILTERS = [
   { key: 'overall', label: 'Overall', emoji: '🏆' },
@@ -33,71 +33,45 @@ const PODIUM = [
   { rank: 3, publicId: 'vibequeen', fullName: 'VibeQueen', isOfficial: true, coins: 7650000, profileImage: null }
 ];
 
-const RANKING_ROWS = [
-  { rank: 4, publicId: 'nightrider', fullName: 'NightRider', isOfficial: true, followers: 6540, isLive: true, coins: 6230000 },
-  { rank: 5, publicId: 'ayesha', fullName: 'Ayesha', isOfficial: true, followers: 5890, isLive: false, coins: 5120000 },
-  { rank: 6, publicId: 'gameon', fullName: 'GameOn', isOfficial: true, followers: 5210, isLive: true, coins: 4890000 },
-  { rank: 7, publicId: 'synthwave', fullName: 'SynthWave', isOfficial: true, followers: 4780, isLive: false, coins: 4210000 },
-  { rank: 8, publicId: 'chillzone', fullName: 'ChillZone', isOfficial: true, followers: 4050, isLive: true, coins: 3980000 }
-];
+// Placeholder — real ranking numbers should differ per period once a
+// backend leaderboard endpoint exists; these are just scaled variants of
+// the same five demo streamers so each period tab visibly shows
+// different data instead of the identical list four times.
+const RANKING_ROWS_BY_PERIOD = {
+  today: [
+    { rank: 4, publicId: 'nightrider', fullName: 'NightRider', isOfficial: true, followers: 6540, isLive: true, coins: 6230000 },
+    { rank: 5, publicId: 'ayesha', fullName: 'Ayesha', isOfficial: true, followers: 5890, isLive: false, coins: 5120000 },
+    { rank: 6, publicId: 'gameon', fullName: 'GameOn', isOfficial: true, followers: 5210, isLive: true, coins: 4890000 },
+    { rank: 7, publicId: 'synthwave', fullName: 'SynthWave', isOfficial: true, followers: 4780, isLive: false, coins: 4210000 },
+    { rank: 8, publicId: 'chillzone', fullName: 'ChillZone', isOfficial: true, followers: 4050, isLive: true, coins: 3980000 }
+  ],
+  week: [
+    { rank: 4, publicId: 'gameon', fullName: 'GameOn', isOfficial: true, followers: 5210, isLive: true, coins: 28900000 },
+    { rank: 5, publicId: 'nightrider', fullName: 'NightRider', isOfficial: true, followers: 6540, isLive: false, coins: 24600000 },
+    { rank: 6, publicId: 'chillzone', fullName: 'ChillZone', isOfficial: true, followers: 4050, isLive: true, coins: 19800000 },
+    { rank: 7, publicId: 'ayesha', fullName: 'Ayesha', isOfficial: true, followers: 5890, isLive: false, coins: 16200000 },
+    { rank: 8, publicId: 'synthwave', fullName: 'SynthWave', isOfficial: true, followers: 4780, isLive: true, coins: 14100000 }
+  ],
+  month: [
+    { rank: 4, publicId: 'synthwave', fullName: 'SynthWave', isOfficial: true, followers: 4780, isLive: false, coins: 92400000 },
+    { rank: 5, publicId: 'chillzone', fullName: 'ChillZone', isOfficial: true, followers: 4050, isLive: true, coins: 87100000 },
+    { rank: 6, publicId: 'ayesha', fullName: 'Ayesha', isOfficial: true, followers: 5890, isLive: false, coins: 74300000 },
+    { rank: 7, publicId: 'gameon', fullName: 'GameOn', isOfficial: true, followers: 5210, isLive: true, coins: 68900000 },
+    { rank: 8, publicId: 'nightrider', fullName: 'NightRider', isOfficial: true, followers: 6540, isLive: false, coins: 61200000 }
+  ],
+  allTime: [
+    { rank: 4, publicId: 'ayesha', fullName: 'Ayesha', isOfficial: true, followers: 5890, isLive: false, coins: 412000000 },
+    { rank: 5, publicId: 'synthwave', fullName: 'SynthWave', isOfficial: true, followers: 4780, isLive: true, coins: 378000000 },
+    { rank: 6, publicId: 'nightrider', fullName: 'NightRider', isOfficial: true, followers: 6540, isLive: false, coins: 345000000 },
+    { rank: 7, publicId: 'chillzone', fullName: 'ChillZone', isOfficial: true, followers: 4050, isLive: true, coins: 298000000 },
+    { rank: 8, publicId: 'gameon', fullName: 'GameOn', isOfficial: true, followers: 5210, isLive: false, coins: 265000000 }
+  ]
+};
 
 function formatCoins(value) {
   return Number(value).toLocaleString();
 }
 
-function FilterPill({ filter, active, onPress }) {
-  const theme = useTheme();
-  if (active) {
-    return <Pressable onPress={onPress}>
-        <LinearGradient colors={[theme.colors.teal700, theme.colors.tertiary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.filterPillActive}>
-          <Text style={styles.filterPillIcon}>{filter.emoji}</Text>
-          <Text style={styles.filterPillTextActive}>{filter.label}</Text>
-        </LinearGradient>
-      </Pressable>;
-  }
-  return <Pressable onPress={onPress}>
-      <GlassPanel style={[styles.filterPill, { borderColor: theme.colors.cardBorder }]}>
-        <Text style={styles.filterPillIcon}>{filter.emoji}</Text>
-        <Text style={[styles.filterPillText, { color: theme.text.secondary }]}>{filter.label}</Text>
-      </GlassPanel>
-    </Pressable>;
-}
-
-function PeriodPill({ period, active, onPress }) {
-  const theme = useTheme();
-  if (active) {
-    return <Pressable onPress={onPress}>
-        <LinearGradient colors={[theme.colors.teal700, theme.colors.tertiary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.periodPillActive}>
-          <Text style={styles.periodPillTextActive}>{period.label}</Text>
-        </LinearGradient>
-      </Pressable>;
-  }
-  return <Pressable onPress={onPress} style={styles.periodPill}>
-      <Text style={[styles.periodPillText, { color: theme.text.secondary }]}>{period.label}</Text>
-    </Pressable>;
-}
-
-function GlassPanel({ style, children }) {
-  const theme = useTheme();
-  return <LinearGradient colors={[hexToRgba(theme.surfaces.card, 0.65), hexToRgba(theme.surfaces.card, 0.4)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={style}>
-      <LinearGradient
-        colors={[hexToRgba(theme.colors.secondary, 0.12), hexToRgba(theme.colors.tertiary, 0.12)]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-      {children}
-    </LinearGradient>;
-}
-
-function hexToRgba(hex, alpha) {
-  const clean = hex.replace('#', '');
-  const r = parseInt(clean.substring(0, 2), 16);
-  const g = parseInt(clean.substring(2, 4), 16);
-  const b = parseInt(clean.substring(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 const RANK_ACCENT_COLOR = { 2: '#B77CFF', 3: '#FFB05A' };
 const RANK_CARD_ASSET = {
@@ -228,8 +202,24 @@ export function RankingsScreen() {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = React.useState('overall');
   const [period, setPeriod] = React.useState('today');
+  const [tableWidth, setTableWidth] = React.useState(0);
+  const periodPagerRef = React.useRef(null);
 
   const openProfile = publicId => navigation.navigate('UserProfile', { publicId });
+
+  const handleSelectPeriod = key => {
+    setPeriod(key);
+    const index = PERIODS.findIndex(item => item.key === key);
+    periodPagerRef.current?.scrollTo({ x: index * tableWidth, animated: true });
+  };
+
+  const handlePeriodPagerScrollEnd = event => {
+    if (!tableWidth) {
+      return;
+    }
+    const index = Math.round(event.nativeEvent.contentOffset.x / tableWidth);
+    setPeriod(PERIODS[index]?.key ?? PERIODS[0].key);
+  };
 
   return <ImageBackground source={rankingBackgroundImage} resizeMode="cover" style={[styles.background, { backgroundColor: theme.surfaces.page }]}>
       <Screen transparent>
@@ -248,20 +238,20 @@ export function RankingsScreen() {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-          {FILTERS.map(item => <FilterPill key={item.key} filter={item} active={item.key === filter} onPress={() => setFilter(item.key)} />)}
+          {FILTERS.map(item => <FilterPill key={item.key} filter={item} active={item.key === filter} onPress={() => setFilter(item.key)} styles={styles} />)}
         </ScrollView>
 
         <View style={styles.podiumRow}>
           {PODIUM.map(entry => <PodiumCard key={entry.publicId} entry={entry} onPress={() => openProfile(entry.publicId)} />)}
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.periodScrollContent}>
+        <View style={styles.periodScrollContent}>
           <GlassPanel style={[styles.periodRow, { borderColor: theme.colors.cardBorder }]}>
-            {PERIODS.map(item => <PeriodPill key={item.key} period={item} active={item.key === period} onPress={() => setPeriod(item.key)} />)}
+            {PERIODS.map(item => <PeriodPill key={item.key} period={item} active={item.key === period} onPress={() => handleSelectPeriod(item.key)} styles={styles} />)}
           </GlassPanel>
-        </ScrollView>
+        </View>
 
-        <GlassPanel style={[styles.tableCard, { borderColor: theme.colors.cardBorder }]}>
+        <GlassPanel style={[styles.tableCard, { borderColor: theme.colors.cardBorder }]} onLayout={event => setTableWidth(event.nativeEvent.layout.width)}>
           <View style={styles.tableHeaderRow}>
             <Text style={[styles.tableHeaderRank, { color: theme.colors.tertiary }]}>Rank</Text>
             <Text style={[styles.tableHeaderName, { color: theme.colors.tertiary }]}>Streamer</Text>
@@ -269,7 +259,17 @@ export function RankingsScreen() {
             <Text style={[styles.tableHeaderLive, { color: theme.colors.tertiary }]}>Live Stream</Text>
             <Text style={[styles.tableHeaderCoins, { color: theme.colors.tertiary }]}>Total Coins</Text>
           </View>
-          {RANKING_ROWS.map(entry => <RankingRow key={entry.publicId} entry={entry} onPress={() => openProfile(entry.publicId)} />)}
+          {tableWidth > 0 ? <ScrollView
+              ref={periodPagerRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={handlePeriodPagerScrollEnd}
+            >
+              {PERIODS.map(item => <View key={item.key} style={{ width: tableWidth }}>
+                  {RANKING_ROWS_BY_PERIOD[item.key].map(entry => <RankingRow key={entry.publicId} entry={entry} onPress={() => openProfile(entry.publicId)} />)}
+                </View>)}
+            </ScrollView> : null}
         </GlassPanel>
 
         <Pressable>
@@ -444,6 +444,8 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   periodScrollContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: scaleModerate(16),
     marginBottom: scaleModerate(16)
   },
