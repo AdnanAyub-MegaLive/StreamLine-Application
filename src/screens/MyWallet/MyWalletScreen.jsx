@@ -1,8 +1,9 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
+import { walletImage } from '../../assets';
 import { useTheme } from '../../theme';
 import { Screen, showAlert } from '../../components';
 import { scaleFont, scaleModerate } from '../../utils';
@@ -149,8 +150,7 @@ export function MyWalletScreen() {
           </View>
 
           <View style={styles.heroIllustration}>
-            <Text style={styles.heroWalletEmoji}>👛</Text>
-            <Text style={styles.heroCoinEmoji}>🪙</Text>
+            <Image source={walletImage} style={styles.heroWalletImage} resizeMode="contain" />
           </View>
         </GlassPanel>
 
@@ -223,10 +223,12 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderRadius: scaleModerate(20),
     overflow: 'hidden',
-    padding: scaleModerate(16)
+    paddingHorizontal: scaleModerate(16),
+    paddingVertical: scaleModerate(8)
   },
   heroLeft: {
     flex: 1
@@ -272,16 +274,13 @@ const styles = StyleSheet.create({
     fontSize: scaleFont(10)
   },
   heroIllustration: {
-    width: scaleModerate(96),
+    width: scaleModerate(150),
     alignItems: 'center',
     justifyContent: 'center'
   },
-  heroWalletEmoji: {
-    fontSize: scaleFont(60)
-  },
-  heroCoinEmoji: {
-    fontSize: scaleFont(22),
-    marginTop: -scaleModerate(14)
+  heroWalletImage: {
+    width: '100%',
+    height: scaleModerate(140)
   },
   actionsRow: {
     flexDirection: 'row',
