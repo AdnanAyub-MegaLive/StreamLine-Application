@@ -7,7 +7,7 @@ import { routes } from '../../../navigation/routes';
 import { scaleFont, scaleModerate } from '../../../utils';
 
 const FEATURED_GAMES = [
-  { id: 'ludo', emoji: '🎲', tag: 'FEATURED', title: 'Mega Ludo', accent: 'teal700' },
+  { id: 'ludo', emoji: '🎲', tag: 'FEATURED', title: 'Streamline Ludo', accent: 'teal700' },
   { id: 'domino', emoji: '🁫', tag: 'TRENDING', title: 'Gold Dominoes', accent: 'vipPurple' }
 ];
 
