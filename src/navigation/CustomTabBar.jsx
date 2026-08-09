@@ -24,17 +24,7 @@ const CENTER_BUTTON_SIZE = scaleModerate(60);
 const CENTER_BUTTON_HALO_SIZE = CENTER_BUTTON_SIZE * 1.3;
 const DROPLET_SIZE = scaleModerate(38);
 
-// No true fluid/blob-morph renderer in this project (that needs something
-// like react-native-skia, which isn't a dependency here) — this is an
-// Animated-only approximation of the same idea: one small pill travels
-// between icons on a spring (so it overshoots and settles instead of
-// snapping), stretching along the direction of travel and squashing
-// perpendicular to it while moving, then relaxing back to a circle on
-// arrival, with a brief glow pulse the instant it lands.
 function LiquidDroplet({ theme, x, stretch, glow }) {
-  // Squash inversely with stretch (volume-preserving-ish) but capped
-  // gently — at stretch's peak (~1.9) this settles around 0.55, not a
-  // near-flat line.
   const squash = Animated.subtract(1, Animated.multiply(Animated.subtract(stretch, 1), 0.5));
   return <Animated.View
       pointerEvents="none"
@@ -198,10 +188,7 @@ export function CustomTabBar({
   };
   const handleSelectCreateReel = () => {
     closeCreateContent();
-    navigation.navigate(routes.comingSoon, {
-      title: 'Create Reel',
-      message: "Reel creation is still in development. We're working on it — check back soon!"
-    });
+    navigation.navigate(routes.createReel);
   };
   const handleCenterPress = async () => {
     if (isCheckingRoom) {
@@ -312,7 +299,7 @@ export function CustomTabBar({
                     locations={[0, 0.7, 1]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={[styles.centerButton, { borderColor: theme.cta.primary.text, shadowColor: theme.colors.teal700 }]}
+                    style={[styles.centerButton, { borderColor: theme.colors.secondary, shadowColor: theme.colors.secondary }]}
                   >
                     <PlusIcon size={36} color={theme.cta.primary.text} />
                   </LinearGradient>
