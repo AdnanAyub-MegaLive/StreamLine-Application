@@ -10,11 +10,9 @@ import { getCachedSeatState, scaleFont, scaleModerate } from '../../utils';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { routes } from '../../navigation/routes';
+import { DiscoverHeader } from './components/DiscoverHeader';
 
 const PAGE_WIDTH = Dimensions.get('window').width;
-
-// Needed to animate LinearGradient's borderColor (only Animated-wrapped
-// components pick up Animated.Value style props).
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 const DISCOVER_TABS = [
@@ -32,17 +30,13 @@ const DUMMY_STORIES = [
   { id: 'story-3', name: 'Vaporwave Vibes', photo: personPhotoForIndex(42), live: false }
 ];
 
-// Same reels-thumbnail-grid placeholder idea used for the posts feed —
-// no Reels model/endpoint exists yet either. Demo-only, so the "reel" is
-// just its thumbnail photo blown up full-screen — no real video file
-// (avoids depending on large remote video downloads just to demo the UI).
 const DUMMY_REELS = [
-  { id: 'reel-1', authorName: 'Obaid Zafar', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel1/400/700', views: '12.4K' },
-  { id: 'reel-2', authorName: 'Midnight Grind', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel2/400/700', views: '3.1K' },
-  { id: 'reel-3', authorName: 'Vaporwave Vibes', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel3/400/700', views: '842' },
-  { id: 'reel-4', authorName: 'Obaid Zafar', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel4/400/700', views: '9.7K' },
-  { id: 'reel-5', authorName: 'Midnight Grind', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel5/400/700', views: '221' },
-  { id: 'reel-6', authorName: 'Vaporwave Vibes', thumbnailUrl: 'https://picsum.photos/seed/streamlinereel6/400/700', views: '5.6K' }
+  { id: 'reel-1', authorName: 'Obaid Zafar', authorAvatar: personPhotoForIndex(11), thumbnailUrl: 'https://picsum.photos/seed/streamlinereel1/400/700', views: '12.4K' },
+  { id: 'reel-2', authorName: 'Midnight Grind', authorAvatar: personPhotoForIndex(31), thumbnailUrl: 'https://picsum.photos/seed/streamlinereel2/400/700', views: '3.1K' },
+  { id: 'reel-3', authorName: 'Vaporwave Vibes', authorAvatar: personPhotoForIndex(42), thumbnailUrl: 'https://picsum.photos/seed/streamlinereel3/400/700', views: '842' },
+  { id: 'reel-4', authorName: 'Obaid Zafar', authorAvatar: personPhotoForIndex(11), thumbnailUrl: 'https://picsum.photos/seed/streamlinereel4/400/700', views: '9.7K' },
+  { id: 'reel-5', authorName: 'Midnight Grind', authorAvatar: personPhotoForIndex(31), thumbnailUrl: 'https://picsum.photos/seed/streamlinereel5/400/700', views: '221' },
+  { id: 'reel-6', authorName: 'Vaporwave Vibes', authorAvatar: personPhotoForIndex(42), thumbnailUrl: 'https://picsum.photos/seed/streamlinereel6/400/700', views: '5.6K' }
 ];
 
 // Shown whenever the real feed comes back empty — just for demo purposes
@@ -131,10 +125,6 @@ function HeaderGlassButton({ theme, onPress, children, style }) {
 }
 
 function HeaderBar({ theme, onOpenNotifications, hasUnreadNotifications, searchActive, searchQuery, onChangeSearchQuery, onOpenSearch, onCloseSearch }) {
-  // Both rows stay mounted the whole time and cross-fade/slide against
-  // each other — swapping one for the other via a plain conditional
-  // render (what this used to do) snaps instantly with no way to
-  // animate between the two layouts.
   const searchAnim = React.useRef(new Animated.Value(searchActive ? 1 : 0)).current;
   const searchInputRef = React.useRef(null);
 
@@ -247,11 +237,6 @@ function StoriesRow({ theme, onGoLive }) {
 }
 
 const DOUBLE_TAP_MS = 280;
-
-// Client-only for now (no Post model on the backend yet — see
-// docs/discover-posts-api-spec.md) — liked/saved state and the bumped
-// like count just live in this component and reset on reload, same as
-// every other placeholder in Discover.
 function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) {
   const [liked, setLiked] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
@@ -261,10 +246,6 @@ function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) 
   const bigHeartOpacity = React.useRef(new Animated.Value(0)).current;
   const borderAnim = React.useRef(new Animated.Value(0)).current;
   const lastTapRef = React.useRef(0);
-
-  // Slow color-cycling glow — the "Neon Pulse" theme's magenta/cyan/purple
-  // trio. Color interpolation isn't supported by the native driver, so
-  // this stays JS-driven.
   React.useEffect(() => {
     const loop = Animated.loop(
       Animated.timing(borderAnim, { toValue: 1, duration: 4000, easing: Easing.linear, useNativeDriver: false })
@@ -320,12 +301,6 @@ function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) 
   const handleShare = () => {
     Share.share({ message: post.description || 'Check out this post on Streamline' }).catch(() => {});
   };
-
-  // Dark glass base (theme.surfaces.card, not the near-black "Soft" tokens
-  // — secondarySoft/tertiarySoft are almost black themselves, so blending
-  // them just read as plain black instead of a bluish tint) plus a
-  // separate, subtle cyan/purple tint layer on top for the neon hint,
-  // and an animated color-cycling border to match.
   return <AnimatedLinearGradient
       colors={[hexToRgba(theme.surfaces.card, 0.6), hexToRgba(theme.surfaces.card, 0.4)]}
       start={{ x: 0, y: 0 }}
@@ -333,7 +308,7 @@ function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) 
       style={[styles.card, { borderColor, shadowColor: theme.colors.tertiary }]}
     >
       <LinearGradient
-        colors={[hexToRgba(theme.colors.secondary, 0.14), hexToRgba(theme.colors.tertiary, 0.14)]}
+        colors={[hexToRgba(theme.colors.neutral900, 0.5), hexToRgba(theme.colors.neutral900, 0.2)]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.cardTint}
@@ -421,9 +396,6 @@ function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) 
     </AnimatedLinearGradient>;
 }
 
-// theme.colors.teal700 (#RRGGBB) at a fixed alpha, for the active tab's
-// text-shadow glow — textShadowColor needs an rgba, and the theme only
-// exposes solid hex tokens.
 function hexToRgba(hex, alpha) {
   const value = hex.replace('#', '');
   const r = parseInt(value.substring(0, 2), 16);
@@ -450,10 +422,6 @@ function TabBar({ activeTab, onSelectTab, theme }) {
     </View>;
 }
 
-// Premium border/badge treatment — same teal700→teal700→vipGoldText
-// (pink dominant, gold accent) gradient as CustomTabBar's center "+"
-// button, so Reels reads as belonging to the same "premium" visual
-// language as the navbar instead of a plain thumbnail grid.
 function ReelCard({ reel, theme, onPress }) {
   return <LinearGradient
       colors={[theme.colors.teal700, theme.colors.teal700, theme.colors.vipGoldText]}
@@ -492,11 +460,6 @@ function ReelActionButton({ Icon, color, filled, onPress }) {
     </Pressable>;
 }
 
-// One full-screen photo per page, exactly the source data's height so a
-// vertical FlatList with pagingEnabled swipes cleanly between them — a
-// demo stand-in for real reel playback (no Reels video model/endpoint
-// exists yet), so this is just the thumbnail blown up full-screen rather
-// than an actual video.
 function ReelPage({ reel, insets, pageHeight }) {
   const [liked, setLiked] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
@@ -515,6 +478,10 @@ function ReelPage({ reel, insets, pageHeight }) {
       <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']} style={styles.reelPageBottomShade} pointerEvents="none" />
 
       <View style={[styles.reelPageInfo, { paddingBottom: insets.bottom + scaleModerate(20) }]}>
+        <View style={styles.reelPageAuthorRow}>
+          <Avatar value={reel.authorAvatar} fullName={reel.authorName} size={scaleModerate(34)} style={[styles.reelPageAuthorAvatar, { borderColor: theme.colors.teal700 }]} />
+          <Text style={styles.reelPageAuthorName} numberOfLines={1}>{reel.authorName}</Text>
+        </View>
         <Text style={styles.reelPageViews}>▶ {reel.views} views</Text>
       </View>
 
@@ -527,13 +494,6 @@ function ReelPage({ reel, insets, pageHeight }) {
 function ReelPreviewModal({ reels, initialIndex, onClose }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  // Measured off the actual backdrop instead of Dimensions.get('window'/
-  // 'screen') — those two disagree by exactly the system bar height on
-  // Android, and picking the wrong one either leaves a gap at the bottom
-  // of each page or overshoots it (FlatList's initialScrollIndex lands
-  // past the real content, rendering nothing). The real on-screen height
-  // is neither of those constants — it's whatever this View actually
-  // measures at, so use that.
   const [pageHeight, setPageHeight] = React.useState(0);
   const listRef = React.useRef(null);
 
@@ -557,14 +517,6 @@ function ReelPreviewModal({ reels, initialIndex, onClose }) {
     </Modal>;
 }
 
-// Swipeable like the "Live / Party / Games" tabs elsewhere in the app —
-// a paging ScrollView holding one full-width pane per tab, kept in sync
-// both ways with the tab bar (tapping a tab scrolls to its pane, swiping
-// updates which tab reads as active). "For You" is backed by the real
-// GET /api/posts feed — see docs/discover-posts-api-spec.md, now
-// implemented on StreamLine-Portal, falling back to DUMMY_POSTS when
-// empty. Reels stays on DUMMY_REELS since no Reels model/endpoint exists
-// yet.
 export function DiscoverScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -580,9 +532,6 @@ export function DiscoverScreen() {
   const [previewIndex, setPreviewIndex] = React.useState(null);
   const [searchActive, setSearchActive] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
-
-  // "Go Live" on the stories row — same create-room flow the tab bar's "+"
-  // uses on every tab except Discover (see CustomTabBar's handleCenterPress).
   const [streamOptionsVisible, setStreamOptionsVisible] = React.useState(false);
   const [roomTitleVisible, setRoomTitleVisible] = React.useState(false);
   const [seatLayoutVisible, setSeatLayoutVisible] = React.useState(false);
@@ -592,9 +541,6 @@ export function DiscoverScreen() {
 
   const loadPosts = React.useCallback(() => {
     if (!sessionToken) {
-      // No session yet (e.g. still hydrating) — fall back to the sample
-      // feed immediately instead of leaving the spinner stuck forever,
-      // same as the fetch-failure path below.
       setPostsLoadError(true);
       setLoadingPosts(false);
       return;
@@ -619,9 +565,6 @@ export function DiscoverScreen() {
     setRefreshingPosts(true);
     loadPosts();
   };
-
-  // No comments backend/UI exists yet — same "in development" placeholder
-  // pattern used for Live Video (see CustomTabBar's handleSelectVideo).
   const handleOpenComments = () => {
     navigation.navigate(routes.comingSoon, {
       title: 'Comments',
@@ -740,7 +683,7 @@ export function DiscoverScreen() {
       <SeatLayoutModal visible={seatLayoutVisible} onClose={() => setSeatLayoutVisible(false)} onConfirm={handleConfirmSeatLayout} />
 
       <ImageBackground source={discoverBackgroundImage} style={[styles.background, { paddingTop: insets.top }]} resizeMode="cover">
-        <HeaderBar
+        <DiscoverHeader
           theme={theme}
           onOpenSearch={handleOpenSearch}
           onCloseSearch={handleCloseSearch}
@@ -749,6 +692,7 @@ export function DiscoverScreen() {
           onChangeSearchQuery={setSearchQuery}
           onOpenNotifications={handleOpenNotifications}
           hasUnreadNotifications
+          styles={styles}
         />
         <TabBar activeTab={activeTab} onSelectTab={handleSelectTab} theme={theme} />
         <ScrollView
@@ -1254,6 +1198,21 @@ const styles = StyleSheet.create({
     left: scaleModerate(16),
     right: scaleModerate(80),
     bottom: 0
+  },
+  reelPageAuthorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(8),
+    marginBottom: scaleModerate(8)
+  },
+  reelPageAuthorAvatar: {
+    borderWidth: 1.5
+  },
+  reelPageAuthorName: {
+    flexShrink: 1,
+    color: '#FFFFFF',
+    fontSize: scaleFont(14),
+    fontWeight: '800'
   },
   reelPageViews: {
     color: '#FFFFFF',
