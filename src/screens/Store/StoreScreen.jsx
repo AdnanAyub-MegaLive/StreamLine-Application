@@ -113,6 +113,10 @@ export function StoreScreen() {
 
   const reload = React.useCallback(async () => {
     if (!sessionToken) {
+      // No session (still hydrating, or backend unreachable) — stop
+      // spinning and just render the page empty instead of hanging on
+      // the loading indicator forever.
+      setLoading(false);
       return;
     }
     const [categoryResults, propsData] = await Promise.all([
