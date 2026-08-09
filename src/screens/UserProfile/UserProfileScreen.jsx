@@ -1,12 +1,10 @@
 import React from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { MessageIcon } from '../../assets';
 import { useTheme } from '../../theme';
 import { Avatar, GenderAgeChip, Screen, VerifiedTick } from '../../components';
-import { fetchFriendStatus, respondToFriendRequest, sendFriendRequest, startConversation } from '../../api';
+import { fetchFriendStatus, respondToFriendRequest, sendFriendRequest } from '../../api';
 import { useUserAssets } from '../../hooks';
-import { routes } from '../../navigation/routes';
 import { useAppStore } from '../../store';
 import { scaleFont, scaleModerate } from '../../utils';
 
@@ -85,7 +83,7 @@ export function UserProfileScreen() {
   // until then.
   const [friendStatus, setFriendStatus] = React.useState({ status: 'none', requestId: null });
   const [friendActionBusy, setFriendActionBusy] = React.useState(false);
-  const [startingChat, setStartingChat] = React.useState(false);
+  const [following, setFollowing] = React.useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -124,25 +122,13 @@ export function UserProfileScreen() {
     }
   };
 
-  const handleChat = async () => {
-    if (startingChat || !sessionToken || !userId || isOwnProfile) {
+  // No follow backend yet — toggles locally, same placeholder convention
+  // as friendStatus above until a real endpoint exists.
+  const handleFollow = () => {
+    if (isOwnProfile) {
       return;
     }
-    setStartingChat(true);
-    try {
-      const conversation = await startConversation(sessionToken, userId);
-      navigation.navigate(routes.conversation, {
-        conversationId: conversation.id,
-        name: displayName,
-        avatar: userAvatar,
-        participantId: userId,
-        frameUrl: userFrameUrl
-      });
-    } catch {
-      // Nothing to recover to here — the user can just tap Chat again.
-    } finally {
-      setStartingChat(false);
-    }
+    setFollowing(value => !value);
   };
 
   const friendButtonLabel = {
@@ -209,18 +195,17 @@ export function UserProfileScreen() {
       </ScrollView>
 
       {!isOwnProfile ? <View style={[styles.actionBar, { borderTopColor: theme.colors.cardBorder }]}>
-          <Pressable disabled={startingChat} onPress={handleChat} style={[styles.chatButton, {
-            backgroundColor: theme.surfaces.card,
-            borderColor: theme.colors.cardBorder
+          <Pressable onPress={handleFollow} style={[styles.chatButton, {
+            backgroundColor: following ? theme.colors.teal700 : theme.surfaces.card,
+            borderColor: following ? theme.colors.teal700 : theme.colors.cardBorder
           }]}>
-            {startingChat ? <ActivityIndicator size="small" color={theme.text.primary} /> : <MessageIcon size={18} color={theme.text.primary} />}
-            <Text style={[styles.chatButtonText, { color: theme.text.primary }]}>Chat</Text>
+            <Text style={[styles.chatButtonText, { color: following ? '#FFFFFF' : theme.text.primary }]}>{following ? 'Following ✓' : '+ Follow'}</Text>
           </Pressable>
-          <Pressable disabled={friendButtonDisabled} onPress={handleFriendAction} style={[styles.followButton, {
-            backgroundColor: friendButtonDisabled && friendStatus.status !== 'pending_received' ? theme.colors.cardBorder : theme.colors.followOrange
-          }]}>
-            {friendActionBusy ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.followButtonText}>{friendButtonLabel}</Text>}
-          </Pressable>
+          {!profileIsOfficial ? <Pressable disabled={friendButtonDisabled} onPress={handleFriendAction} style={[styles.followButton, {
+              backgroundColor: friendButtonDisabled && friendStatus.status !== 'pending_received' ? theme.colors.cardBorder : theme.colors.followOrange
+            }]}>
+              {friendActionBusy ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.followButtonText}>{friendButtonLabel}</Text>}
+            </Pressable> : null}
           <Pressable style={[styles.giftButton, { backgroundColor: theme.colors.giftAccent }]}>
             <Text style={styles.giftButtonEmoji}>🎁</Text>
           </Pressable>
