@@ -1,6 +1,7 @@
 import React from 'react';
 import { FlatList, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../../theme';
 import { routes } from '../../../navigation/routes';
 import { scaleFont, scaleModerate } from '../../../utils';
@@ -10,9 +11,7 @@ import { scaleFont, scaleModerate } from '../../../utils';
 // until that listing endpoint exists, instead of showing fake rooms.
 const liveRooms = [];
 
-// Real (demo/placeholder) human-face photos instead of a flat accent
-// color — pravatar.cc serves a fixed, free-to-use pool of ~70 portrait
-// photos; keyed by index so the same card always gets the same face.
+
 function personPhotoForIndex(index) {
   return `https://i.pravatar.cc/400?img=${(index % 70) + 1}`;
 }
@@ -22,12 +21,12 @@ function personPhotoForIndex(index) {
 // Remove this block (and the fallback below) once that endpoint ships and
 // liveRooms above is wired up to it.
 const DEMO_LIVE_ROOMS = [
-  { id: 'demo-live-1', hostName: 'Ayesha Khan', hostTag: '@ayeshalive', viewers: '2.4k', photo: personPhotoForIndex(11) },
+  { id: 'demo-live-1', hostName: 'Usaid Khan', hostTag: '@usaidlive', viewers: '2.4k', photo: personPhotoForIndex(11) },
   { id: 'demo-live-2', hostName: 'Bilal Ahmed', hostTag: '@bilalvibes', viewers: '1.1k', photo: personPhotoForIndex(12) },
-  { id: 'demo-live-3', hostName: 'Sara Malik', hostTag: '@sara_talks', viewers: '834', photo: personPhotoForIndex(13) },
-  { id: 'demo-live-4', hostName: 'Usman Raza', hostTag: '@usmanmusic', viewers: '612', photo: personPhotoForIndex(14) },
-  { id: 'demo-live-5', hostName: 'Hina Farooq', hostTag: '@hinaspeaks', viewers: '389', photo: personPhotoForIndex(15) },
-  { id: 'demo-live-6', hostName: 'Danish Iqbal', hostTag: '@danishgaming', viewers: '201', photo: personPhotoForIndex(16) }
+  { id: 'demo-live-3', hostName: 'Usman Raza', hostTag: '@usmanraza', viewers: '834', photo: personPhotoForIndex(13) },
+  { id: 'demo-live-4', hostName: 'Saad Malik', hostTag: '@saadmalik', viewers: '612', photo: personPhotoForIndex(14) },
+  { id: 'demo-live-5', hostName: 'Hina Farooq', hostTag: '@hinafarooq', viewers: '389', photo: personPhotoForIndex(15) },
+  { id: 'demo-live-6', hostName: 'Danish Iqbal', hostTag: '@danishiqbal', viewers: '201', photo: personPhotoForIndex(16) }
 ];
 
 // Grouped by region instead of individual countries — each chip's flags
@@ -81,28 +80,25 @@ function LiveRoomCard({
       <ImageBackground source={{ uri: item.photo }} style={styles.liveThumb}>
         <View style={styles.liveThumbTopRow}>
           <LiveBadge />
-          <View style={[styles.liveViewersPill, {
-          backgroundColor: theme.colors.teal900
-        }]}>
-            <Text style={[styles.liveViewers, {
-            color: theme.cta.primary.text
-          }]}>{item.viewers}</Text>
+          <View style={styles.liveViewersPill}>
+            <Text style={styles.liveViewersEye}>👁</Text>
+            <Text style={styles.liveViewers}>{item.viewers}</Text>
           </View>
         </View>
 
-        <View style={[styles.liveThumbScrim, {
-        backgroundColor: theme.colors.teal900
-      }]}>
-          <Text style={[styles.liveHostName, {
-          color: theme.cta.primary.text
-        }]} numberOfLines={1}>
-            {item.hostName}
-          </Text>
-          <Text style={[styles.liveHostTag, {
-          color: theme.colors.teal100
-        }]} numberOfLines={1}>
-            {item.hostTag}
-          </Text>
+        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={styles.liveThumbScrim} pointerEvents="none" />
+        <View style={styles.liveHostRow}>
+          <View style={[styles.liveHostAvatarRing, { borderColor: theme.colors.teal700 }]}>
+            <Text style={styles.liveHostAvatarGlyph}>👤</Text>
+          </View>
+          <View style={styles.liveHostTextWrap}>
+            <Text style={styles.liveHostName} numberOfLines={1}>
+              {item.hostName}
+            </Text>
+            <Text style={styles.liveHostTag} numberOfLines={1}>
+              {item.hostTag}
+            </Text>
+          </View>
         </View>
       </ImageBackground>
     </Pressable>;
@@ -246,34 +242,61 @@ const styles = StyleSheet.create({
   },
   liveBadge: {
     alignSelf: 'flex-start',
-    borderRadius: scaleModerate(6),
-    paddingHorizontal: scaleModerate(6),
-    paddingVertical: scaleModerate(2)
+    borderRadius: 999,
+    paddingHorizontal: scaleModerate(8),
+    paddingVertical: scaleModerate(3)
   },
   liveBadgeText: {
     fontSize: scaleFont(10),
     fontWeight: '800'
   },
   liveViewersPill: {
-    borderRadius: 999,
-    paddingHorizontal: scaleModerate(8),
-    paddingVertical: scaleModerate(2)
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(3)
+  },
+  liveViewersEye: {
+    fontSize: scaleFont(11)
   },
   liveViewers: {
+    color: '#FFFFFF',
     fontSize: scaleFont(11),
     fontWeight: '700'
   },
   liveThumbScrim: {
-    borderRadius: scaleModerate(10),
-    paddingHorizontal: scaleModerate(8),
-    paddingVertical: scaleModerate(6),
-    opacity: 0.82
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '55%'
+  },
+  liveHostRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(6)
+  },
+  liveHostAvatarRing: {
+    width: scaleModerate(24),
+    height: scaleModerate(24),
+    borderRadius: 999,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)'
+  },
+  liveHostAvatarGlyph: {
+    fontSize: scaleFont(11)
+  },
+  liveHostTextWrap: {
+    flex: 1
   },
   liveHostName: {
+    color: '#FFFFFF',
     fontSize: scaleFont(13),
     fontWeight: '700'
   },
   liveHostTag: {
+    color: '#E4B8D0',
     fontSize: scaleFont(11),
     marginTop: scaleModerate(1)
   },
