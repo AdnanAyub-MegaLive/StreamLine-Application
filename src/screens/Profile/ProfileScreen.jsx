@@ -3,7 +3,21 @@ import { Animated, Easing, Image, ImageBackground, Pressable, ScrollView, StyleS
 import LinearGradient from 'react-native-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { profileBackgroundImage } from '../../assets';
+import {
+  coinsImage,
+  profileBackgroundImage,
+  tasksImage,
+  toolAgencyImage,
+  toolBadgesImage,
+  toolBagImage,
+  toolHelpCenterImage,
+  toolMyLevelImage,
+  toolOfficialsImage,
+  toolSettingsImage,
+  toolShopImage,
+  vipBadgesIconsImage,
+  vipIllustrationImage
+} from '../../assets';
 import { useTheme } from '../../theme';
 import { Avatar, GenderAgeChip, Screen, VerifiedTick } from '../../components';
 import { fetchFriends, fetchStoreCatalog } from '../../api';
@@ -11,6 +25,7 @@ import { useAssignedBadge, useAssignedFrame } from '../../hooks';
 import { useAppStore } from '../../store';
 import { scaleFont, scaleModerate } from '../../utils';
 import { routes } from '../../navigation/routes';
+import { ProfileIcon } from './ProfileIcon';
 
 function hexToRgba(hex, alpha) {
   const clean = hex.replace('#', '');
@@ -31,7 +46,7 @@ function GlassPanel({ style, borderColor, children }) {
       style={[style, borderColor ? { borderColor } : null]}
     >
       <LinearGradient
-        colors={[hexToRgba(theme.colors.secondary, 0.12), hexToRgba(theme.colors.tertiary, 0.12)]}
+        colors={[hexToRgba(theme.colors.neutral900, 0.5), hexToRgba(theme.colors.neutral900, 0.2)]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -41,38 +56,71 @@ function GlassPanel({ style, borderColor, children }) {
     </AnimatedLinearGradient>;
 }
 
-function VipFeature({ emoji, label, color }) {
+const VIP_BADGE_SPRITE_SIZE = { width: 1536, height: 1024 };
+const VIP_BADGE_SPRITE_COUNT = 5;
+const VIP_BADGE_SPRITE_CELL_WIDTH = VIP_BADGE_SPRITE_SIZE.width / VIP_BADGE_SPRITE_COUNT;
+// Circle badges sit centered in each cell on a plain gray backdrop —
+// crop tightly to the circle itself so the backdrop never shows.
+const VIP_BADGE_CIRCLE = { diameterRatio: 0.82, centerYRatio: 0.493 };
+
+function VipBadgeIcon({ index, size }) {
+  const diameter = VIP_BADGE_SPRITE_CELL_WIDTH * VIP_BADGE_CIRCLE.diameterRatio;
+  const centerX = VIP_BADGE_SPRITE_CELL_WIDTH * (index + 0.5);
+  const centerY = VIP_BADGE_SPRITE_SIZE.height * VIP_BADGE_CIRCLE.centerYRatio;
+  const scale = size / diameter;
+  return <View style={[styles.vipFeatureIcon, { width: size, height: size, borderRadius: size / 2, overflow: 'hidden' }]}>
+      <Image
+        source={vipBadgesIconsImage}
+        style={{
+          width: VIP_BADGE_SPRITE_SIZE.width * scale,
+          height: VIP_BADGE_SPRITE_SIZE.height * scale,
+          position: 'absolute',
+          left: -(centerX - diameter / 2) * scale,
+          top: -(centerY - diameter / 2) * scale
+        }}
+      />
+    </View>;
+}
+
+function VipFeature({ index, label }) {
   const theme = useTheme();
   return <View style={styles.vipFeature}>
-      <View style={[styles.vipFeatureIcon, { backgroundColor: hexToRgba(color, 0.16), borderColor: hexToRgba(color, 0.4) }]}>
-        <Text style={styles.vipFeatureEmoji}>{emoji}</Text>
-      </View>
+      <VipBadgeIcon index={index} size={scaleModerate(44)} />
       <Text style={[styles.vipFeatureLabel, { color: theme.text.secondary }]} numberOfLines={2}>{label}</Text>
     </View>;
 }
 
 const VIP_FEATURES = [
-  { emoji: '💎', label: 'Exclusive Badges', color: '#FF4DA3' },
-  { emoji: '💬', label: 'Special Chat Colors', color: '#7000FF' },
-  { emoji: '⚡', label: 'Priority Support', color: '#00F2FF' },
-  { emoji: '🎁', label: 'Monthly Rewards', color: '#F0B93D' },
-  { emoji: '🛡️', label: 'Verified Profile', color: '#3AA0FF' }
+  { label: 'Exclusive Badges' },
+  { label: 'Special Chat Colors' },
+  { label: 'Priority Support' },
+  { label: 'Monthly Rewards' },
+  { label: 'Verified Profile' }
 ];
 
-function StatItem({ label, value, onPress }) {
+const TOOL_ICON_IMAGES = {
+  'My Level': toolMyLevelImage,
+  Shop: toolShopImage,
+  Badges: toolBadgesImage,
+  Officials: toolOfficialsImage,
+  Agency: toolAgencyImage,
+  Bag: toolBagImage,
+  Settings: toolSettingsImage,
+  'Help Center': toolHelpCenterImage
+};
+
+function StatItem({ label, value, onPress, showDivider }) {
   const theme = useTheme();
-  return <Pressable onPress={onPress} style={styles.statItem}>
+  return <Pressable onPress={onPress} style={[styles.statItem, showDivider ? { borderLeftColor: theme.colors.cardBorder } : null]}>
       <Text style={[styles.statValue, { color: theme.text.primary }]}>{value}</Text>
       <Text style={[styles.statLabel, { color: theme.text.secondary }]}>{label}</Text>
     </Pressable>;
 }
 
-function ToolItem({ emoji, label, color, onPress }) {
+function ToolItem({ icon, label, onPress }) {
   const theme = useTheme();
   return <Pressable onPress={onPress} disabled={!onPress} style={styles.toolItem}>
-      <View style={[styles.toolIcon, { backgroundColor: hexToRgba(color, 0.16), borderColor: hexToRgba(color, 0.4) }]}>
-        <Text style={styles.toolEmoji}>{emoji}</Text>
-      </View>
+      <Image source={icon} style={styles.toolIconImage} resizeMode="contain" />
       <Text style={[styles.toolLabel, { color: theme.text.secondary }]} numberOfLines={1}>{label}</Text>
     </Pressable>;
 }
@@ -130,14 +178,14 @@ export function ProfileScreen() {
   ].map(stat => ({ ...stat, onPress: () => navigation.navigate(routes.connections, { type: stat.key }) }));
 
   const tools = [
-    { emoji: '📈', label: 'My Level', color: '#FF4DA3', onPress: () => navigation.navigate(routes.myLevel) },
-    { emoji: '🛍️', label: 'Shop', color: '#7000FF', onPress: () => navigation.navigate(routes.store) },
-    { emoji: '🎖️', label: 'Badges', color: '#F0B93D' },
-    { emoji: '✅', label: 'Officials', color: '#2ECC71' },
-    { emoji: '🏢', label: 'Agency', color: '#F5A623', onPress: () => navigation.navigate(routes.agencyChoice) },
-    { emoji: '🎒', label: 'Bag', color: '#E24B4A' },
-    { emoji: '⚙️', label: 'Settings', color: '#8B8B94', onPress: () => navigation.navigate(routes.settings) },
-    { emoji: '🎧', label: 'Help Center', color: '#3AA0FF' }
+    { label: 'My Level', onPress: () => navigation.navigate(routes.myLevel) },
+    { label: 'Shop', onPress: () => navigation.navigate(routes.store) },
+    { label: 'Badges' },
+    { label: 'Officials', onPress: () => navigation.navigate(routes.officials) },
+    { label: 'Agency', onPress: () => navigation.navigate(routes.agencyChoice) },
+    { label: 'Bag' },
+    { label: 'Settings', onPress: () => navigation.navigate(routes.settings) },
+    { label: 'Help Center' }
   ];
 
   const content = <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -151,7 +199,7 @@ export function ProfileScreen() {
             // no frame.
             style={frameUri ? undefined : [styles.avatarRing, { borderColor: theme.colors.teal700, shadowColor: theme.colors.teal700 }]}
           >
-            <Avatar value={user?.profileImage} fullName={user?.fullName} size={scaleModerate(56)} frameUri={frameUri} />
+            <Avatar value={user?.profileImage} fullName={user?.fullName} size={scaleModerate(82)} frameUri={frameUri} />
           </Pressable>
           <View style={styles.headerInfo}>
             <View style={styles.nameRow}>
@@ -171,28 +219,23 @@ export function ProfileScreen() {
             <View style={[styles.profileBadgeRing, { borderColor: theme.colors.secondary, shadowColor: theme.colors.secondary }]}>
               <Image source={{ uri: badgeUri }} style={styles.profileBadge} resizeMode="contain" />
             </View>
-          ) : null}
+          ) : <View style={[styles.countryBadge, { borderColor: theme.colors.tertiary }]}><Text style={styles.countryFlag}>🇵🇰</Text></View>}
         </View>
 
         <View style={styles.statsRow}>
-          {stats.map(stat => <StatItem key={stat.key} label={stat.label} value={stat.value} onPress={stat.onPress} />)}
+          {stats.map((stat, index) => <StatItem key={stat.key} label={stat.label} value={stat.value} onPress={stat.onPress} showDivider={index > 0} />)}
         </View>
       </GlassPanel>
 
       <GlassPanel style={styles.vipFeatureCard} borderColor={neonBorderColor}>
-        <LinearGradient
-          colors={[hexToRgba(theme.surfaces.card, 0.95), hexToRgba(theme.colors.tertiarySoft, 0.9)]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.vipTopRow, { borderColor: hexToRgba(theme.colors.tertiary, 0.4) }]}
-        >
-          <LinearGradient colors={[theme.colors.vipGoldText, theme.colors.tertiary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.vipBadge}>
-            <Text style={styles.vipBadgeCrown}>👑</Text>
-            <Text style={styles.vipBadgeText}>VIP</Text>
-          </LinearGradient>
+        <View style={styles.vipTopRow}>
+          <Image source={vipIllustrationImage} style={styles.vipBadge} resizeMode="contain" />
 
           <View style={styles.vipTextWrap}>
-            <Text style={[styles.vipTitle, { color: theme.text.primary }]}>👑 <Text style={{ color: theme.colors.tertiary }}>Premium</Text> VIP</Text>
+            <Text style={[styles.vipTitle, { color: theme.text.primary }]}>
+              <Text style={{ color: theme.colors.secondary, textShadowColor: theme.colors.secondary, textShadowRadius: 8, textShadowOffset: { width: 0, height: 0 } }}>👑 </Text>
+              <Text style={{ color: theme.colors.tertiary }}>Premium</Text> VIP
+            </Text>
             <Text style={[styles.vipSubtitle, { color: theme.text.secondary }]}>Unlock exclusive perks & badges</Text>
           </View>
 
@@ -202,33 +245,36 @@ export function ProfileScreen() {
               <Text style={styles.vipUpgradeChevron}>›</Text>
             </LinearGradient>
           </Pressable>
-        </LinearGradient>
+        </View>
 
         <View style={styles.vipFeatureRow}>
-          {VIP_FEATURES.map(feature => <VipFeature key={feature.label} emoji={feature.emoji} label={feature.label} color={feature.color} />)}
+          {VIP_FEATURES.map((feature, index) => <VipFeature key={feature.label} index={index} label={feature.label} />)}
         </View>
       </GlassPanel>
 
       <View style={styles.walletRow}>
         <Pressable style={styles.walletCardPressable} onPress={() => navigation.navigate(routes.myWallet)}>
           <GlassPanel style={styles.walletCard} borderColor={neonBorderColor}>
-            <Text style={[styles.walletLabel, { color: theme.text.secondary }]}>💰 My Wallet</Text>
+            <View style={styles.walletLabelRow}><ProfileIcon name="wallet" size={scaleModerate(15)} color={theme.colors.secondary} /><Text style={[styles.walletLabel, { color: theme.text.secondary }]}>My Wallet</Text></View>
             <Text style={[styles.walletValue, { color: theme.text.primary }]}>
               {coinBalance !== null ? Number(coinBalance).toLocaleString() : '0'}
             </Text>
-            <Text style={[styles.walletUnit, { color: theme.colors.vipGoldText }]}>Coins</Text>
-            <Text style={styles.walletIllustration}>🪙</Text>
+            <View style={styles.walletUnitRow}>
+              <Text style={[styles.walletUnit, { color: theme.colors.vipGoldText }]}>Coins</Text>
+              <Image source={coinsImage} style={styles.walletUnitIcon} resizeMode="contain" />
+            </View>
+            <Image source={coinsImage} style={styles.walletIllustration} resizeMode="contain" />
           </GlassPanel>
         </Pressable>
         <Pressable style={styles.walletCardPressable} onPress={() => navigation.navigate(routes.comingSoon, { title: 'Tasks', message: "Tasks are still in development. We're working on it — check back soon!" })}>
           <GlassPanel style={styles.walletCard} borderColor={neonBorderColor}>
-            <Text style={[styles.walletLabel, { color: theme.text.secondary }]}>🪙 Earn Coins</Text>
+            <View style={styles.walletLabelRow}><ProfileIcon name="priority" size={scaleModerate(15)} color={theme.colors.vipGoldText} /><Text style={[styles.walletLabel, { color: theme.text.secondary }]}>Earn Coins</Text></View>
             <View style={styles.tasksRow}>
               <Text style={[styles.walletValue, { color: theme.text.primary }]}>Tasks</Text>
               <View style={[styles.tasksDot, { backgroundColor: theme.colors.liveBadge }]} />
             </View>
             <Text style={[styles.walletSubtitle, { color: theme.text.secondary }]} numberOfLines={2}>Complete tasks & earn more coins</Text>
-            <Text style={styles.walletIllustration}>📋</Text>
+            <Image source={tasksImage} style={[styles.walletIllustration, { right: scaleModerate(3) }]} resizeMode="contain" />
           </GlassPanel>
         </Pressable>
       </View>
@@ -241,7 +287,7 @@ export function ProfileScreen() {
           </Pressable>
         </View>
         <View style={styles.toolsGrid}>
-          {tools.map(tool => <ToolItem key={tool.label} emoji={tool.emoji} label={tool.label} color={tool.color} onPress={tool.onPress} />)}
+          {tools.map(tool => <ToolItem key={tool.label} icon={TOOL_ICON_IMAGES[tool.label]} label={tool.label} onPress={tool.onPress} />)}
         </View>
       </GlassPanel>
     </ScrollView>;
@@ -259,14 +305,67 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: scaleModerate(14),
-    paddingTop: scaleModerate(8),
+    paddingTop: scaleModerate(4),
     paddingBottom: scaleModerate(28)
   },
+  topBar: {
+    height: scaleModerate(128),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: scaleModerate(2)
+  },
+  topIconButton: {
+    width: scaleModerate(38),
+    height: scaleModerate(38),
+    borderRadius: scaleModerate(10),
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth
+  },
+  topIcon: {
+    fontSize: scaleFont(42),
+    fontWeight: '300',
+    marginTop: scaleModerate(-6)
+  },
+  topActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(12)
+  },
+  actionIcon: {
+    fontSize: scaleFont(25),
+    fontWeight: '700'
+  },
+  topBrand: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    height: '100%',
+    width: '58%'
+  },
+  topTrophy: {
+    fontSize: scaleFont(52),
+    marginBottom: scaleModerate(-10),
+    zIndex: 1
+  },
+  skyline: {
+    height: scaleModerate(54),
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-evenly',
+    opacity: 0.7
+  },
+  skylineBar: {
+    width: scaleModerate(5),
+    borderTopLeftRadius: scaleModerate(2),
+    borderTopRightRadius: scaleModerate(2)
+  },
   headerCard: {
-    borderRadius: scaleModerate(20),
+    borderRadius: scaleModerate(15),
     borderWidth: 1,
     overflow: 'hidden',
-    padding: scaleModerate(14)
+    padding: scaleModerate(13)
   },
   headerRow: {
     flexDirection: 'row',
@@ -322,13 +421,29 @@ const styles = StyleSheet.create({
     width: scaleModerate(28),
     height: scaleModerate(28)
   },
+  countryBadge: {
+    width: scaleModerate(52),
+    height: scaleModerate(52),
+    borderRadius: scaleModerate(26),
+    borderWidth: scaleModerate(2),
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#7000FF',
+    shadowOpacity: 0.65,
+    shadowRadius: scaleModerate(8),
+    elevation: 5
+  },
+  countryFlag: {
+    fontSize: scaleFont(28)
+  },
   statsRow: {
     flexDirection: 'row',
-    marginTop: scaleModerate(14)
+    marginTop: scaleModerate(13)
   },
   statItem: {
     flex: 1,
-    alignItems: 'center'
+    alignItems: 'center',
+    borderLeftWidth: StyleSheet.hairlineWidth
   },
   statValue: {
     fontSize: scaleFont(16),
@@ -341,18 +456,13 @@ const styles = StyleSheet.create({
   vipTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: scaleModerate(16),
-    borderWidth: 1,
-    padding: scaleModerate(12),
+    paddingHorizontal: scaleModerate(4),
     marginTop: scaleModerate(12),
     marginBottom: scaleModerate(14)
   },
   vipBadge: {
-    width: scaleModerate(46),
-    height: scaleModerate(46),
-    borderRadius: scaleModerate(12),
-    alignItems: 'center',
-    justifyContent: 'center'
+    width: scaleModerate(84),
+    height: scaleModerate(84)
   },
   vipBadgeCrown: {
     fontSize: scaleFont(13),
@@ -368,12 +478,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: scaleModerate(10)
   },
   vipTitle: {
-    fontSize: scaleFont(14),
+    fontSize: scaleFont(19),
     fontWeight: '800'
   },
   vipSubtitle: {
-    fontSize: scaleFont(11),
-    marginTop: scaleModerate(2)
+    fontSize: scaleFont(13.5),
+    marginTop: scaleModerate(4)
   },
   vipUpgrade: {
     flexDirection: 'row',
@@ -410,10 +520,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: scaleModerate(2)
   },
   vipFeatureIcon: {
-    width: scaleModerate(40),
-    height: scaleModerate(40),
-    borderRadius: 999,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -454,6 +560,15 @@ const styles = StyleSheet.create({
     fontSize: scaleFont(11),
     fontWeight: '700'
   },
+  walletUnitRow: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  walletUnitIcon: {
+    width: scaleModerate(14),
+    height: scaleModerate(14),
+    marginLeft: scaleModerate(8)
+  },
   walletSubtitle: {
     marginTop: scaleModerate(4),
     fontSize: scaleFont(9),
@@ -461,10 +576,11 @@ const styles = StyleSheet.create({
   },
   walletIllustration: {
     position: 'absolute',
-    right: -scaleModerate(4),
-    bottom: -scaleModerate(6),
-    fontSize: scaleFont(46),
-    opacity: 0.18
+    right: scaleModerate(8),
+    top: '50%',
+    width: scaleModerate(78),
+    height: scaleModerate(78),
+    marginTop: -scaleModerate(14)
   },
   tasksRow: {
     flexDirection: 'row',
@@ -500,27 +616,24 @@ const styles = StyleSheet.create({
   },
   toolsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
+    rowGap: scaleModerate(13)
   },
   toolItem: {
     width: '25%',
     alignItems: 'center',
-    marginBottom: scaleModerate(16)
+    marginBottom: scaleModerate(10)
   },
-  toolIcon: {
-    width: scaleModerate(52),
-    height: scaleModerate(52),
-    borderRadius: 999,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
+  toolIconImage: {
+    width: scaleModerate(58),
+    height: scaleModerate(58)
   },
   toolEmoji: {
-    fontSize: scaleFont(22)
+    fontSize: scaleFont(18)
   },
   toolLabel: {
     marginTop: scaleModerate(6),
-    fontSize: scaleFont(10.5),
+    fontSize: scaleFont(8.5),
     fontWeight: '600',
     textAlign: 'center'
   }
