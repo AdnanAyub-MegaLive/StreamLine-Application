@@ -36,6 +36,9 @@ import { MyLevelScreen } from '../screens/MyLevel';
 import { MyWalletScreen } from '../screens/MyWallet';
 import { OfficialsScreen } from '../screens/Officials';
 import { CreateReelScreen } from '../screens/CreateReel';
+import { BadgesScreen } from '../screens/Badges';
+import { TasksScreen } from '../screens/Tasks';
+import { HelpCentreScreen } from '../screens/HelpCentre';
 const Stack = createNativeStackNavigator();
 export function AppNavigator() {
   return <Stack.Navigator screenOptions={{
@@ -79,6 +82,9 @@ export function AppNavigator() {
       <Stack.Screen name="MyWallet" component={MyWalletScreen} />
       <Stack.Screen name="Officials" component={OfficialsScreen} />
       <Stack.Screen name="CreateReel" component={CreateReelScreen} />
+      <Stack.Screen name="Badges" component={BadgesScreen} />
+      <Stack.Screen name="Tasks" component={TasksScreen} />
+      <Stack.Screen name="HelpCentre" component={HelpCentreScreen} />
     </Stack.Navigator>;
 }
 export default AppNavigator;

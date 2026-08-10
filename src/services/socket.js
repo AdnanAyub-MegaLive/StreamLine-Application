@@ -121,6 +121,23 @@ export function leaveAudioRoom(roomId) {
   socket?.emit('audio-room:leave', { roomId });
 }
 
+// Room chat is intentionally separate from private/world conversations. The
+// server relays the authoritative message to everyone currently in the audio
+// room (including the sender), which keeps every participant's chat in sync.
+export function sendAudioRoomMessage(roomId, body, callback) {
+  if (!socket) {
+    callback?.({ success: false, error: { code: 'NOT_CONNECTED' } });
+    return;
+  }
+  socket.timeout(8000).emit('audio-room:message', { roomId, body }, (error, result) => {
+    callback?.(
+      error
+        ? { success: false, error: { code: 'SEND_TIMEOUT' } }
+        : result ?? { success: false, error: { code: 'MESSAGE_SEND_FAILED' } }
+    );
+  });
+}
+
 // See StreamLine-Portal/docs/mobile-audio-room-api.md's "Live seat-state
 // relay" section — seat state is intentionally NOT persisted server-side;
 // the room owner is the sole source of truth and the server only validates

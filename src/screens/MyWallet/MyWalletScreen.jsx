@@ -1,11 +1,13 @@
 import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
-import { walletImage } from '../../assets';
+import { profileBackgroundImage, walletImage } from '../../assets';
 import { useTheme } from '../../theme';
 import { Screen, showAlert } from '../../components';
+import { fetchStoreCatalog } from '../../api';
+import { useAppStore } from '../../store';
 import { scaleFont, scaleModerate } from '../../utils';
 
 function hexToRgba(hex, alpha) {
@@ -18,9 +20,9 @@ function hexToRgba(hex, alpha) {
 
 function GlassPanel({ style, children }) {
   const theme = useTheme();
-  return <LinearGradient colors={[hexToRgba(theme.surfaces.card, 0.7), hexToRgba(theme.surfaces.card, 0.45)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={style}>
+  return <LinearGradient colors={[hexToRgba(theme.surfaces.card, 0.65), hexToRgba(theme.surfaces.card, 0.4)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={style}>
       <LinearGradient
-        colors={[hexToRgba(theme.colors.secondary, 0.12), hexToRgba(theme.colors.tertiary, 0.12)]}
+        colors={[hexToRgba(theme.colors.neutral900, 0.5), hexToRgba(theme.colors.neutral900, 0.2)]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -30,7 +32,6 @@ function GlassPanel({ style, children }) {
     </LinearGradient>;
 }
 
-const TOTAL_BALANCE = 12450;
 const DIAMONDS = 2850;
 const COUPONS = 12;
 
@@ -69,7 +70,7 @@ function ActionButton({ action, onPress }) {
 
 function CoinPackageCard({ item, onPress }) {
   const theme = useTheme();
-  return <Pressable onPress={onPress} style={[styles.packageCard, { borderColor: item.bestValue ? theme.colors.teal700 : theme.colors.cardBorder, backgroundColor: item.bestValue ? hexToRgba(theme.colors.teal700, 0.08) : 'transparent' }]}>
+  return <Pressable onPress={onPress} style={[styles.packageCard, { borderColor: item.bestValue ? theme.colors.teal700 : theme.colors.cardBorder, backgroundColor: item.bestValue ? hexToRgba(theme.colors.teal700, 0.14) : hexToRgba(theme.colors.neutral900, 0.55) }]}>
       <View style={[styles.packageBadge, { backgroundColor: theme.colors.teal700 }]}>
         <Text style={styles.packageBadgeText}>{item.bonus}</Text>
       </View>
@@ -106,12 +107,31 @@ export function MyWalletScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const sessionToken = useAppStore(state => state.session?.token);
+  const [wallet, setWallet] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  const loadWallet = React.useCallback(() => {
+    if (!sessionToken) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetchStoreCatalog(sessionToken).then(setWallet).catch(() => setWallet(null)).finally(() => setLoading(false));
+  }, [sessionToken]);
+
+  useFocusEffect(React.useCallback(() => {
+    loadWallet();
+  }, [loadWallet]));
+
+  const balance = Number(wallet?.balance ?? 0);
 
   const handleComingSoon = label => {
     showAlert('Coming Soon', `${label} isn't available yet — check back soon.`);
   };
 
-  return <Screen>
+  return <Screen transparent>
+      <ImageBackground source={profileBackgroundImage} style={styles.background} resizeMode="cover">
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + scaleModerate(14) }]}>
         <View style={styles.header}>
           <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
@@ -130,8 +150,7 @@ export function MyWalletScreen() {
               <Text style={styles.heroEyeIcon}>👁️</Text>
             </View>
             <Text style={styles.heroBalance}>
-              <Text style={{ color: theme.colors.teal700 }}>{TOTAL_BALANCE.toLocaleString().split(',')[0]},</Text>
-              <Text style={{ color: theme.colors.secondary }}>{TOTAL_BALANCE.toLocaleString().split(',')[1]}</Text>
+              <Text style={{ color: theme.colors.teal700 }}>{loading ? '...' : balance.toLocaleString()}</Text>
             </Text>
             <Text style={[styles.heroCoinsLabel, { color: theme.colors.vipGoldText }]}>🪙 Coins</Text>
 
@@ -154,7 +173,7 @@ export function MyWalletScreen() {
           </View>
         </GlassPanel>
 
-        <View style={[styles.actionsRow, { borderColor: theme.colors.cardBorder }]}>
+        <View style={[styles.actionsRow, { borderColor: theme.colors.cardBorder, backgroundColor: hexToRgba(theme.colors.neutral900, 0.55) }]}>
           {ACTIONS.map(action => <ActionButton key={action.key} action={action} onPress={() => handleComingSoon(action.label)} />)}
         </View>
 
@@ -189,10 +208,14 @@ export function MyWalletScreen() {
           {TRANSACTIONS.map(item => <TransactionRow key={item.key} item={item} />)}
         </GlassPanel>
       </ScrollView>
+      </ImageBackground>
     </Screen>;
 }
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1
+  },
   scrollContent: {
     paddingHorizontal: scaleModerate(16),
     paddingBottom: scaleModerate(28)

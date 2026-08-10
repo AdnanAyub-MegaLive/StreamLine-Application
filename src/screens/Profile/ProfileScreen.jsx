@@ -180,12 +180,12 @@ export function ProfileScreen() {
   const tools = [
     { label: 'My Level', onPress: () => navigation.navigate(routes.myLevel) },
     { label: 'Shop', onPress: () => navigation.navigate(routes.store) },
-    { label: 'Badges' },
+    { label: 'Badges', onPress: () => navigation.navigate(routes.badges) },
     { label: 'Officials', onPress: () => navigation.navigate(routes.officials) },
     { label: 'Agency', onPress: () => navigation.navigate(routes.agencyChoice) },
     { label: 'Bag' },
     { label: 'Settings', onPress: () => navigation.navigate(routes.settings) },
-    { label: 'Help Center' }
+    { label: 'Help Center', onPress: () => navigation.navigate(routes.helpCentre) }
   ];
 
   const content = <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -193,13 +193,11 @@ export function ProfileScreen() {
         <View style={styles.headerRow}>
           <Pressable
             onPress={() => navigation.navigate(routes.changeAvatar)}
-            // An assigned frame is its own decoration around the photo —
-            // stacking the glow ring on top of it as well looked
-            // cramped/overlapping, so the ring is only shown when there's
+          
             // no frame.
             style={frameUri ? undefined : [styles.avatarRing, { borderColor: theme.colors.teal700, shadowColor: theme.colors.teal700 }]}
           >
-            <Avatar value={user?.profileImage} fullName={user?.fullName} size={scaleModerate(82)} frameUri={frameUri} />
+            <Avatar value={user?.profileImage} fullName={user?.fullName} size={scaleModerate(70)} frameUri={frameUri} />
           </Pressable>
           <View style={styles.headerInfo}>
             <View style={styles.nameRow}>
@@ -219,7 +217,7 @@ export function ProfileScreen() {
             <View style={[styles.profileBadgeRing, { borderColor: theme.colors.secondary, shadowColor: theme.colors.secondary }]}>
               <Image source={{ uri: badgeUri }} style={styles.profileBadge} resizeMode="contain" />
             </View>
-          ) : <View style={[styles.countryBadge, { borderColor: theme.colors.tertiary }]}><Text style={styles.countryFlag}>🇵🇰</Text></View>}
+          ) : null}
         </View>
 
         <View style={styles.statsRow}>
@@ -266,7 +264,7 @@ export function ProfileScreen() {
             <Image source={coinsImage} style={styles.walletIllustration} resizeMode="contain" />
           </GlassPanel>
         </Pressable>
-        <Pressable style={styles.walletCardPressable} onPress={() => navigation.navigate(routes.comingSoon, { title: 'Tasks', message: "Tasks are still in development. We're working on it — check back soon!" })}>
+        <Pressable style={styles.walletCardPressable} onPress={() => navigation.navigate(routes.tasks)}>
           <GlassPanel style={styles.walletCard} borderColor={neonBorderColor}>
             <View style={styles.walletLabelRow}><ProfileIcon name="priority" size={scaleModerate(15)} color={theme.colors.vipGoldText} /><Text style={[styles.walletLabel, { color: theme.text.secondary }]}>Earn Coins</Text></View>
             <View style={styles.tasksRow}>
@@ -420,21 +418,6 @@ const styles = StyleSheet.create({
   profileBadge: {
     width: scaleModerate(28),
     height: scaleModerate(28)
-  },
-  countryBadge: {
-    width: scaleModerate(52),
-    height: scaleModerate(52),
-    borderRadius: scaleModerate(26),
-    borderWidth: scaleModerate(2),
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#7000FF',
-    shadowOpacity: 0.65,
-    shadowRadius: scaleModerate(8),
-    elevation: 5
-  },
-  countryFlag: {
-    fontSize: scaleFont(28)
   },
   statsRow: {
     flexDirection: 'row',
@@ -625,16 +608,16 @@ const styles = StyleSheet.create({
     marginBottom: scaleModerate(10)
   },
   toolIconImage: {
-    width: scaleModerate(58),
-    height: scaleModerate(58)
+    width: scaleModerate(50),
+    height: scaleModerate(50)
   },
   toolEmoji: {
     fontSize: scaleFont(18)
   },
   toolLabel: {
     marginTop: scaleModerate(6),
-    fontSize: scaleFont(8.5),
-    fontWeight: '600',
+    fontSize: scaleFont(10.5),
+    fontWeight: '700',
     textAlign: 'center'
   }
 });

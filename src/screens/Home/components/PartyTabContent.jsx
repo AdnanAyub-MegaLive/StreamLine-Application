@@ -33,7 +33,9 @@ function toPartyItem(room, index) {
 const DEMO_TRENDING_PARTIES = [
   { id: 'demo-party-1', title: 'Friday Night Karaoke', members: 128, hostName: 'Zara Sheikh', hostAvatar: undefined, photo: personPhotoForIndex(21) },
   { id: 'demo-party-2', title: 'Weekend Royale Tournament', members: 96, hostName: 'Omar Farooq', hostAvatar: undefined, photo: personPhotoForIndex(22) },
-  { id: 'demo-party-3', title: 'Chill & Chat Lounge', members: 54, hostName: 'Mahnoor Ali', hostAvatar: undefined, photo: personPhotoForIndex(23) }
+  { id: 'demo-party-3', title: 'Chill & Chat Lounge', members: 54, hostName: 'Mahnoor Ali', hostAvatar: undefined, photo: personPhotoForIndex(23) },
+  { id: 'demo-party-4', title: 'Desi Beats Night', members: 82, hostName: 'Hassan Raza', hostAvatar: undefined, photo: personPhotoForIndex(24) },
+  { id: 'demo-party-5', title: 'Late Night Vibes', members: 67, hostName: 'Areeba Noor', hostAvatar: undefined, photo: personPhotoForIndex(25) }
 ];
 
 
@@ -326,7 +328,8 @@ function PartyBanner({ onBannerScrolling }) {
 // the owner-authoritative seat-broadcast relay, so this can navigate in for
 // real instead of showing a placeholder.
 function PartyCard({
-  item
+  item,
+  variant = 'feature'
 }) {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -358,28 +361,30 @@ function PartyCard({
       asViewer: true
     });
   };
-  return <Pressable style={[styles.partyCard, {
+  return <Pressable style={[styles.partyCard, styles[`partyCard${variant.charAt(0).toUpperCase()}${variant.slice(1)}`], {
     backgroundColor: theme.surfaces.card,
     borderColor: theme.colors.cardBorder
   }]} onPress={handlePress}>
-      <ImageBackground source={{ uri: item.photo }} style={styles.partyThumb} imageStyle={styles.partyThumbImage}>
+      <ImageBackground source={{ uri: item.photo }} style={[styles.partyThumb, styles[`partyThumb${variant.charAt(0).toUpperCase()}${variant.slice(1)}`]]} imageStyle={styles.partyThumbImage}>
         <View style={styles.partyViewerBadge}>
           <Text style={styles.partyViewerBadgeIcon}>👥</Text>
           <Text style={styles.partyViewerBadgeText}>{item.members}</Text>
         </View>
       </ImageBackground>
-      <Text style={[styles.partyTitle, {
-      color: theme.text.primary
-    }]} numberOfLines={1}>
-        {item.title}
-      </Text>
-      <View style={styles.partyMetaRow}>
-        <Avatar value={item.hostAvatar} fullName={item.hostName} size={scaleModerate(16)} frameUri={hostFrameUri} />
-        <Text style={[styles.partyMeta, {
-        color: theme.text.secondary
-      }]} numberOfLines={1}>
-          {item.hostName}
+      <View style={styles.partyDetails}>
+        <Text style={[styles.partyTitle, variant === 'compact' && styles.partyTitleCompact, {
+        color: theme.text.primary
+        }]} numberOfLines={variant === 'compact' ? 2 : 1}>
+          {item.title}
         </Text>
+        {variant !== 'compact' ? <View style={styles.partyMetaRow}>
+          <Avatar value={item.hostAvatar} fullName={item.hostName} size={scaleModerate(16)} frameUri={hostFrameUri} />
+          <Text style={[styles.partyMeta, {
+        color: theme.text.secondary
+          }]} numberOfLines={1}>
+            {item.hostName}
+          </Text>
+        </View> : null}
       </View>
     </Pressable>;
 }
@@ -423,8 +428,18 @@ export function PartyTabContent({ onBannerScrolling }) {
       {/* DEMO DATA fallback — see DEMO_TRENDING_PARTIES above. Falls back
       to it only when the real fetch came back empty; real data always
       wins once it exists. */}
-      {(trendingParties.length > 0 ? trendingParties : DEMO_TRENDING_PARTIES).length > 0 ? <View style={styles.partyRow}>
-          {(trendingParties.length > 0 ? trendingParties : DEMO_TRENDING_PARTIES).map(item => <PartyCard key={item.id} item={item} />)}
+      {(trendingParties.length > 0 ? trendingParties : DEMO_TRENDING_PARTIES).length > 0 ? <View style={styles.partyMosaic}>
+          {(() => {
+            const parties = trendingParties.length > 0 ? trendingParties : DEMO_TRENDING_PARTIES;
+            return <>
+              <View style={styles.partyMosaicTop}>
+                {parties[0] ? <PartyCard item={parties[0]} variant="feature" /> : null}
+                {parties.length > 1 ? <View style={styles.partyMosaicSide}>
+                    {parties.slice(1, 3).map(item => <PartyCard key={item.id} item={item} variant="compact" />)}
+                  </View> : null}
+              </View>
+            </>;
+          })()}
         </View> : <View style={styles.emptyState}>
           <Text style={[styles.emptyStateText, {
         color: theme.text.secondary
@@ -496,25 +511,63 @@ const styles = StyleSheet.create({
     fontSize: scaleFont(13),
     fontWeight: '700'
   },
-  partyRow: {
+  partyMosaic: {
+    gap: scaleModerate(12)
+  },
+  partyMosaicTop: {
     flexDirection: 'row',
+    gap: scaleModerate(12),
+    height: scaleModerate(212)
+  },
+  partyMosaicSide: {
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 0,
     gap: scaleModerate(12)
   },
   partyCard: {
-    flex: 1,
     borderRadius: scaleModerate(16),
     borderWidth: 1,
     padding: scaleModerate(8)
   },
+  partyCardFeature: {
+    flexGrow: 1.65,
+    flexBasis: 0,
+    minWidth: 0,
+    height: '100%'
+  },
+  partyCardCompact: {
+    flex: 1,
+    minHeight: 0,
+    padding: scaleModerate(6)
+  },
+  partyCardWide: {
+    minHeight: scaleModerate(100),
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
   partyThumb: {
     width: '100%',
-    aspectRatio: 1,
     borderRadius: scaleModerate(16),
     overflow: 'hidden',
     marginBottom: scaleModerate(8),
     padding: scaleModerate(8),
     alignItems: 'flex-end',
     justifyContent: 'flex-end'
+  },
+  partyThumbFeature: {
+    flex: 1
+  },
+  partyThumbCompact: {
+    flex: 1,
+    marginBottom: scaleModerate(5),
+    padding: scaleModerate(5)
+  },
+  partyThumbWide: {
+    width: scaleModerate(110),
+    height: scaleModerate(80),
+    marginBottom: 0,
+    marginRight: scaleModerate(10)
   },
   partyThumbImage: {
     borderRadius: scaleModerate(16)
@@ -539,6 +592,13 @@ const styles = StyleSheet.create({
   partyTitle: {
     fontSize: scaleFont(13),
     fontWeight: '700'
+  },
+  partyTitleCompact: {
+    fontSize: scaleFont(9),
+    lineHeight: scaleFont(11)
+  },
+  partyDetails: {
+    flex: 1
   },
   partyMetaRow: {
     flexDirection: 'row',

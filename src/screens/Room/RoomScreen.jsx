@@ -31,7 +31,8 @@ import {
   joinAudioRoom,
   leaveAudioRoom,
   requestSeat,
-  respondToSeatRequest
+  respondToSeatRequest,
+  sendAudioRoomMessage
 } from '../../services/socket';
 import { routes } from '../../navigation/routes';
 import { useAppStore } from '../../store';
@@ -632,8 +633,8 @@ function ChatMessage({ message, theme }) {
   }
 
   const badgeTone = message.badge?.tone === 'secondary' ? theme.text.primary : theme.colors.teal700;
-  return (
-    <View style={styles.chatBubble}>
+  const bubble = (
+    <View style={styles.chatBubbleContent}>
       {message.badge ? (
         <View style={[styles.chatMessageBadge, { backgroundColor: theme.colors.teal700 }]}>
           {message.badge.icon === 'diamond' ? (
@@ -648,6 +649,21 @@ function ChatMessage({ message, theme }) {
       <Text style={[styles.chatBody, { color: theme.text.primary }]}>{message.text}</Text>
     </View>
   );
+
+  if (message.chatBoxUrl) {
+    return (
+      <ImageBackground
+        source={{ uri: fixLocalhostOrigin(message.chatBoxUrl) }}
+        imageStyle={styles.chatBoxArtwork}
+        resizeMode="stretch"
+        style={styles.chatBubble}
+      >
+        {bubble}
+      </ImageBackground>
+    );
+  }
+
+  return <View style={styles.chatBubble}>{bubble}</View>;
 }
 
 export function RoomScreen() {
@@ -1394,6 +1410,39 @@ export function RoomScreen() {
       ]);
     };
 
+    const handleRoomMessage = payload => {
+      const data = payload?.data;
+      if (!data || data.roomId !== activeRoomId) {
+        return;
+      }
+      setMessages(current => {
+        if (current.some(message => message.id === data.id)) {
+          return current;
+        }
+        // If this echo is the server's authoritative copy of a message we
+        // already showed optimistically (same author + text, still
+        // pending), replace the pending placeholder instead of appending a
+        // second bubble — avoids a visible duplicate once the real ack
+        // arrives.
+        const pendingIndex = current.findIndex(
+          message => message.pending && message.author === (data.sender?.name ?? 'Someone') && message.text === data.body
+        );
+        const resolved = {
+          id: data.id,
+          type: 'message',
+          author: data.sender?.name ?? 'Someone',
+          chatBoxUrl: data.sender?.chatBoxUrl ?? null,
+          text: data.body
+        };
+        if (pendingIndex !== -1) {
+          const next = [...current];
+          next[pendingIndex] = resolved;
+          return next;
+        }
+        return [...current, resolved];
+      });
+    };
+
     socket?.on('audio-room:joining-disabled', handleJoiningDisabled);
     socket?.on('audio-room:joining-enabled', handleJoiningEnabled);
     socket?.on('audio-room:blocked', handleBlocked);
@@ -1405,6 +1454,7 @@ export function RoomScreen() {
     socket?.on('audio-room:seat-response', handleSeatResponseEvent);
     socket?.on('audio-room:entrance', handleEntrance);
     socket?.on('gift:received', handleGiftBroadcast);
+    socket?.on('audio-room:message', handleRoomMessage);
     console.log('[Entrance] listener registered, socket connected:', socket?.connected);
 
     setup();
@@ -1423,6 +1473,7 @@ export function RoomScreen() {
       socket?.off('audio-room:seat-sync-request', handleSeatSyncRequest);
       socket?.off('audio-room:entrance', handleEntrance);
       socket?.off('gift:received', handleGiftBroadcast);
+      socket?.off('audio-room:message', handleRoomMessage);
       socket?.off('audio-room:seat-request', handleSeatRequestEvent);
       socket?.off('audio-room:seat-response', handleSeatResponseEvent);
       // If activeRoomId isn't known yet at this point (brand-new room,
@@ -1552,14 +1603,26 @@ export function RoomScreen() {
 
   const handleSend = () => {
     const text = draft.trim().slice(0, CHAT_MESSAGE_MAX_LENGTH);
-    if (!text) {
+    if (!text || !roomId) {
       return;
     }
+    setDraft('');
+    // Show the message in the chat box immediately instead of waiting on
+    // the server's broadcast — handleRoomMessage reconciles this pending
+    // bubble with the authoritative copy once it arrives, or it's removed
+    // below if the send actually fails.
+    const pendingId = `pending-${Date.now()}`;
     setMessages(current => [
       ...current,
-      { id: `local-${Date.now()}`, type: 'message', author: 'You', text }
+      { id: pendingId, type: 'message', author: ownerName, chatBoxUrl: null, text, pending: true }
     ]);
-    setDraft('');
+    sendAudioRoomMessage(roomId, text, result => {
+      if (!result?.success) {
+        setMessages(current => current.filter(message => message.id !== pendingId));
+        setDraft(current => (current ? current : text));
+        showAlert('Message Not Sent', 'Please reconnect to the room and try again.');
+      }
+    });
   };
 
 
@@ -2163,6 +2226,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.55)'
+  },
+  chatBubbleContent: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center'
+  },
+  chatBoxArtwork: {
+    borderRadius: scaleModerate(14),
+    borderBottomLeftRadius: 4,
+    opacity: 0.9
   },
   chatSystemLabel: {
     fontSize: scaleFont(12),

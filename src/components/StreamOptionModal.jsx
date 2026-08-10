@@ -36,7 +36,7 @@ function OptionButton({ label, color, onPress, children }) {
   const theme = useTheme();
   return (
     <Pressable onPress={onPress} style={styles.optionColumn}>
-      <Animated.View style={[styles.optionCircle, { backgroundColor: color }]}>{children}</Animated.View>
+      <Animated.View style={[styles.optionCircle, { backgroundColor: color, borderColor: theme.colors.secondary, shadowColor: theme.colors.secondary }]}>{children}</Animated.View>
       <Text style={[styles.optionLabel, { color: theme.text.primary }]}>{label}</Text>
     </Pressable>
   );
@@ -125,8 +125,13 @@ const styles = StyleSheet.create({
     width: scaleModerate(58),
     height: scaleModerate(58),
     borderRadius: scaleModerate(29),
+    borderWidth: scaleModerate(3),
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: scaleModerate(14),
+    elevation: 10
   },
   optionLabel: {
     fontSize: scaleFont(12),

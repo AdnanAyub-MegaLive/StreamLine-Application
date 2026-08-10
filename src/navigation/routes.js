@@ -33,5 +33,8 @@ export const routes = {
   myLevel: 'MyLevel',
   myWallet: 'MyWallet',
   officials: 'Officials',
-  createReel: 'CreateReel'
+  createReel: 'CreateReel',
+  badges: 'Badges',
+  tasks: 'Tasks',
+  helpCentre: 'HelpCentre'
 };

@@ -53,7 +53,7 @@ function TabPill({
     </Pressable>;
 }
 
-const HOME_TABS = ['live', 'party', 'games'];
+const HOME_TABS = ['party', 'live', 'games'];
 
 export function HomeScreen() {
   const theme = useTheme();
@@ -61,7 +61,7 @@ export function HomeScreen() {
   const {
     width
   } = useWindowDimensions();
-  const [activeTab, setActiveTab] = React.useState('live');
+  const [activeTab, setActiveTab] = React.useState('party');
   const pagerRef = React.useRef(null);
   // Disabled while a finger is on any nested horizontal scroller inside a
   // tab page (the Party banner, the Live tab's region filter row) — those
@@ -86,7 +86,7 @@ export function HomeScreen() {
   };
   const handleMomentumScrollEnd = event => {
     const index = Math.round(event.nativeEvent.contentOffset.x / width);
-    setActiveTab(HOME_TABS[index] ?? 'live');
+    setActiveTab(HOME_TABS[index] ?? 'party');
   };
   return <ImageBackground source={homeBackgroundImage} resizeMode="cover" style={[styles.background, { backgroundColor: theme.surfaces.page }]}>
       <Screen transparent>
@@ -99,8 +99,8 @@ export function HomeScreen() {
         <HeaderBar />
 
         <View style={styles.header}>
-          <TabPill label="Live" active={activeTab === 'live'} onPress={() => scrollToTab('live')} />
           <TabPill label="Party" active={activeTab === 'party'} onPress={() => scrollToTab('party')} />
+          <TabPill label="Live" active={activeTab === 'live'} onPress={() => scrollToTab('live')} />
           <TabPill label="Games" active={activeTab === 'games'} onPress={() => scrollToTab('games')} />
         </View>
 
@@ -111,12 +111,12 @@ export function HomeScreen() {
           <View style={[styles.pagerPage, {
           width
         }]}>
-            <LiveTabContent onFilterRowScrolling={handleBannerScrolling} />
+            <PartyTabContent onBannerScrolling={handleBannerScrolling} />
           </View>
           <View style={[styles.pagerPage, {
           width
         }]}>
-            <PartyTabContent onBannerScrolling={handleBannerScrolling} />
+            <LiveTabContent onFilterRowScrolling={handleBannerScrolling} />
           </View>
           <View style={[styles.pagerPage, {
           width
