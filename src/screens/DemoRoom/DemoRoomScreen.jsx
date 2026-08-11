@@ -298,6 +298,7 @@ export function DemoRoomScreen() {
   const [messages, setMessages] = React.useState(() => [
     { id: 'welcome', type: 'system', text: `Welcome to ${roomName}! Please be respectful to others.` }
   ]);
+  const chatListRef = React.useRef(null);
   const occupiedSeatCount = seatRows.flat().filter(seat => seat.occupied).length;
   const viewerCount = (members ?? 0) + occupiedSeatCount;
 
@@ -403,12 +404,14 @@ export function DemoRoomScreen() {
 
         <View style={styles.chatArea}>
           <FlatList
+            ref={chatListRef}
             data={messages}
             keyExtractor={item => item.id}
             renderItem={({ item }) => <ChatMessage message={item} theme={theme} />}
             contentContainerStyle={styles.chatListContent}
             showsVerticalScrollIndicator={false}
             style={styles.chatMask}
+            onContentSizeChange={() => chatListRef.current?.scrollToEnd({ animated: true })}
           />
         </View>
 

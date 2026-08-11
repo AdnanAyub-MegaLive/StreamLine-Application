@@ -9,6 +9,8 @@ import { RANK2_CARD_SVG, RANK2_CROP } from '../../assets/rank2CardSvg';
 import { RANK3_CARD_SVG, RANK3_CROP } from '../../assets/rank3CardSvg';
 import { useTheme } from '../../theme';
 import { Avatar, Screen, VerifiedTick } from '../../components';
+import { fetchRankings } from '../../api';
+import { useAppStore } from '../../store';
 import { scaleFont, scaleModerate } from '../../utils';
 import { FilterPill, GlassPanel, hexToRgba, PeriodPill } from './components/RankingControls';
 
@@ -27,49 +29,16 @@ const PERIODS = [
   { key: 'allTime', label: 'All Time' }
 ];
 
-const PODIUM = [
-  { rank: 2, publicId: 'shadowx', fullName: 'ShadowX', isOfficial: true, coins: 9870000, profileImage: null },
-  { rank: 1, publicId: 'obaidzafar', fullName: 'Obaid Zafar', isOfficial: true, coins: 15420000, profileImage: null },
-  { rank: 3, publicId: 'vibequeen', fullName: 'VibeQueen', isOfficial: true, coins: 7650000, profileImage: null }
-];
-
-// Placeholder — real ranking numbers should differ per period once a
-// backend leaderboard endpoint exists; these are just scaled variants of
-// the same five demo streamers so each period tab visibly shows
-// different data instead of the identical list four times.
-const RANKING_ROWS_BY_PERIOD = {
-  today: [
-    { rank: 4, publicId: 'nightrider', fullName: 'NightRider', isOfficial: true, followers: 6540, isLive: true, coins: 6230000 },
-    { rank: 5, publicId: 'ayesha', fullName: 'Ayesha', isOfficial: true, followers: 5890, isLive: false, coins: 5120000 },
-    { rank: 6, publicId: 'gameon', fullName: 'GameOn', isOfficial: true, followers: 5210, isLive: true, coins: 4890000 },
-    { rank: 7, publicId: 'synthwave', fullName: 'SynthWave', isOfficial: true, followers: 4780, isLive: false, coins: 4210000 },
-    { rank: 8, publicId: 'chillzone', fullName: 'ChillZone', isOfficial: true, followers: 4050, isLive: true, coins: 3980000 }
-  ],
-  week: [
-    { rank: 4, publicId: 'gameon', fullName: 'GameOn', isOfficial: true, followers: 5210, isLive: true, coins: 28900000 },
-    { rank: 5, publicId: 'nightrider', fullName: 'NightRider', isOfficial: true, followers: 6540, isLive: false, coins: 24600000 },
-    { rank: 6, publicId: 'chillzone', fullName: 'ChillZone', isOfficial: true, followers: 4050, isLive: true, coins: 19800000 },
-    { rank: 7, publicId: 'ayesha', fullName: 'Ayesha', isOfficial: true, followers: 5890, isLive: false, coins: 16200000 },
-    { rank: 8, publicId: 'synthwave', fullName: 'SynthWave', isOfficial: true, followers: 4780, isLive: true, coins: 14100000 }
-  ],
-  month: [
-    { rank: 4, publicId: 'synthwave', fullName: 'SynthWave', isOfficial: true, followers: 4780, isLive: false, coins: 92400000 },
-    { rank: 5, publicId: 'chillzone', fullName: 'ChillZone', isOfficial: true, followers: 4050, isLive: true, coins: 87100000 },
-    { rank: 6, publicId: 'ayesha', fullName: 'Ayesha', isOfficial: true, followers: 5890, isLive: false, coins: 74300000 },
-    { rank: 7, publicId: 'gameon', fullName: 'GameOn', isOfficial: true, followers: 5210, isLive: true, coins: 68900000 },
-    { rank: 8, publicId: 'nightrider', fullName: 'NightRider', isOfficial: true, followers: 6540, isLive: false, coins: 61200000 }
-  ],
-  allTime: [
-    { rank: 4, publicId: 'ayesha', fullName: 'Ayesha', isOfficial: true, followers: 5890, isLive: false, coins: 412000000 },
-    { rank: 5, publicId: 'synthwave', fullName: 'SynthWave', isOfficial: true, followers: 4780, isLive: true, coins: 378000000 },
-    { rank: 6, publicId: 'nightrider', fullName: 'NightRider', isOfficial: true, followers: 6540, isLive: false, coins: 345000000 },
-    { rank: 7, publicId: 'chillzone', fullName: 'ChillZone', isOfficial: true, followers: 4050, isLive: true, coins: 298000000 },
-    { rank: 8, publicId: 'gameon', fullName: 'GameOn', isOfficial: true, followers: 5210, isLive: false, coins: 265000000 }
-  ]
-};
-
 function formatCoins(value) {
   return Number(value).toLocaleString();
+}
+
+// The API returns a generic `score` (its meaning depends on the selected
+// filter/type — gift coins, live-room activity, etc.), while the podium
+///row components below were built around a `coins` field. Map it over so
+// those components don't need to change.
+function toDisplayEntry(entry) {
+  return { ...entry, coins: Number(entry.score ?? 0) };
 }
 
 
@@ -181,7 +150,7 @@ function RankingRow({ entry, onPress }) {
           {entry.isOfficial ? <VerifiedTick size={12} /> : null}
         </View>
       </View>
-      <Text style={[styles.rowFollowers, { color: theme.text.secondary }]}>{entry.followers.toLocaleString()}</Text>
+      <Text style={[styles.rowFollowers, { color: theme.text.secondary }]}>{entry.followers != null ? entry.followers.toLocaleString() : '—'}</Text>
       <View style={styles.rowLiveWrap}>
         {entry.isLive ? <View style={styles.rowLiveDotRow}>
             <View style={[styles.rowLiveDot, { backgroundColor: theme.colors.liveBadge }]} />
@@ -200,10 +169,40 @@ export function RankingsScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const sessionToken = useAppStore(state => state.session?.token);
   const [filter, setFilter] = React.useState('overall');
   const [period, setPeriod] = React.useState('today');
   const [tableWidth, setTableWidth] = React.useState(0);
   const periodPagerRef = React.useRef(null);
+  // Keyed by period — the server scopes both podium and rankings to the
+  // current filter+period in one response, so switching filters clears
+  // this cache (see the effect below) rather than trying to merge results
+  // that no longer mean the same thing.
+  const [periodData, setPeriodData] = React.useState({});
+  const [loadingPeriods, setLoadingPeriods] = React.useState({});
+
+  React.useEffect(() => {
+    setPeriodData({});
+  }, [filter]);
+
+  React.useEffect(() => {
+    if (!sessionToken || periodData[period] || loadingPeriods[period]) {
+      return;
+    }
+    setLoadingPeriods(current => ({ ...current, [period]: true }));
+    fetchRankings(sessionToken, { type: filter, period, limit: 20 })
+      .then(data => {
+        setPeriodData(current => ({ ...current, [period]: data }));
+      })
+      .catch(() => {})
+      .finally(() => {
+        setLoadingPeriods(current => ({ ...current, [period]: false }));
+      });
+  }, [sessionToken, filter, period, periodData, loadingPeriods]);
+
+  const activeData = periodData[period];
+  const podium = (activeData?.podium ?? []).map(toDisplayEntry);
+  const isLoadingActive = Boolean(loadingPeriods[period]) && !activeData;
 
   const openProfile = publicId => navigation.navigate('UserProfile', { publicId });
 
@@ -242,7 +241,15 @@ export function RankingsScreen() {
         </ScrollView>
 
         <View style={styles.podiumRow}>
-          {PODIUM.map(entry => <PodiumCard key={entry.publicId} entry={entry} onPress={() => openProfile(entry.publicId)} />)}
+          {podium.length > 0 ? (
+            // Visual podium order is 2nd-place, 1st-place, 3rd-place
+            // (left to right) — the server always returns rank-ascending.
+            [...podium].sort((a, b) => [2, 1, 3].indexOf(a.rank) - [2, 1, 3].indexOf(b.rank)).map(entry => <PodiumCard key={entry.publicId} entry={entry} onPress={() => openProfile(entry.publicId)} />)
+          ) : isLoadingActive ? (
+            <Text style={[styles.emptyRankingsText, styles.emptyRankingsTextLight]}>Loading leaderboard...</Text>
+          ) : (
+            <Text style={[styles.emptyRankingsText, styles.emptyRankingsTextLight]}>No rankings yet.</Text>
+          )}
         </View>
 
         <View style={styles.periodScrollContent}>
@@ -266,9 +273,19 @@ export function RankingsScreen() {
               showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={handlePeriodPagerScrollEnd}
             >
-              {PERIODS.map(item => <View key={item.key} style={{ width: tableWidth }}>
-                  {RANKING_ROWS_BY_PERIOD[item.key].map(entry => <RankingRow key={entry.publicId} entry={entry} onPress={() => openProfile(entry.publicId)} />)}
-                </View>)}
+              {PERIODS.map(item => {
+                const pageData = periodData[item.key];
+                const pageRows = (pageData?.rankings ?? []).map(toDisplayEntry);
+                return <View key={item.key} style={{ width: tableWidth }}>
+                    {pageRows.length > 0 ? (
+                      pageRows.map(entry => <RankingRow key={entry.publicId} entry={entry} onPress={() => openProfile(entry.publicId)} />)
+                    ) : (
+                      <Text style={[styles.emptyRankingsText, { color: theme.text.secondary }]}>
+                        {loadingPeriods[item.key] && !pageData ? 'Loading...' : 'No rankings yet for this period.'}
+                      </Text>
+                    )}
+                  </View>;
+              })}
             </ScrollView> : null}
         </GlassPanel>
 
@@ -654,6 +671,15 @@ const styles = StyleSheet.create({
   climbChevron: {
     fontSize: scaleFont(16),
     fontWeight: '700'
+  },
+  emptyRankingsText: {
+    paddingVertical: scaleModerate(20),
+    paddingHorizontal: scaleModerate(16),
+    textAlign: 'center',
+    fontSize: scaleFont(11.5)
+  },
+  emptyRankingsTextLight: {
+    color: '#E4E4EA'
   }
 });
 

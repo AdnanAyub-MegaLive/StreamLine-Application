@@ -882,6 +882,7 @@ export function RoomScreen() {
   const [draft, setDraft] = React.useState('');
   const [messages, setMessages] = React.useState([]);
   const hasWelcomedRef = React.useRef(false);
+  const chatListRef = React.useRef(null);
 
   const [currentEntrance, setCurrentEntrance] = React.useState(null);
   const entranceQueueRef = React.useRef([]);
@@ -1802,12 +1803,14 @@ export function RoomScreen() {
 
         <View style={styles.chatArea}>
           <FlatList
+            ref={chatListRef}
             data={messages}
             keyExtractor={item => item.id}
             renderItem={({ item }) => <ChatMessage message={item} theme={theme} />}
             contentContainerStyle={styles.chatListContent}
             showsVerticalScrollIndicator={false}
             style={styles.chatMask}
+            onContentSizeChange={() => chatListRef.current?.scrollToEnd({ animated: true })}
           />
         </View>
 

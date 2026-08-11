@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme';
 import { Screen } from '../../components';
@@ -14,6 +14,7 @@ export function BannerDetailScreen() {
   const { uri, title, subtitle } = route.params ?? {};
 
   return <Screen>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
           <Text style={[styles.backChevron, { color: theme.text.primary }]}>‹</Text>
@@ -24,6 +25,7 @@ export function BannerDetailScreen() {
         <Text style={[styles.title, { color: theme.text.primary }]}>{title || 'Banner'}</Text>
         <Text style={[styles.subtitle, { color: theme.text.secondary }]}>{subtitle || 'More coming soon.'}</Text>
       </View>
+      </ScrollView>
     </Screen>;
 }
 
@@ -44,6 +46,9 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: scaleModerate(20),
     paddingTop: scaleModerate(16)
+  },
+  scrollContent: {
+    paddingBottom: scaleModerate(28)
   },
   title: {
     fontSize: scaleFont(20),

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { fetchMyAgencyApplication, fetchMyAgencyJoinRequest } from '../../api';
 import { Screen } from '../../components';
@@ -81,6 +81,7 @@ export function AgencyChoiceScreen() {
   }
 
   return <Screen>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <View style={styles.headerRow}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
           <Text style={[styles.backChevron, { color: theme.text.primary }]}>‹</Text>
@@ -105,6 +106,7 @@ export function AgencyChoiceScreen() {
           theme={theme}
         />
       </View>
+      </ScrollView>
     </Screen>;
 }
 
@@ -137,6 +139,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: scaleModerate(20),
     paddingTop: scaleModerate(20),
     gap: scaleModerate(14)
+  },
+  scrollContent: {
+    paddingBottom: scaleModerate(28)
   },
   card: {
     flexDirection: 'row',

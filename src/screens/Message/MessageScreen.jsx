@@ -1,8 +1,8 @@
 import React from 'react';
-import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { messageBackgroundImage, SearchIcon, UserIcon } from '../../assets';
+import { messageBackgroundImage, SearchIcon, UserIcon, worldChatImage } from '../../assets';
 import { useTheme } from '../../theme';
 import { Avatar, Screen, VerifiedTick } from '../../components';
 import { fetchIncomingFriendRequests, startConversation } from '../../api';
@@ -43,14 +43,14 @@ function HeaderBar({ searchOpen, query, onToggleSearch, onChangeQuery, requestCo
     </View>;
 }
 
-function BroadcastRow({ emoji, iconBackground, title, time, children, unreadDot, unreadCount, onPress }) {
+function BroadcastRow({ emoji, iconBackground, iconImage, title, time, children, unreadDot, unreadCount, onPress }) {
   const theme = useTheme();
   return <Pressable onPress={onPress} style={[styles.broadcastRow, {
       backgroundColor: theme.surfaces.card,
       borderColor: theme.colors.cardBorder
     }]}>
       <View style={[styles.broadcastIcon, { backgroundColor: iconBackground }]}>
-        <Text style={styles.broadcastEmoji}>{emoji}</Text>
+        {iconImage ? <Image source={iconImage} style={styles.broadcastImage} resizeMode="cover" /> : <Text style={styles.broadcastEmoji}>{emoji}</Text>}
       </View>
       <View style={styles.rowBody}>
         <View style={styles.rowTopLine}>
@@ -207,7 +207,7 @@ export function MessageScreen() {
         {!trimmedQuery && systemNotification ? <BroadcastRow emoji="📣" iconBackground={theme.colors.vipGoldBackground} title="System Notifications" time={systemNotification.time} unreadDot={systemNotification.unread}>
             {systemNotification.preview}
           </BroadcastRow> : null}
-        {worldChat && worldChatMatches ? <BroadcastRow emoji="🌐" iconBackground={theme.colors.proGamerBackground} title="World Chat" time={worldChat.time} unreadCount={worldChat.unreadCount} onPress={() => openConversation({ id: worldChat.id, name: worldChat.name, avatar: null })}>
+        {worldChat && worldChatMatches ? <BroadcastRow iconImage={worldChatImage} iconBackground={theme.colors.proGamerBackground} title="World Chat" time={worldChat.time} unreadCount={worldChat.unreadCount} onPress={() => openConversation({ id: worldChat.id, name: worldChat.name, avatar: null })}>
             {worldChat.preview}
           </BroadcastRow> : null}
 
@@ -311,6 +311,10 @@ const styles = StyleSheet.create({
   },
   broadcastEmoji: {
     fontSize: scaleFont(20)
+  },
+  broadcastImage: {
+    width: '100%',
+    height: '100%'
   },
   connectionNotice: {
     borderRadius: scaleModerate(12),

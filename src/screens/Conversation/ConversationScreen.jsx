@@ -1,11 +1,12 @@
 import React from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme';
 import { Avatar, Screen, VerifiedTick } from '../../components';
 import { fetchMessages, markConversationRead } from '../../api';
 import { useUserAssets } from '../../hooks';
 import { routes } from '../../navigation/routes';
+import { worldChatImage } from '../../assets';
 import { getSessionSocket, sendMessage } from '../../services/socket';
 import { useAppStore } from '../../store';
 import { scaleFont, scaleModerate } from '../../utils';
@@ -30,6 +31,7 @@ export function ConversationScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { conversationId, name, avatar, participantId, frameUrl, badgeUrl, gender, dob, isOfficial } = route.params ?? {};
+  const isWorldChat = conversationId === 'CONV-WORLD';
   const sessionToken = useAppStore(state => state.session?.token);
   const myPublicId = useAppStore(state => state.session?.user?.publicId);
   // 'world-chat' is a fake, never-real userId — passing undefined here
@@ -97,7 +99,7 @@ export function ConversationScreen() {
           onPress={() => participantId && navigation.navigate(routes.userProfile, { userId: participantId, userName: name, userAvatar: avatar, userFrameUrl: frameUrl, userBadgeUrl: badgeUrl, userGender: gender, userDob: dob, userIsOfficial: isOfficial })}
           disabled={!participantId}
         >
-          <Avatar value={avatar} fullName={name} size={scaleModerate(34)} frameUri={frameUri} />
+          {isWorldChat ? <View style={styles.worldChatAvatar}><Image source={worldChatImage} style={styles.worldChatAvatarImage} resizeMode="cover" /></View> : <Avatar value={avatar} fullName={name} size={scaleModerate(34)} frameUri={frameUri} />}
         </Pressable>
         <Text style={[styles.headerTitle, { color: theme.text.primary }]} numberOfLines={1}>{name}</Text>
         {isOfficial ? <VerifiedTick size={13} /> : null}
@@ -149,6 +151,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: scaleFont(16),
     fontWeight: '800'
+  },
+  worldChatAvatar: {
+    width: scaleModerate(34),
+    height: scaleModerate(34),
+    borderRadius: 999,
+    overflow: 'hidden'
+  },
+  worldChatAvatarImage: {
+    width: '100%',
+    height: '100%'
   },
   list: {
     padding: scaleModerate(16),

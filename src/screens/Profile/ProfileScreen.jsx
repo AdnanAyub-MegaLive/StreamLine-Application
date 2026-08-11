@@ -4,9 +4,9 @@ import LinearGradient from 'react-native-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  coinsImage,
   profileBackgroundImage,
   tasksImage,
+  walletDiamondsImage,
   toolAgencyImage,
   toolBadgesImage,
   toolBagImage,
@@ -20,7 +20,7 @@ import {
 } from '../../assets';
 import { useTheme } from '../../theme';
 import { Avatar, GenderAgeChip, Screen, VerifiedTick } from '../../components';
-import { fetchFriends, fetchStoreCatalog } from '../../api';
+import { fetchFriends, fetchWallet } from '../../api';
 import { useAssignedBadge, useAssignedFrame } from '../../hooks';
 import { useAppStore } from '../../store';
 import { scaleFont, scaleModerate } from '../../utils';
@@ -134,7 +134,7 @@ export function ProfileScreen() {
   const frameUri = useAssignedFrame();
   const badgeUri = useAssignedBadge();
   const [friendCount, setFriendCount] = React.useState(0);
-  const [coinBalance, setCoinBalance] = React.useState(null);
+  const [diamondBalance, setDiamondBalance] = React.useState(null);
   const borderAnim = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
@@ -159,9 +159,9 @@ export function ProfileScreen() {
             setFriendCount(friends.length);
           }
         });
-        fetchStoreCatalog(session.token).then(data => {
+        fetchWallet(session.token).then(data => {
           if (!cancelled) {
-            setCoinBalance(data.balance);
+            setDiamondBalance(data.diamonds ?? 0);
           }
         }).catch(() => {});
       }
@@ -255,13 +255,13 @@ export function ProfileScreen() {
           <GlassPanel style={styles.walletCard} borderColor={neonBorderColor}>
             <View style={styles.walletLabelRow}><ProfileIcon name="wallet" size={scaleModerate(15)} color={theme.colors.secondary} /><Text style={[styles.walletLabel, { color: theme.text.secondary }]}>My Wallet</Text></View>
             <Text style={[styles.walletValue, { color: theme.text.primary }]}>
-              {coinBalance !== null ? Number(coinBalance).toLocaleString() : '0'}
+              {diamondBalance !== null ? Number(diamondBalance).toLocaleString() : '0'}
             </Text>
             <View style={styles.walletUnitRow}>
-              <Text style={[styles.walletUnit, { color: theme.colors.vipGoldText }]}>Coins</Text>
-              <Image source={coinsImage} style={styles.walletUnitIcon} resizeMode="contain" />
+              <Text style={[styles.walletUnit, { color: theme.colors.vipGoldText }]}>Diamonds</Text>
+              <ProfileIcon name="diamond" size={scaleModerate(16)} color={theme.colors.vipGoldText} />
             </View>
-            <Image source={coinsImage} style={styles.walletIllustration} resizeMode="contain" />
+            <Image source={walletDiamondsImage} style={styles.walletIllustration} resizeMode="contain" />
           </GlassPanel>
         </Pressable>
         <Pressable style={styles.walletCardPressable} onPress={() => navigation.navigate(routes.tasks)}>
@@ -302,6 +302,7 @@ const styles = StyleSheet.create({
     flex: 1
   },
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: scaleModerate(14),
     paddingTop: scaleModerate(4),
     paddingBottom: scaleModerate(28)

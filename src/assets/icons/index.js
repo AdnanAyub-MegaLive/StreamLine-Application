@@ -23,3 +23,5 @@ export * from './DotsIcon';
 export * from './PlayIcon';
 export * from './SpeakerIcon';
 export * from './RepostIcon';
+export * from './WalletActionIcon';
+export * from './TransactionStatusIcon';

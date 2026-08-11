@@ -1,6 +1,7 @@
 import React from 'react';
-import { Animated, Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import LinearGradient from 'react-native-linear-gradient';
 import { fetchDiscoverRooms } from '../../../api';
 import { agencyApplyBannerImage } from '../../../assets';
 import { Avatar } from '../../../components';
@@ -10,8 +11,16 @@ import { useTheme } from '../../../theme';
 import { routes } from '../../../navigation/routes';
 import { scaleFont, scaleModerate } from '../../../utils';
 
-function personPhotoForIndex(index) {
-  return `https://i.pravatar.cc/400?img=${(index % 70) + 1}`;
+const PARTY_THUMBNAIL_URLS = [
+  'https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=85',
+  'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=85',
+  'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=85',
+  'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=85',
+  'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=85'
+];
+
+function partyPhotoForIndex(index) {
+  return PARTY_THUMBNAIL_URLS[index % PARTY_THUMBNAIL_URLS.length];
 }
 
 // See StreamLine-Portal/docs/mobile-audio-room-api.md's "Discover live
@@ -26,16 +35,16 @@ function toPartyItem(room, index) {
     hostName: room.owner?.name ?? 'Unknown host',
     hostAvatar: room.owner?.profileImage,
     hostFrameUrl: room.owner?.frameUrl ?? null,
-    photo: personPhotoForIndex(index)
+    photo: room.coverImage ?? room.thumbnailUrl ?? room.imageUrl ?? partyPhotoForIndex(index)
   };
 }
 
 const DEMO_TRENDING_PARTIES = [
-  { id: 'demo-party-1', title: 'Friday Night Karaoke', members: 128, hostName: 'Zara Sheikh', hostAvatar: undefined, photo: personPhotoForIndex(21) },
-  { id: 'demo-party-2', title: 'Weekend Royale Tournament', members: 96, hostName: 'Omar Farooq', hostAvatar: undefined, photo: personPhotoForIndex(22) },
-  { id: 'demo-party-3', title: 'Chill & Chat Lounge', members: 54, hostName: 'Mahnoor Ali', hostAvatar: undefined, photo: personPhotoForIndex(23) },
-  { id: 'demo-party-4', title: 'Desi Beats Night', members: 82, hostName: 'Hassan Raza', hostAvatar: undefined, photo: personPhotoForIndex(24) },
-  { id: 'demo-party-5', title: 'Late Night Vibes', members: 67, hostName: 'Areeba Noor', hostAvatar: undefined, photo: personPhotoForIndex(25) }
+  { id: 'demo-party-1', title: 'Friday Night Karaoke', members: 128, hostName: 'Zara Sheikh', hostAvatar: undefined, photo: PARTY_THUMBNAIL_URLS[0] },
+  { id: 'demo-party-2', title: 'Weekend Royale Tournament', members: 96, hostName: 'Omar Farooq', hostAvatar: undefined, photo: PARTY_THUMBNAIL_URLS[1] },
+  { id: 'demo-party-3', title: 'Chill & Chat Lounge', members: 54, hostName: 'Mahnoor Ali', hostAvatar: undefined, photo: PARTY_THUMBNAIL_URLS[2] },
+  { id: 'demo-party-4', title: 'Desi Beats Night', members: 82, hostName: 'Hassan Raza', hostAvatar: undefined, photo: PARTY_THUMBNAIL_URLS[3] },
+  { id: 'demo-party-5', title: 'Late Night Vibes', members: 67, hostName: 'Areeba Noor', hostAvatar: undefined, photo: PARTY_THUMBNAIL_URLS[4] }
 ];
 
 
@@ -329,7 +338,8 @@ function PartyBanner({ onBannerScrolling }) {
 // real instead of showing a placeholder.
 function PartyCard({
   item,
-  variant = 'feature'
+  variant = 'feature',
+  style
 }) {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -361,30 +371,41 @@ function PartyCard({
       asViewer: true
     });
   };
-  return <Pressable style={[styles.partyCard, styles[`partyCard${variant.charAt(0).toUpperCase()}${variant.slice(1)}`], {
+  return <Pressable style={[styles.partyCard, styles[`partyCard${variant.charAt(0).toUpperCase()}${variant.slice(1)}`], style, {
     backgroundColor: theme.surfaces.card,
     borderColor: theme.colors.cardBorder
   }]} onPress={handlePress}>
-      <ImageBackground source={{ uri: item.photo }} style={[styles.partyThumb, styles[`partyThumb${variant.charAt(0).toUpperCase()}${variant.slice(1)}`]]} imageStyle={styles.partyThumbImage}>
-        <View style={styles.partyViewerBadge}>
-          <Text style={styles.partyViewerBadgeIcon}>👥</Text>
-          <Text style={styles.partyViewerBadgeText}>{item.members}</Text>
+      <View style={[styles.partyThumb, styles[`partyThumb${variant.charAt(0).toUpperCase()}${variant.slice(1)}`]]}>
+        <Image source={{ uri: item.photo }} resizeMode="cover" style={styles.partyImage} />
+        <LinearGradient
+          colors={[
+            'rgba(0,0,0,0)',
+            'rgba(0,0,0,0.05)',
+            'rgba(0,0,0,0.25)',
+            'rgba(0,0,0,0.60)',
+            'rgba(0,0,0,0.90)'
+          ]}
+          locations={[0, 0.30, 0.50, 0.75, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.partyTextGradient}
+          pointerEvents="none"
+        />
+        <View style={[styles.partyViewerBadge, variant === 'compact' && styles.partyViewerBadgeCompact]}>
+          <Text style={[styles.partyViewerBadgeIcon, variant === 'compact' && styles.partyViewerBadgeIconCompact]}>👥</Text>
+          <Text style={[styles.partyViewerBadgeText, variant === 'compact' && styles.partyViewerBadgeTextCompact]}>{item.members}</Text>
         </View>
-      </ImageBackground>
-      <View style={styles.partyDetails}>
-        <Text style={[styles.partyTitle, variant === 'compact' && styles.partyTitleCompact, {
-        color: theme.text.primary
-        }]} numberOfLines={variant === 'compact' ? 2 : 1}>
-          {item.title}
-        </Text>
-        {variant !== 'compact' ? <View style={styles.partyMetaRow}>
-          <Avatar value={item.hostAvatar} fullName={item.hostName} size={scaleModerate(16)} frameUri={hostFrameUri} />
-          <Text style={[styles.partyMeta, {
-        color: theme.text.secondary
-          }]} numberOfLines={1}>
-            {item.hostName}
+        <View style={[styles.partyDetails, variant === 'compact' && styles.partyDetailsCompact]}>
+          <Text style={[styles.partyTitle, variant === 'compact' && styles.partyTitleCompact]} numberOfLines={1}>
+            {item.title}
           </Text>
-        </View> : null}
+          {variant !== 'compact' ? <View style={styles.partyMetaRow}>
+            <Avatar value={item.hostAvatar} fullName={item.hostName} size={scaleModerate(16)} frameUri={hostFrameUri} />
+            <Text style={styles.partyMeta} numberOfLines={1}>
+              {item.hostName}
+            </Text>
+          </View> : null}
+        </View>
       </View>
     </Pressable>;
 }
@@ -393,6 +414,11 @@ export function PartyTabContent({ onBannerScrolling }) {
   const theme = useTheme();
   const sessionToken = useAppStore(store => store.session?.token);
   const [trendingParties, setTrendingParties] = React.useState([]);
+  const [mosaicWidth, setMosaicWidth] = React.useState(0);
+  const mosaicGap = scaleModerate(12);
+  // One featured square is exactly two compact squares plus their shared gap.
+  const compactCardSize = Math.max(0, (mosaicWidth - mosaicGap * 2) / 3);
+  const featureCardSize = compactCardSize * 2 + mosaicGap;
 
   const loadTrending = React.useCallback(async () => {
     if (!sessionToken) {
@@ -432,10 +458,10 @@ export function PartyTabContent({ onBannerScrolling }) {
           {(() => {
             const parties = trendingParties.length > 0 ? trendingParties : DEMO_TRENDING_PARTIES;
             return <>
-              <View style={styles.partyMosaicTop}>
-                {parties[0] ? <PartyCard item={parties[0]} variant="feature" /> : null}
-                {parties.length > 1 ? <View style={styles.partyMosaicSide}>
-                    {parties.slice(1, 3).map(item => <PartyCard key={item.id} item={item} variant="compact" />)}
+              <View style={[styles.partyMosaicTop, mosaicWidth > 0 && { height: featureCardSize }]} onLayout={event => setMosaicWidth(event.nativeEvent.layout.width)}>
+                {parties[0] ? <PartyCard item={parties[0]} variant="feature" style={mosaicWidth > 0 ? [styles.partyCardMeasured, { width: featureCardSize, height: featureCardSize }] : undefined} /> : null}
+                {parties.length > 1 ? <View style={[styles.partyMosaicSide, mosaicWidth > 0 && styles.partyMosaicSideMeasured, mosaicWidth > 0 && { width: compactCardSize }]}>
+                    {parties.slice(1, 3).map(item => <PartyCard key={item.id} item={item} variant="compact" style={mosaicWidth > 0 ? [styles.partyCardMeasured, { width: compactCardSize, height: compactCardSize }] : undefined} />)}
                   </View> : null}
               </View>
             </>;
@@ -525,10 +551,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: scaleModerate(12)
   },
+  partyMosaicSideMeasured: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto'
+  },
   partyCard: {
-    borderRadius: scaleModerate(16),
+    borderRadius: scaleModerate(14),
     borderWidth: 1,
-    padding: scaleModerate(8)
+    padding: scaleModerate(8),
+    overflow: 'hidden'
   },
   partyCardFeature: {
     flexGrow: 1.65,
@@ -541,6 +573,12 @@ const styles = StyleSheet.create({
     minHeight: 0,
     padding: scaleModerate(6)
   },
+  partyCardMeasured: {
+    flex: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto'
+  },
   partyCardWide: {
     minHeight: scaleModerate(100),
     flexDirection: 'row',
@@ -548,20 +586,17 @@ const styles = StyleSheet.create({
   },
   partyThumb: {
     width: '100%',
-    borderRadius: scaleModerate(16),
+    aspectRatio: 1,
+    borderRadius: scaleModerate(14),
     overflow: 'hidden',
-    marginBottom: scaleModerate(8),
-    padding: scaleModerate(8),
-    alignItems: 'flex-end',
-    justifyContent: 'flex-end'
+    position: 'relative',
+    flex: 1
   },
   partyThumbFeature: {
     flex: 1
   },
   partyThumbCompact: {
-    flex: 1,
-    marginBottom: scaleModerate(5),
-    padding: scaleModerate(5)
+    flex: 1
   },
   partyThumbWide: {
     width: scaleModerate(110),
@@ -569,10 +604,21 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     marginRight: scaleModerate(10)
   },
-  partyThumbImage: {
-    borderRadius: scaleModerate(16)
+  partyImage: {
+    width: '100%',
+    height: '100%'
+  },
+  partyTextGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0
   },
   partyViewerBadge: {
+    position: 'absolute',
+    right: scaleModerate(6),
+    bottom: scaleModerate(6),
     flexDirection: 'row',
     alignItems: 'center',
     gap: scaleModerate(3),
@@ -589,16 +635,38 @@ const styles = StyleSheet.create({
     fontSize: scaleFont(10),
     fontWeight: '800'
   },
+  partyViewerBadgeCompact: {
+    right: scaleModerate(4),
+    bottom: scaleModerate(4),
+    gap: scaleModerate(2),
+    paddingHorizontal: scaleModerate(4),
+    paddingVertical: scaleModerate(2)
+  },
+  partyViewerBadgeIconCompact: {
+    fontSize: scaleFont(7)
+  },
+  partyViewerBadgeTextCompact: {
+    fontSize: scaleFont(7)
+  },
   partyTitle: {
     fontSize: scaleFont(13),
-    fontWeight: '700'
+    fontWeight: '700',
+    color: '#FFFFFF'
   },
   partyTitleCompact: {
     fontSize: scaleFont(9),
     lineHeight: scaleFont(11)
   },
   partyDetails: {
-    flex: 1
+    position: 'absolute',
+    left: scaleModerate(8),
+    right: scaleModerate(8),
+    bottom: scaleModerate(8)
+  },
+  partyDetailsCompact: {
+    left: scaleModerate(4),
+    right: '44%',
+    bottom: scaleModerate(4)
   },
   partyMetaRow: {
     flexDirection: 'row',
@@ -608,7 +676,8 @@ const styles = StyleSheet.create({
   },
   partyMeta: {
     fontSize: scaleFont(11),
-    flex: 1
+    flex: 1,
+    color: 'rgba(255,255,255,0.82)'
   },
   emptyState: {
     paddingVertical: scaleModerate(40),
