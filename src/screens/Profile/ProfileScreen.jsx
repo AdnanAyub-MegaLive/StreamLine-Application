@@ -59,8 +59,6 @@ function GlassPanel({ style, borderColor, children }) {
 const VIP_BADGE_SPRITE_SIZE = { width: 1536, height: 1024 };
 const VIP_BADGE_SPRITE_COUNT = 5;
 const VIP_BADGE_SPRITE_CELL_WIDTH = VIP_BADGE_SPRITE_SIZE.width / VIP_BADGE_SPRITE_COUNT;
-// Circle badges sit centered in each cell on a plain gray backdrop —
-// crop tightly to the circle itself so the backdrop never shows.
 const VIP_BADGE_CIRCLE = { diameterRatio: 0.82, centerYRatio: 0.493 };
 
 function VipBadgeIcon({ index, size }) {

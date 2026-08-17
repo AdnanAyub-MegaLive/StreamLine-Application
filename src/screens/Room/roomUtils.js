@@ -9,7 +9,7 @@ export function buildSeatRowsFromGroups(seatGroups) {
   let seatIndex = 0;
   return seatGroups.map((count, rowIndex) => Array.from({ length: count }, () => {
     seatIndex += 1;
-    return { id: `row${rowIndex}-seat${seatIndex}`, name: null, occupied: false };
+    return { id: `row${rowIndex}-seat${seatIndex}`, name: null, occupied: false, locked: false };
   }));
 }
 

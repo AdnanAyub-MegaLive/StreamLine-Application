@@ -1,15 +1,29 @@
 import React from 'react';
-import { FlatList, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { FlatList, ImageBackground, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../../theme';
 import { routes } from '../../../navigation/routes';
+import { fetchDiscoverRooms } from '../../../api';
+import { useAppStore } from '../../../store';
+import { RegionFilterRow } from '../../../components';
+import { matchesRegionFilter } from '../../../data/regions';
 import { scaleFont, scaleModerate } from '../../../utils';
 
-// No public "browse all live rooms" API exists on the backend yet — only
-// GET /api/audio-rooms (the current user's own rooms). This stays empty
-// until that listing endpoint exists, instead of showing fake rooms.
-const liveRooms = [];
+// GET /api/audio-rooms/discover is the same public listing endpoint the
+// Party tab already uses (see PartyTabContent's toPartyItem) — reused here
+// instead of the old hardcoded-empty liveRooms array, so this tab shows
+// real live rooms too instead of always falling back to demo data.
+function toLiveItem(room, index) {
+  return {
+    id: room.roomId,
+    hostName: room.owner?.name ?? 'Unknown host',
+    hostTag: room.title,
+    viewers: room.participantCount,
+    country: room.country ?? null,
+    photo: room.roomBackgroundUrl ?? room.owner?.profileImage ?? personPhotoForIndex(index)
+  };
+}
 
 
 function personPhotoForIndex(index) {
@@ -27,17 +41,6 @@ const DEMO_LIVE_ROOMS = [
   { id: 'demo-live-4', hostName: 'Saad Malik', hostTag: '@saadmalik', viewers: '612', photo: personPhotoForIndex(14) },
   { id: 'demo-live-5', hostName: 'Hina Farooq', hostTag: '@hinafarooq', viewers: '389', photo: personPhotoForIndex(15) },
   { id: 'demo-live-6', hostName: 'Danish Iqbal', hostTag: '@danishiqbal', viewers: '201', photo: personPhotoForIndex(16) }
-];
-
-// Grouped by region instead of individual countries — each chip's flags
-// are just the representative countries for that region, not an
-// exhaustive list of every country actually included in it.
-const regionFilters = [
-  { id: 'all', label: 'All', flags: '' },
-  { id: 'middle-east', label: 'Middle East', flags: '🇸🇦🇦🇪🇰🇼🇶🇦' },
-  { id: 'south-asia', label: 'South Asia', flags: '🇵🇰🇮🇳🇧🇩' },
-  { id: 'africa', label: 'Africa', flags: '🇪🇬🇳🇬🇰🇪' },
-  { id: 'global', label: 'Global', flags: '🌍' }
 ];
 
 function LiveBadge() {
@@ -71,7 +74,10 @@ function LiveRoomCard({
       });
       return;
     }
-    navigation.navigate(routes.room, { roomId: item.id });
+    // Matches PartyTabContent's real-room navigation — mode/asViewer are
+    // required for RoomScreen to treat this as joining someone else's live
+    // room instead of defaulting to starting the viewer's own.
+    navigation.navigate(routes.room, { roomId: item.id, roomName: item.hostTag, mode: 'audio', asViewer: true });
   };
   return <Pressable style={[styles.liveCard, {
     backgroundColor: theme.surfaces.card,
@@ -104,82 +110,6 @@ function LiveRoomCard({
     </Pressable>;
 }
 
-// Same manual tap-detection as PartyBanner's carousel, and for the same
-// reason: the row wrapper below has to disable HomeScreen's tab pager the
-// instant a touch starts (see onFilterRowScrolling), otherwise the pager
-// (also horizontal, one level up) wins the drag before this row's own
-// ScrollView ever sees it and the region chips can't be scrolled at all.
-// But flipping the pager's native scrollEnabled prop mid-touch makes
-// Android cancel any Pressable's in-progress responder chain, so a normal
-// <Pressable onPress> here would silently stop registering taps — exactly
-// what broke the banner before it switched to tracking touches directly.
-const CHIP_TAP_MAX_MOVEMENT = 10;
-const CHIP_TAP_MAX_DURATION = 300;
-
-function FilterChip({ region, active, theme, onSelect }) {
-  const touchStartRef = React.useRef(null);
-  const handleTouchStart = event => {
-    touchStartRef.current = {
-      x: event.nativeEvent.pageX,
-      y: event.nativeEvent.pageY,
-      time: Date.now()
-    };
-  };
-  const handleTouchEnd = event => {
-    const start = touchStartRef.current;
-    touchStartRef.current = null;
-    if (!start) {
-      return;
-    }
-    const dx = Math.abs(event.nativeEvent.pageX - start.x);
-    const dy = Math.abs(event.nativeEvent.pageY - start.y);
-    const duration = Date.now() - start.time;
-    if (dx < CHIP_TAP_MAX_MOVEMENT && dy < CHIP_TAP_MAX_MOVEMENT && duration < CHIP_TAP_MAX_DURATION) {
-      onSelect(region.id);
-    }
-  };
-  return <View
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={() => {
-        touchStartRef.current = null;
-      }}
-      style={[styles.filterChip, {
-        backgroundColor: active ? theme.colors.teal700 : theme.surfaces.card,
-        borderColor: active ? theme.colors.teal700 : theme.colors.cardBorder
-      }]}
-    >
-      <Text style={[styles.filterChipText, {
-      color: active ? theme.cta.primary.text : theme.text.secondary
-    }]}>{region.flags ? `${region.flags} ${region.label}` : region.label}</Text>
-    </View>;
-}
-
-function CountryFilterRow({
-  activeFilter,
-  onSelect,
-  onFilterRowScrolling
-}) {
-  const theme = useTheme();
-  const pausedRef = React.useRef(false);
-  const handleRowTouchStart = () => {
-    if (!pausedRef.current) {
-      pausedRef.current = true;
-      onFilterRowScrolling?.(true);
-    }
-  };
-  const handleRowTouchEnd = () => {
-    if (pausedRef.current) {
-      pausedRef.current = false;
-      onFilterRowScrolling?.(false);
-    }
-  };
-  return <View onTouchStart={handleRowTouchStart} onTouchEnd={handleRowTouchEnd} onTouchCancel={handleRowTouchEnd}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-        {regionFilters.map(region => <FilterChip key={region.id} region={region} active={region.id === activeFilter} theme={theme} onSelect={onSelect} />)}
-      </ScrollView>
-    </View>;
-}
 
 function LiveEmptyState() {
   const theme = useTheme();
@@ -191,34 +121,64 @@ function LiveEmptyState() {
 }
 
 export function LiveTabContent({ onFilterRowScrolling }) {
-  const [activeFilter, setActiveFilter] = React.useState('all');
+  const theme = useTheme();
+  const sessionToken = useAppStore(store => store.session?.token);
+  const regionFilter = useAppStore(store => store.regionFilter);
+  const [liveRooms, setLiveRooms] = React.useState([]);
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const loadLiveRooms = React.useCallback(async () => {
+    if (!sessionToken) {
+      return;
+    }
+    const rooms = await fetchDiscoverRooms(sessionToken);
+    setLiveRooms(rooms.map(toLiveItem));
+  }, [sessionToken]);
+
+  // Refetch every time the Live tab is focused, same as the Party tab, so a
+  // room started since the last visit shows up without a full app restart.
+  useFocusEffect(
+    React.useCallback(() => {
+      loadLiveRooms();
+    }, [loadLiveRooms])
+  );
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadLiveRooms().catch(() => {});
+    setRefreshing(false);
+  };
+
   // Falls back to DEMO_LIVE_ROOMS above whenever the real list is empty —
-  // see the comment on that constant.
-  const data = liveRooms.length ? liveRooms : DEMO_LIVE_ROOMS;
-  return <FlatList data={data} keyExtractor={item => item.id} numColumns={2} columnWrapperStyle={data.length ? styles.liveRow : undefined} contentContainerStyle={styles.liveList} ListHeaderComponent={<CountryFilterRow activeFilter={activeFilter} onSelect={setActiveFilter} onFilterRowScrolling={onFilterRowScrolling} />} ListEmptyComponent={<LiveEmptyState />} renderItem={({
-    item
-  }) => <LiveRoomCard item={item} />} />;
+  // see the comment on that constant. Demo rooms have no country, so they
+  // only show up while the "All" region filter is active.
+  const filteredLiveRooms = liveRooms.filter(item => matchesRegionFilter(item.country, regionFilter));
+  const data = filteredLiveRooms.length ? filteredLiveRooms : liveRooms.length ? [] : DEMO_LIVE_ROOMS;
+  return <FlatList
+      data={data}
+      keyExtractor={item => item.id}
+      numColumns={2}
+      columnWrapperStyle={data.length ? styles.liveRow : undefined}
+      contentContainerStyle={styles.liveList}
+      ListHeaderComponent={<RegionFilterRow onFilterRowScrolling={onFilterRowScrolling} />}
+      ListEmptyComponent={<LiveEmptyState />}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor={theme.colors.teal700}
+          colors={[theme.colors.teal700]}
+          progressBackgroundColor={theme.surfaces.card}
+        />
+      }
+      renderItem={({ item }) => <LiveRoomCard item={item} />}
+    />;
 }
 
 const styles = StyleSheet.create({
   liveList: {
     padding: scaleModerate(16),
     paddingBottom: scaleModerate(28)
-  },
-  filterRow: {
-    alignItems: 'center',
-    gap: scaleModerate(8),
-    paddingBottom: scaleModerate(16)
-  },
-  filterChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: scaleModerate(14),
-    paddingVertical: scaleModerate(7)
-  },
-  filterChipText: {
-    fontSize: scaleFont(12),
-    fontWeight: '700'
   },
   liveRow: {
     gap: scaleModerate(12)

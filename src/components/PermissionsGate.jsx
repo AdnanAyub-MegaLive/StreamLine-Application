@@ -4,13 +4,20 @@ import { useTheme } from '../theme';
 import {
   checkDevicePermission,
   checkLocationPermission,
-  getCurrentLocation,
+  getCurrentLocationOrError,
   requestDevicePermission,
   requestLocationPermission,
   scaleFont,
   scaleModerate
 } from '../utils';
 import { PrimaryButton } from './PrimaryButton';
+import { LocationRequiredScreen } from './LocationRequiredScreen';
+
+// How often to re-check while blocked on "location services off" — flipping
+// the quick-settings location tile doesn't reliably background the app on
+// every Android OEM, so the AppState 'active' listener alone can miss it;
+// a light poll while this screen is showing catches it either way.
+const LOCATION_SERVICES_POLL_MS = 3000;
 
 const PERMISSION_KEYS = ['location', 'camera', 'microphone', 'gallery', 'notification'];
 const PERMISSION_LABELS = {
@@ -73,8 +80,13 @@ export function PermissionsGate({ children }) {
     const allGranted = PERMISSION_KEYS.every(key => nextState[key]);
 
     if (allGranted) {
-      setStatus('granted');
-      getCurrentLocation();
+      // Permission being granted just means the app is *allowed* to ask for
+      // a fix — it says nothing about whether location services (GPS) are
+      // actually switched on. getCurrentLocationOrError distinguishes the
+      // two (POSITION_UNAVAILABLE = services off), which a plain
+      // getCurrentLocation() call can't.
+      const result = await getCurrentLocationOrError();
+      setStatus(result.errorCode === 'POSITION_UNAVAILABLE' ? 'locationOff' : 'granted');
     } else {
       setStatus('denied');
     }
@@ -103,8 +115,25 @@ export function PermissionsGate({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only run the initial request once on mount
   }, []);
 
+  React.useEffect(() => {
+    if (status !== 'locationOff') {
+      return undefined;
+    }
+    const interval = setInterval(async () => {
+      const result = await getCurrentLocationOrError();
+      if (result.errorCode !== 'POSITION_UNAVAILABLE') {
+        setStatus('granted');
+      }
+    }, LOCATION_SERVICES_POLL_MS);
+    return () => clearInterval(interval);
+  }, [status]);
+
   if (status === 'checking') {
     return <View style={[styles.center, { backgroundColor: theme.surfaces.page }]} />;
+  }
+
+  if (status === 'locationOff') {
+    return <LocationRequiredScreen />;
   }
 
   if (status === 'denied') {

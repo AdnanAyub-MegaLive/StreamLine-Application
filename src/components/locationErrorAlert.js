@@ -1,4 +1,5 @@
 import { showAlert } from './ThemedAlert';
+import { showLocationRequiredModal } from './LocationRequiredModal';
 import { openLocationSettings } from '../utils/location';
 
 export function showLocationErrorAlert(error) {
@@ -13,10 +14,11 @@ export function showLocationErrorAlert(error) {
     ]);
     return;
   }
-  showAlert('Turn On Location', error.message, [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Open Settings', onPress: () => openLocationSettings() }
-  ]);
+  // Location services being off (not just a permission or a weak/slow fix)
+  // gets the same full-screen "Location Required" block used on app
+  // launch (see PermissionsGate) instead of a small dismissible alert —
+  // same requirement, same treatment.
+  showLocationRequiredModal();
 }
 
 export default showLocationErrorAlert;

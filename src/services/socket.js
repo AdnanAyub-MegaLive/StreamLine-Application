@@ -164,6 +164,19 @@ export function respondToSeatRequest(roomId, requestId, requesterId, seatId, acc
   socket?.emit('audio-room:seat-response', { roomId, requestId, requesterId, seatId, accepted, reason });
 }
 
+// A seated (non-owner) speaker voluntarily standing up. Only the room owner
+// is allowed to broadcast seat state (see audio-room:seat-update), so this
+// just notifies the owner — their client clears the seat locally and the
+// existing seat-update broadcast effect relays it to everyone else, same
+// as any other seat change.
+export function leaveSeat(roomId, seatId, callback) {
+  if (!socket) {
+    callback?.({ success: false, error: { code: 'NOT_CONNECTED' } });
+    return;
+  }
+  socket.emit('audio-room:seat-leave', { roomId, seatId }, callback);
+}
+
 // See StreamLine-Portal/docs/mobile-messaging-api.md — sends over the
 // already-authenticated session socket instead of the REST fallback
 // (sendMessageRest in src/api/messaging.js), so the sender also gets the

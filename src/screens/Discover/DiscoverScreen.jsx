@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Animated, Dimensions, Easing, FlatList, Image, ImageBackground, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Animated, Dimensions, Easing, FlatList, Image, ImageBackground, Modal, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
@@ -238,6 +238,7 @@ function StoriesRow({ theme, onGoLive }) {
 
 const DOUBLE_TAP_MS = 280;
 function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) {
+  const navigation = useNavigation();
   const [liked, setLiked] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
   const [likeCount, setLikeCount] = React.useState(post.likeCount ?? 0);
@@ -301,6 +302,21 @@ function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) 
   const handleShare = () => {
     Share.share({ message: post.description || 'Check out this post on Streamline' }).catch(() => {});
   };
+  const handleOpenAuthorProfile = () => {
+    if (!post.author?.publicId) {
+      return;
+    }
+    navigation.navigate(routes.userProfile, {
+      userId: post.author.publicId,
+      userName: post.author.fullName,
+      userAvatar: post.author.profileImage,
+      userFrameUrl: post.author.frameUrl,
+      userBadgeUrl: post.author.badgeUrl,
+      userGender: post.author.gender,
+      userDob: post.author.dob,
+      userIsOfficial: post.author.isOfficial
+    });
+  };
   return <AnimatedLinearGradient
       colors={[hexToRgba(theme.surfaces.card, 0.6), hexToRgba(theme.surfaces.card, 0.4)]}
       start={{ x: 0, y: 0 }}
@@ -315,12 +331,14 @@ function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) 
         pointerEvents="none"
       />
       <View style={styles.cardHeader}>
-        <GradientRing size={scaleModerate(42)}>
-          <View style={[styles.cardAvatarWrap, { backgroundColor: theme.surfaces.card }]}>
-            <Avatar value={post.author?.profileImage} fullName={post.author?.fullName} size={scaleModerate(36)} />
-          </View>
-        </GradientRing>
-        <View style={styles.cardHeaderText}>
+        <Pressable onPress={handleOpenAuthorProfile} hitSlop={4}>
+          <GradientRing size={scaleModerate(42)}>
+            <View style={[styles.cardAvatarWrap, { backgroundColor: theme.surfaces.card }]}>
+              <Avatar value={post.author?.profileImage} fullName={post.author?.fullName} size={scaleModerate(36)} frameUri={post.author?.frameUrl} />
+            </View>
+          </GradientRing>
+        </Pressable>
+        <Pressable onPress={handleOpenAuthorProfile} style={styles.cardHeaderText}>
           <VerifiedName name={post.author?.fullName || 'Unknown'} isOfficial={post.author?.isOfficial} textStyle={[styles.authorName, { color: theme.text.primary }]} />
           <View style={styles.metaRow}>
             <Text style={[styles.timestamp, { color: theme.text.secondary }]}>{timeAgo(post.createdAt)}</Text>
@@ -331,7 +349,7 @@ function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) 
                 </View>
               </> : null}
           </View>
-        </View>
+        </Pressable>
         <View style={styles.cardHeaderRight}>
           {isOwnPost ? <Pressable
               hitSlop={8}
@@ -710,8 +728,15 @@ export function DiscoverScreen() {
                 keyExtractor={item => item.id}
                 contentContainerStyle={styles.list}
                 showsVerticalScrollIndicator={false}
-                onRefresh={handleRefreshPosts}
-                refreshing={refreshingPosts}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshingPosts}
+                    onRefresh={handleRefreshPosts}
+                    tintColor={theme.colors.teal700}
+                    colors={[theme.colors.teal700]}
+                    progressBackgroundColor={theme.surfaces.card}
+                  />
+                }
                 renderItem={({ item }) => <PostCard
                   post={item}
                   theme={theme}

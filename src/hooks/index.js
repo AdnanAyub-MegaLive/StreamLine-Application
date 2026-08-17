@@ -2,6 +2,7 @@ export * from './useAssignedBadge';
 export * from './useAssignedFrame';
 export * from './useAssignedRoomBackground';
 export * from './useBannerAssets';
+export * from './useLiveKitAudio';
 export * from './useMessaging';
 export * from './useSessionGuard';
 export * from './useUnreadBadgeCount';

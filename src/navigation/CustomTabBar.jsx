@@ -132,12 +132,10 @@ export function CustomTabBar({
   const [roomTitleVisible, setRoomTitleVisible] = React.useState(false);
   const [seatLayoutVisible, setSeatLayoutVisible] = React.useState(false);
   const [pendingRoomTitle, setPendingRoomTitle] = React.useState(null);
-  const [isCheckingRoom, setIsCheckingRoom] = React.useState(false);
+  // Guards the background resume-room check (see handleCenterPress) against
+  // firing after the picker was already closed/superseded.
+  const pendingCheckRef = React.useRef(0);
   const defaultRoomTitle = `${session?.user?.fullName || 'My'}'s Room`;
-
-  // Liquid droplet indicator — travels along the row (the shortest,
-  // straight-line path) from whichever tab was previously focused to
-  // whichever one is focused now, in either direction.
   const itemCentersRef = React.useRef({});
   const hasPositionedDropletRef = React.useRef(false);
   const dropletX = React.useRef(new Animated.Value(0)).current;
@@ -178,7 +176,10 @@ export function CustomTabBar({
     });
   }, [state.index, dropletX, dropletStretch, dropletGlow, centerGlow]);
 
-  const closeStreamOptions = () => setStreamOptionsVisible(false);
+  const closeStreamOptions = () => {
+    pendingCheckRef.current += 1;
+    setStreamOptionsVisible(false);
+  };
   const closeRoomTitle = () => setRoomTitleVisible(false);
   const closeSeatLayout = () => setSeatLayoutVisible(false);
   const closeCreateContent = () => setCreateContentVisible(false);
@@ -190,10 +191,7 @@ export function CustomTabBar({
     closeCreateContent();
     navigation.navigate(routes.createReel);
   };
-  const handleCenterPress = async () => {
-    if (isCheckingRoom) {
-      return;
-    }
+  const handleCenterPress = () => {
     if (state.routes[state.index]?.name === 'DiscoverTab') {
       setCreateContentVisible(true);
       return;
@@ -202,24 +200,27 @@ export function CustomTabBar({
       setStreamOptionsVisible(true);
       return;
     }
-    setIsCheckingRoom(true);
-    const existingRoom = await fetchAudioRoom(sessionToken);
-    setIsCheckingRoom(false);
-    const canResumeWithoutAsking =
-      existingRoom?.status === 'LIVE' || (existingRoom?.status === 'IDLE' && Boolean(getCachedSeatState(existingRoom.roomId)));
-    if (canResumeWithoutAsking) {
-      const occupiedSeats = Math.max(0, (existingRoom.participantCount ?? 1) - 1);
-      const fallbackLayout =
-        SEAT_LAYOUT_OPTIONS.find(option => option.groups.reduce((sum, count) => sum + count, 0) >= occupiedSeats) ??
-        SEAT_LAYOUT_OPTIONS[SEAT_LAYOUT_OPTIONS.length - 1];
-      navigation.navigate(routes.room, {
-        roomId: existingRoom.roomId,
-        mode: 'audio',
-        seatGroups: fallbackLayout.groups
-      });
-      return;
-    }
     setStreamOptionsVisible(true);
+    const checkId = ++pendingCheckRef.current;
+    fetchAudioRoom(sessionToken).then(existingRoom => {
+      if (pendingCheckRef.current !== checkId) {
+        return;
+      }
+      const canResumeWithoutAsking =
+        existingRoom?.status === 'LIVE' || (existingRoom?.status === 'IDLE' && Boolean(getCachedSeatState(existingRoom.roomId)));
+      if (canResumeWithoutAsking) {
+        const occupiedSeats = Math.max(0, (existingRoom.participantCount ?? 1) - 1);
+        const fallbackLayout =
+          SEAT_LAYOUT_OPTIONS.find(option => option.groups.reduce((sum, count) => sum + count, 0) >= occupiedSeats) ??
+          SEAT_LAYOUT_OPTIONS[SEAT_LAYOUT_OPTIONS.length - 1];
+        closeStreamOptions();
+        navigation.navigate(routes.room, {
+          roomId: existingRoom.roomId,
+          mode: 'audio',
+          seatGroups: fallbackLayout.groups
+        });
+      }
+    });
   };
   const handleSelectAudio = () => {
     closeStreamOptions();

@@ -24,12 +24,13 @@ import { useTheme } from '../../theme';
 import { LockIcon, roomBackgroundImage } from '../../assets';
 import { Avatar, EmojiPickerModal, GiftPickerModal, SeatLayoutModal, showAlert } from '../../components';
 import { AudioRoomError, endAudioRoom as endAudioRoomRecord, fetchAssetDataUri, fixLocalhostOrigin, GiftSendError, sendGift, startAudioRoom, updateAudioRoom } from '../../api';
-import { assetIdentity, useAssignedFrame, useAssignedRoomBackground } from '../../hooks';
+import { assetIdentity, useAssignedFrame, useAssignedRoomBackground, useLiveKitAudio } from '../../hooks';
 import {
   emitSeatUpdate,
   getSessionSocket,
   joinAudioRoom,
   leaveAudioRoom,
+  leaveSeat,
   requestSeat,
   respondToSeatRequest,
   sendAudioRoomMessage
@@ -182,21 +183,34 @@ function SeatsIcon({ size = 18, color }) {
 }
 
 const AVATAR_PLACEHOLDER = 'https://api.dicebear.com/7.x/avataaars/svg';
+const SEAT_HOLD_MS = 500;
+const SEAT_HOLD_MOVE_THRESHOLD = 8;
 
 // Builds the seat rows for a freshly created audio room from the chosen
 // seat-layout tiers (e.g. [2, 3, 5, 5]). The room owner has their own fixed
 // spot in the header identity panel — they never occupy a numbered seat —
 // so every seat starts open for other participants to take.
 
-function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmptySeatPress, pressEnabled, draggable, note, onAvatarPress, myFrameUri }) {
+function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmptySeatPress, pressEnabled, isOwner, draggable, note, onAvatarPress, onLongPressSeat, myFrameUri }) {
   const avatarInnerSize = circleSize - 4;
   const ringSize = circleSize + 4;
   const micBadgeSize = Math.max(scaleModerate(16), Math.round(circleSize * 0.36));
   const avatarInnerBackground = draggable && myFrameUri ? 'transparent' : theme.surfaces.card;
 
+  // PanResponder callbacks are created once (see the useRef below) and
+  // never see fresh props on their own — this ref is how they read the
+  // current seat.id/callback instead of a stale one from first render.
+  const seatRef = React.useRef(seat);
+  seatRef.current = seat;
+  const onLongPressSeatRef = React.useRef(onLongPressSeat);
+  onLongPressSeatRef.current = onLongPressSeat;
+  const holdTimerRef = React.useRef(null);
+
   // Only the seat belonging to the current user (draggable) gets a pan
   // gesture, so people can move their own tile around the room — this
-  // never applies to the owner, who has no seat at all.
+  // never applies to the owner, who has no seat at all. Holding (without
+  // dragging) for HOLD_MS opens the "Leave Seat" prompt — cancelled the
+  // moment real dragging is detected so the two gestures never fight.
   const pan = React.useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const panResponder = React.useRef(
     PanResponder.create({
@@ -205,16 +219,31 @@ function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmpt
       onPanResponderGrant: () => {
         pan.setOffset({ x: pan.x._value, y: pan.y._value });
         pan.setValue({ x: 0, y: 0 });
+        clearTimeout(holdTimerRef.current);
+        holdTimerRef.current = setTimeout(() => {
+          onLongPressSeatRef.current?.(seatRef.current.id);
+        }, SEAT_HOLD_MS);
       },
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
+      onPanResponderMove: (event, gesture) => {
+        if (Math.abs(gesture.dx) > SEAT_HOLD_MOVE_THRESHOLD || Math.abs(gesture.dy) > SEAT_HOLD_MOVE_THRESHOLD) {
+          clearTimeout(holdTimerRef.current);
+        }
+        Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false })(event, gesture);
+      },
       onPanResponderRelease: () => {
+        clearTimeout(holdTimerRef.current);
         pan.flattenOffset();
       }
     })
   ).current;
 
   if (!seat.occupied) {
-    if (seat.locked) {
+    // Locked seats stay non-interactive for everyone except the owner —
+    // who can still tap to manage (unlock/relock/set note) it, same as any
+    // other empty seat. Previously this was a plain View with no press
+    // handler at all, so the owner had no way to ever unlock a seat again
+    // once locked.
+    if (seat.locked && !isOwner) {
       return (
         <View style={[styles.seatColumn, columnStyle]}>
           <View
@@ -232,6 +261,9 @@ function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmpt
           >
             <LockIcon size={Math.round(circleSize * 0.32)} color={theme.text.mutedIcon} />
           </View>
+          <Text style={[styles.seatLabel, { color: theme.text.secondary }]} numberOfLines={1}>
+            Locked
+          </Text>
         </View>
       );
     }
@@ -244,20 +276,24 @@ function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmpt
         <View
           style={[
             styles.seatCircle,
-            styles.seatCircleEmpty,
+            seat.locked ? styles.seatCircleLocked : styles.seatCircleEmpty,
             {
               width: circleSize,
               height: circleSize,
               borderRadius: circleSize / 2,
-              borderColor: theme.colors.teal700,
+              borderColor: seat.locked ? theme.colors.cardBorder : theme.colors.teal700,
               backgroundColor: theme.surfaces.card
             }
           ]}
         >
-          <PlusIcon size={Math.round(circleSize * 0.36)} color={theme.colors.teal700} />
+          {seat.locked ? (
+            <LockIcon size={Math.round(circleSize * 0.32)} color={theme.text.mutedIcon} />
+          ) : (
+            <PlusIcon size={Math.round(circleSize * 0.36)} color={theme.colors.teal700} />
+          )}
         </View>
         <Text style={[styles.seatLabel, { color: theme.text.secondary }]} numberOfLines={1}>
-          {note || 'Take seat'}
+          {seat.locked ? 'Locked' : note || 'Take seat'}
         </Text>
       </Pressable>
     );
@@ -678,12 +714,8 @@ export function RoomScreen() {
     const ownerDisplayId = session?.user?.displayId || session?.user?.publicId;
   
   const [roomId, setRoomId] = React.useState(route.params?.roomId ?? null);
-  const { source: assignedRoomBackgroundSource } = useAssignedRoomBackground();
   const myFrameUri = useAssignedFrame();
   const [customBackgroundFailed, setCustomBackgroundFailed] = React.useState(false);
-  React.useEffect(() => {
-    setCustomBackgroundFailed(false);
-  }, [assignedRoomBackgroundSource]);
   const roomName = route.params?.roomName ?? `${ownerName}'s Room`;
   const mode = route.params?.mode ?? 'video';
   const seatGroups = route.params?.seatGroups;
@@ -716,7 +748,35 @@ export function RoomScreen() {
   // Who a sent gift is credited to — set from the join ack (see setup()
   // below), which always includes `owner` regardless of whether this
   // device is the owner or a viewer.
-  const [roomOwner, setRoomOwner] = React.useState(!isViewerEntry ? { id: ownerAvatarSeed, name: ownerName } : null);
+  const [roomOwner, setRoomOwner] = React.useState(
+    !isViewerEntry
+      ? { id: ownerAvatarSeed, name: ownerName, profileImage: session?.user?.profileImage, displayId: ownerDisplayId }
+      : null
+  );
+  // The room OWNER's chosen background — comes from the join ack's
+  // top-level roomBackgroundUrl (see server.js's audio-room:join handler),
+  // not the viewer's own catalog assignment. Calling useAssignedRoomBackground
+  // with no target previously always resolved the CURRENT device's own
+  // background, which is null for anyone who isn't the owner — that's why
+  // a viewer joining someone else's room never saw the owner's background
+  // at all.
+  // Undefined (not null) until a join ack actually reports one — undefined
+  // tells useAssignedRoomBackground to fall back to the current device's
+  // own catalog assignment (the correct behavior for the owner's own
+  // room), whereas an explicit null/url always wins.
+  const [ownerRoomBackgroundUrl, setOwnerRoomBackgroundUrl] = React.useState(undefined);
+  const { source: assignedRoomBackgroundSource } = useAssignedRoomBackground({
+    userId: roomOwner?.id,
+    roomBackgroundUrl: ownerRoomBackgroundUrl
+  });
+  // The identity panel in the header always represents the room OWNER —
+  // resolves to the current device's own frame when isOwner (roomOwner.id
+  // === the signed-in user), or the actual owner's equipped frame for a
+  // viewer. See useAssignedFrame's doc for the userId/frameUrl contract.
+  const ownerFrameUri = useAssignedFrame({ userId: roomOwner?.id, frameUrl: roomOwner?.frameUrl });
+  React.useEffect(() => {
+    setCustomBackgroundFailed(false);
+  }, [assignedRoomBackgroundSource]);
   // The room creator always keeps mic access via their fixed header spot.
   // Anyone else only gets the bottom-bar mic control once they've actually
   // taken a seat.
@@ -759,6 +819,7 @@ export function RoomScreen() {
   const handleToggleMic = () => {
     setIsMicMuted(current => {
       const next = !current;
+      liveKitAudio.setMicEnabled(!next);
       if (mySeatId) {
         setSeatRows(rows =>
           rows.map(row => row.map(seat => (seat.id === mySeatId ? { ...seat, muted: next } : seat)))
@@ -802,11 +863,55 @@ export function RoomScreen() {
     });
   };
 
-  // The owner can never sit, so tapping an empty seat opens the note popup
-  // instead of taking it. Everyone else still takes the seat as normal.
+  // A seated speaker standing up voluntarily. Optimistically clears the
+  // seat on this device immediately for instant feedback; the owner's
+  // device (the actual source of truth) clears it too once
+  // audio-room:seat-leave reaches it and re-broadcasts, which is what
+  // every other participant's view actually updates from.
+  const handleLeaveSeat = seatId => {
+    if (!roomId) {
+      return;
+    }
+    setMySeatId(null);
+    setSeatRows(rows => rows.map(row => row.map(seat => (seat.id === seatId ? { id: seat.id, name: null, occupied: false, locked: seat.locked } : seat))));
+    leaveSeat(roomId, seatId, result => {
+      if (result && result.success === false) {
+        showAlert('Unable to Leave Seat', 'Please try again.');
+      }
+    });
+  };
+
+  const handleLeaveSeatPress = seatId => {
+    showAlert('Leave Seat', 'Are you sure you want to stand up from this seat?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Leave Seat', style: 'destructive', onPress: () => handleLeaveSeat(seatId) }
+    ]);
+  };
+
+  // Toggles a seat's locked state — locked seats can't be directly claimed
+  // or requested by anyone but the owner (see Seat's empty-seat rendering
+  // and handleSeatRequestEvent's server-side-of-the-room re-check above).
+  // Purely a local seatRows edit — the existing owner-only broadcast effect
+  // (emitSeatUpdate whenever seatRows changes) relays it to everyone else
+  // the same way any other seat change propagates.
+  const handleToggleSeatLock = seatId => {
+    setSeatRows(rows => rows.map(row => row.map(seat => (seat.id === seatId ? { ...seat, locked: !seat.locked } : seat))));
+  };
+
+  // The owner can never sit, so tapping an empty seat opens a management
+  // sheet (lock/unlock, set a note) instead of taking it. Everyone else
+  // still takes the seat as normal.
   const handleEmptySeatPress = seatId => {
     if (isOwner) {
-      setNoteModal({ visible: true, seatId, value: seatNotes[seatId] ?? '' });
+      const seat = seatRowsRef.current?.flat().find(row => row.id === seatId);
+      showAlert('Manage Seat', undefined, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: seat?.locked ? 'Unlock Seat' : 'Lock Seat',
+          onPress: () => handleToggleSeatLock(seatId)
+        },
+        { text: 'Set Note', onPress: () => setNoteModal({ visible: true, seatId, value: seatNotes[seatId] ?? '' }) }
+      ]);
       return;
     }
     handleTakeSeat(seatId);
@@ -921,6 +1026,28 @@ export function RoomScreen() {
   // exists — its layout is unknown until the owner's first seat-state
   // broadcast arrives, not derived from local seatGroups like the owner's.
   const isAudioRoom = mode === 'audio' && (Boolean(seatRows) || isViewerEntry);
+  // Real voice transport — connects once this device actually has mic
+  // access (owner, or a seated speaker), reconnects if that access is
+  // granted/revoked (mySeatId changes), and disconnects on room
+  // end/unmount. The backend independently enforces who may actually
+  // publish (currently owner-only — see the token route's canPublish),
+  // so requesting publish here is only a local intent, not a grant.
+  const liveKitAudio = useLiveKitAudio();
+  React.useEffect(() => {
+    if (!isAudioRoom || !roomId || !session?.token || !hasMicAccess) {
+      return undefined;
+    }
+    let cancelled = false;
+    liveKitAudio.connect(session.token, roomId, { publish: true }).then(() => {
+      if (cancelled) {
+        liveKitAudio.disconnect();
+      }
+    });
+    return () => {
+      cancelled = true;
+      liveKitAudio.disconnect();
+    };
+  }, [isAudioRoom, roomId, session?.token, hasMicAccess, liveKitAudio]);
   const [joiningDisabled, setJoiningDisabled] = React.useState(false);
   const [isRoomBlocked, setIsRoomBlocked] = React.useState(false);
   // Populated from the admin-provided reason on the audio-room:blocked/
@@ -1110,7 +1237,20 @@ export function RoomScreen() {
           setIsOwner(result.data.isOwner);
         }
         if (result.data?.owner?.publicId) {
-          setRoomOwner({ id: result.data.owner.publicId, name: result.data.owner.name });
+          const owner = result.data.owner;
+          setRoomOwner({
+            id: owner.publicId,
+            name: owner.name,
+            profileImage: owner.profileImage,
+            displayId: owner.publicId,
+            frameUrl: owner.frameUrl,
+            badgeUrl: owner.badgeUrl,
+            isOfficial: owner.isOfficial,
+            isVerified: owner.isVerified
+          });
+        }
+        if (result.data?.roomBackgroundUrl !== undefined) {
+          setOwnerRoomBackgroundUrl(result.data.roomBackgroundUrl);
         }
       });
     };
@@ -1137,7 +1277,8 @@ export function RoomScreen() {
         // one.
         const result = await startAudioRoom(session.token, {
           title: roomName,
-          participantCount: viewerCountRef.current
+          participantCount: viewerCountRef.current,
+          country: session?.user?.country ?? undefined
         });
         if (result?.roomId) {
           activeRoomId = result.roomId;
@@ -1268,7 +1409,15 @@ export function RoomScreen() {
       }
       emitSeatUpdate(activeRoomId, seatRowsRef.current, seatNotesRef.current);
     };
-    // Owner-only — a viewer asked to take a specific seat.
+    // Owner-only — a viewer asked to take a specific seat. The seat picker
+    // on the viewer side only ever lets someone tap a seat that's visibly
+    // empty and unlocked (see Seat/handleEmptySeatPress), so this is an
+    // open/direct claim, not a request needing a decision — auto-accept it
+    // as long as the owner's own (authoritative) seat state still agrees
+    // it's empty and unlocked at the moment this arrives. Only a genuine
+    // race (someone else grabbed it, or the owner locked it a moment ago)
+    // gets rejected — silently, since there was never a real decision to
+    // make; the requester's own "Unable to Take Seat" fallback covers it.
     const handleSeatRequestEvent = payload => {
       const data = payload?.data;
       if (!isOwnerRef.current) {
@@ -1278,39 +1427,27 @@ export function RoomScreen() {
         respondToSeatRequest(activeRoomId, data?.requestId, data?.requesterId, null, false, 'No seat specified');
         return;
       }
+      const targetSeat = seatRowsRef.current?.flat().find(seat => seat.id === data.seatId);
+      if (!targetSeat || targetSeat.occupied || targetSeat.locked) {
+        respondToSeatRequest(activeRoomId, data.requestId, data.requesterId, data.seatId, false, 'Seat no longer available');
+        return;
+      }
       // requesterName/requesterProfileImage are server-trusted (see
       // docs/mobile-audio-room-api.md) — requesterId is kept only as a
       // fallback for older backend builds that didn't send a name yet.
       const requesterName = data.requesterName || data.requesterId;
-      showAlert(
-        'Seat Request',
-        data.note ? `${requesterName} wants to take a seat: "${data.note}"` : `${requesterName} wants to take a seat.`,
-        [
-          {
-            text: 'Decline',
-            style: 'cancel',
-            onPress: () =>
-              respondToSeatRequest(activeRoomId, data.requestId, data.requesterId, data.seatId, false, 'Declined by host')
-          },
-          {
-            text: 'Accept',
-            onPress: () => {
-              applySeatAssignment(data.seatId, {
-                name: requesterName,
-                avatarSeed: data.requesterId,
-                avatarUri: data.requesterProfileImage || null,
-                muted: false,
-                frameUrl: data.requesterFrameUrl || null,
-                badgeUrl: data.requesterBadgeUrl || null,
-                gender: data.requesterGender || null,
-                dob: data.requesterDob || null,
-                isOfficial: Boolean(data.requesterIsOfficial)
-              });
-              respondToSeatRequest(activeRoomId, data.requestId, data.requesterId, data.seatId, true, null);
-            }
-          }
-        ]
-      );
+      applySeatAssignment(data.seatId, {
+        name: requesterName,
+        avatarSeed: data.requesterId,
+        avatarUri: data.requesterProfileImage || null,
+        muted: false,
+        frameUrl: data.requesterFrameUrl || null,
+        badgeUrl: data.requesterBadgeUrl || null,
+        gender: data.requesterGender || null,
+        dob: data.requesterDob || null,
+        isOfficial: Boolean(data.requesterIsOfficial)
+      });
+      respondToSeatRequest(activeRoomId, data.requestId, data.requesterId, data.seatId, true, null);
     };
     // Viewer-only — the owner responded to this device's own seat request.
     const handleSeatResponseEvent = payload => {
@@ -1338,6 +1475,13 @@ export function RoomScreen() {
         isOfficial: false
       });
     };
+    const handleSeatLeaveEvent = payload => {
+      const data = payload?.data;
+      if (!isOwnerRef.current || !data?.seatId) {
+        return;
+      }
+      setSeatRows(rows => rows.map(row => row.map(seat => (seat.id === data.seatId ? { id: seat.id, name: null, occupied: false, locked: seat.locked } : seat))));
+    };
 
     const pushRideIfAny = data => {
       if (!data.rideUrl) {
@@ -1345,12 +1489,6 @@ export function RoomScreen() {
         return;
       }
       console.log('[Ride] pushing ride to queue', data.rideUrl);
-      // Always streamed straight from the CDN URL, never run through the
-      // base64-data-URI cache (fetchAssetDataUri) that entrance art below
-      // uses — that cache is for small static images, and a Ride is always
-      // treated as video (see EntranceBanner's isVideo); a multi-MB video
-      // turned into a base64 string is both slow and often too large for
-      // react-native-video to decode as a data: URI anyway.
       pushEntranceRef.current?.({ ...data, kind: 'ride', rideUrl: fixLocalhostOrigin(data.rideUrl) });
     };
 
@@ -1389,11 +1527,6 @@ export function RoomScreen() {
       });
     };
 
-    // See StreamLine-Portal/docs/gift-profit-rules-api.md — the backend
-    // settles the transaction and broadcasts this to everyone in the room
-    // (including the sender), so nobody adds their own gift message
-    // optimistically — this single broadcast is the only source of the
-    // chat bubble for every device.
     const handleGiftBroadcast = payload => {
       const data = payload?.data;
       if (!data || data.roomId !== activeRoomId) {
@@ -1420,11 +1553,6 @@ export function RoomScreen() {
         if (current.some(message => message.id === data.id)) {
           return current;
         }
-        // If this echo is the server's authoritative copy of a message we
-        // already showed optimistically (same author + text, still
-        // pending), replace the pending placeholder instead of appending a
-        // second bubble — avoids a visible duplicate once the real ack
-        // arrives.
         const pendingIndex = current.findIndex(
           message => message.pending && message.author === (data.sender?.name ?? 'Someone') && message.text === data.body
         );
@@ -1453,6 +1581,7 @@ export function RoomScreen() {
     socket?.on('audio-room:seat-sync-request', handleSeatSyncRequest);
     socket?.on('audio-room:seat-request', handleSeatRequestEvent);
     socket?.on('audio-room:seat-response', handleSeatResponseEvent);
+    socket?.on('audio-room:seat-leave', handleSeatLeaveEvent);
     socket?.on('audio-room:entrance', handleEntrance);
     socket?.on('gift:received', handleGiftBroadcast);
     socket?.on('audio-room:message', handleRoomMessage);
@@ -1477,25 +1606,11 @@ export function RoomScreen() {
       socket?.off('audio-room:message', handleRoomMessage);
       socket?.off('audio-room:seat-request', handleSeatRequestEvent);
       socket?.off('audio-room:seat-response', handleSeatResponseEvent);
-      // If activeRoomId isn't known yet at this point (brand-new room,
-      // startAudioRoom() still in flight), there's nothing to background
-      // yet — setup()'s continuation handles it once the response arrives
-      // instead, via the same backgroundNow() helper.
+      socket?.off('audio-room:seat-leave', handleSeatLeaveEvent);
       backgroundNow();
     };
-    // Only run once per room visit — roomName/session are stable for the
-    // screen's lifetime, and re-running this on every viewerCount change
-    // would re-create/rejoin the room instead of just syncing the count
-    // (handled by the separate effect below). roomId is intentionally
-    // excluded too — this effect is what sets it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAudioRoom]);
 
-  // Debounced — a burst of seats filling/emptying quickly (e.g. several
-  // people joining at once) would otherwise fire one API call per change.
-  // Owner-only: updateAudioRoom acts on the caller's OWN one-room-per-user
-  // record, so a viewer calling it would silently create/update their own
-  // separate room instead of this one.
   React.useEffect(() => {
     if (!isAudioRoom || !isOwner || !session?.token || !roomId || roomEndedRef.current) {
       return undefined;
@@ -1512,12 +1627,6 @@ export function RoomScreen() {
     }, 500);
     return () => clearTimeout(timer);
   }, [viewerCount, isAudioRoom, isOwner, roomId, roomName, session?.token]);
-
-  // Owner-only — broadcasts the full seat snapshot to every viewer whenever
-  // seats or notes change, debounced the same way. See
-  // docs/mobile-audio-room-api.md's "Live seat-state relay": this is never
-  // written to the database, the owner's device is the only source of
-  // truth and the server just validates ownership and relays it.
   React.useEffect(() => {
     if (!isAudioRoom || !isOwner || !roomId || roomEndedRef.current) {
       return undefined;
@@ -1527,23 +1636,7 @@ export function RoomScreen() {
     }, 300);
     return () => clearTimeout(timer);
   }, [isAudioRoom, isOwner, roomId, seatRows, seatNotes]);
-
-  // Backgrounding the whole app (home button) does NOT unmount this screen
-  // — React Navigation only unmounts on an actual back/navigate-away, which
-  // is the only place the "still live" notification used to fire. So
-  // putting the app in the background while still on this screen showed no
-  // notification at all, and once the OS eventually suspended the socket
-  // connection the backend's own auto-release (server.js) would quietly
-  // end the room with no warning shown here. This mirrors that same
-  // notification for the background/inactive transition too, without
-  // touching the socket — leaveAudioRoom() is intentionally NOT called
-  // here, since simply backgrounding the app should keep the room (and this
-  // device's participation in it) alive for as long as the OS allows.
   React.useEffect(() => {
-    // Same reasoning as everywhere else — the "still live" notification is
-    // an owner-only concept. A viewer backgrounding the app just keeps
-    // silently listening for as long as the OS allows, same as before, just
-    // without a notification implying they own the room.
     if (!isAudioRoom || !roomId || !isOwner) {
       return undefined;
     }
@@ -1682,7 +1775,7 @@ export function RoomScreen() {
 
   const hasCustomBackground = Boolean(assignedRoomBackgroundSource) && !customBackgroundFailed;
   const backgroundSource = hasCustomBackground ? assignedRoomBackgroundSource : roomBackgroundImage;
-  const identityAvatarBackground = myFrameUri ? 'transparent' : theme.colors.teal50;
+  const identityAvatarBackground = ownerFrameUri ? 'transparent' : theme.colors.teal50;
   // No white scrim overlay at all — both backgrounds dim through image
   // opacity alone against the card-colored surface behind them (custom
   // uploads at 0.5, the bundled default at its original 0.35).
@@ -1711,14 +1804,14 @@ export function RoomScreen() {
               <View style={[styles.identityAvatarOuter, { width: ownerCircleSize, height: ownerCircleSize }]}>
                 <View style={[styles.identityAvatarWrap, { width: ownerCircleSize, height: ownerCircleSize, borderRadius: ownerCircleSize / 2, backgroundColor: identityAvatarBackground }]}>
                   <Avatar
-                    value={session?.user?.profileImage || `${AVATAR_PLACEHOLDER}?seed=${ownerAvatarSeed}`}
-                    fullName={ownerName}
+                    value={roomOwner?.profileImage || `${AVATAR_PLACEHOLDER}?seed=${roomOwner?.id ?? ownerAvatarSeed}`}
+                    fullName={roomOwner?.name ?? ownerName}
                     size={ownerCircleSize}
                   />
                 </View>
-                {myFrameUri ? (
+                {ownerFrameUri ? (
                   <Image
-                    source={{ uri: myFrameUri }}
+                    source={{ uri: ownerFrameUri }}
                     style={[styles.identityFrameOverlay, {
                       top: -(ownerFrameSize - ownerCircleSize) / 2,
                       left: -(ownerFrameSize - ownerCircleSize) / 2,
@@ -1748,9 +1841,17 @@ export function RoomScreen() {
                 <Text style={[styles.roomName, { color: theme.text.primary }]} numberOfLines={1}>
                   {roomName}
                 </Text>
-                {ownerDisplayId ? (
+                {/* ownerDisplayId (this DEVICE's own session ID) is only a
+                valid fallback while viewing your OWN room — before
+                roomOwner populates. For a viewer, showing it at all
+                briefly displays their own ID/Special ID in place of the
+                actual host's, which then gets replaced once the real join
+                ack arrives — looked like the ID randomly changing. A
+                viewer should see nothing until the real host data loads,
+                never their own ID standing in for it. */}
+                {(isOwner ? (roomOwner?.displayId ?? ownerDisplayId) : roomOwner?.displayId) ? (
                   <Text style={[styles.roomIdText, { color: theme.text.secondary }]} numberOfLines={1}>
-                    Your ID: {ownerDisplayId}
+                    {isOwner ? 'Your ID' : 'Host ID'}: {isOwner ? (roomOwner?.displayId ?? ownerDisplayId) : roomOwner?.displayId}
                   </Text>
                 ) : null}
               </View>
@@ -1786,9 +1887,11 @@ export function RoomScreen() {
                     circleSize={seatSizing.circleSize}
                     onEmptySeatPress={handleEmptySeatPress}
                     pressEnabled={isOwner || canTakeSeat}
+                    isOwner={isOwner}
                     draggable={seat.id === mySeatId}
                     note={seatNotes[seat.id]}
                     onAvatarPress={handleSeatAvatarPress}
+                    onLongPressSeat={handleLeaveSeatPress}
                     myFrameUri={myFrameUri}
                   />
                 ))}

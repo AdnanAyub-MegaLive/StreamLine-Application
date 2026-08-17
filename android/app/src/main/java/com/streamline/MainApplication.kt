@@ -6,6 +6,8 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import com.livekit.reactnative.LiveKitReactNative
+import com.livekit.reactnative.audio.AudioType
 
 class MainApplication : Application(), ReactApplication {
 
@@ -22,6 +24,12 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    // Must run before loadReactNative() — audio rooms are voice-only (no
+    // camera publishing), so MediaAudioType is wrong here; rooms are
+    // two-way conversations, which is exactly what CommunicationAudioType
+    // is for (routes through the device's call audio path, echo
+    // cancellation, etc.).
+    LiveKitReactNative.setup(this, AudioType.CommunicationAudioType())
     loadReactNative(this)
   }
 }

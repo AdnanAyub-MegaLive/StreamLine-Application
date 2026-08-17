@@ -65,6 +65,13 @@ export const useAppStore = create()(persist(set => ({
   }),
   clearBanInfo: () => set({
     banInfo: null
+  }),
+  // Shared between the Live and Party tabs (see RegionFilterRow) so
+  // picking a region/country in one is still selected when switching to
+  // the other, instead of each tab keeping its own separate selection.
+  regionFilter: { region: 'all', country: 'all' },
+  setRegionFilter: (region, country) => set({
+    regionFilter: { region, country }
   })
 }), {
   name: 'streamline-auth-session',

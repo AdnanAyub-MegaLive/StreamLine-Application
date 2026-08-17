@@ -1,10 +1,11 @@
 import React from 'react';
-import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
 import { fetchDiscoverRooms } from '../../../api';
 import { agencyApplyBannerImage } from '../../../assets';
-import { Avatar } from '../../../components';
+import { Avatar, RegionFilterRow } from '../../../components';
+import { matchesRegionFilter } from '../../../data/regions';
 import { useBannerAssets, useUserAssets } from '../../../hooks';
 import { useAppStore } from '../../../store';
 import { useTheme } from '../../../theme';
@@ -35,6 +36,7 @@ function toPartyItem(room, index) {
     hostName: room.owner?.name ?? 'Unknown host',
     hostAvatar: room.owner?.profileImage,
     hostFrameUrl: room.owner?.frameUrl ?? null,
+    country: room.country ?? null,
     photo: room.coverImage ?? room.thumbnailUrl ?? room.imageUrl ?? partyPhotoForIndex(index)
   };
 }
@@ -413,7 +415,9 @@ function PartyCard({
 export function PartyTabContent({ onBannerScrolling }) {
   const theme = useTheme();
   const sessionToken = useAppStore(store => store.session?.token);
+  const regionFilter = useAppStore(store => store.regionFilter);
   const [trendingParties, setTrendingParties] = React.useState([]);
+  const [refreshing, setRefreshing] = React.useState(false);
   const [mosaicWidth, setMosaicWidth] = React.useState(0);
   const mosaicGap = scaleModerate(12);
   // One featured square is exactly two compact squares plus their shared gap.
@@ -437,14 +441,36 @@ export function PartyTabContent({ onBannerScrolling }) {
     }, [loadTrending])
   );
 
-  return <ScrollView contentContainerStyle={styles.partyList} showsVerticalScrollIndicator={false}>
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadTrending().catch(() => {});
+    setRefreshing(false);
+  };
+
+  return <ScrollView
+      contentContainerStyle={styles.partyList}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor={theme.colors.teal700}
+          colors={[theme.colors.teal700]}
+          progressBackgroundColor={theme.surfaces.card}
+        />
+      }
+    >
       <PartyBanner onBannerScrolling={onBannerScrolling} />
+
+      <View style={styles.regionFilterWrap}>
+        <RegionFilterRow onFilterRowScrolling={onBannerScrolling} />
+      </View>
 
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionLabel, {
         color: theme.text.primary
       }]}>Trending Parties</Text>
-        <Pressable onPress={loadTrending}>
+        <Pressable onPress={handleRefresh}>
           <Text style={[styles.sectionSeeAll, {
           color: theme.colors.teal700
         }]}>See All ›</Text>
@@ -453,24 +479,24 @@ export function PartyTabContent({ onBannerScrolling }) {
 
       {/* DEMO DATA fallback — see DEMO_TRENDING_PARTIES above. Falls back
       to it only when the real fetch came back empty; real data always
-      wins once it exists. */}
-      {(trendingParties.length > 0 ? trendingParties : DEMO_TRENDING_PARTIES).length > 0 ? <View style={styles.partyMosaic}>
-          {(() => {
-            const parties = trendingParties.length > 0 ? trendingParties : DEMO_TRENDING_PARTIES;
-            return <>
+      wins once it exists. Demo parties have no country, so they only show
+      up while the "All" region filter is active. */}
+      {(() => {
+        const filteredParties = trendingParties.filter(item => matchesRegionFilter(item.country, regionFilter));
+        const parties = filteredParties.length ? filteredParties : trendingParties.length ? [] : DEMO_TRENDING_PARTIES;
+        return parties.length > 0 ? <View style={styles.partyMosaic}>
               <View style={[styles.partyMosaicTop, mosaicWidth > 0 && { height: featureCardSize }]} onLayout={event => setMosaicWidth(event.nativeEvent.layout.width)}>
                 {parties[0] ? <PartyCard item={parties[0]} variant="feature" style={mosaicWidth > 0 ? [styles.partyCardMeasured, { width: featureCardSize, height: featureCardSize }] : undefined} /> : null}
                 {parties.length > 1 ? <View style={[styles.partyMosaicSide, mosaicWidth > 0 && styles.partyMosaicSideMeasured, mosaicWidth > 0 && { width: compactCardSize }]}>
                     {parties.slice(1, 3).map(item => <PartyCard key={item.id} item={item} variant="compact" style={mosaicWidth > 0 ? [styles.partyCardMeasured, { width: compactCardSize, height: compactCardSize }] : undefined} />)}
                   </View> : null}
               </View>
-            </>;
-          })()}
         </View> : <View style={styles.emptyState}>
           <Text style={[styles.emptyStateText, {
         color: theme.text.secondary
       }]}>No trending parties right now. Start one from the + button!</Text>
-        </View>}
+        </View>;
+      })()}
     </ScrollView>;
 }
 
@@ -481,6 +507,9 @@ const styles = StyleSheet.create({
   },
   bannerWrap: {
     position: 'relative'
+  },
+  regionFilterWrap: {
+    marginTop: scaleModerate(16)
   },
   banner: {
     borderRadius: scaleModerate(16),
