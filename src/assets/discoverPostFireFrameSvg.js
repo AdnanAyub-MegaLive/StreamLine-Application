@@ -1,4 +1,24 @@
-
+// Raw SVG source for src/assets/video/discover-post-fire-frame.svg, embedded
+// as a string and rendered live via react-native-svg's <SvgAst> (see
+// src/components/DiscoverPostFireFrame.jsx) — Metro has no .svg-as-component
+// transformer configured in this project, so an inline component's the
+// only way to reuse the same vector markup across every post card.
+//
+// PERFORMANCE: the original source had 5 separate <g filter="..."> groups
+// (main border glow, energy tendrils, edge flickers, star sparks, small
+// embers). Every feGaussianBlur filter needs its own offscreen render pass
+// on the native side — those firing every time a new post card scrolled
+// into view (FlatList mounting/recycling items) caused a visible
+// stutter-then-resume. All feGaussianBlur/filter usage has been removed
+// entirely — every element below is a plain unfiltered stroke/fill. Same
+// colors, gradients and shapes as the original (still reads as a layered
+// neon border), just without any native blur render pass at all.
+//
+// preserveAspectRatio is forced to "none" (the source file doesn't set
+// one, so it would otherwise default to "xMidYMid meet" and letterbox
+// instead of filling the frame layer exactly) — every post card has a
+// different height depending on its content, so the frame must stretch to
+// match each one's dynamic height exactly.
 export const discoverPostFireFrameSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1049" height="1449" viewBox="0 0 1049 1449" preserveAspectRatio="none" fill="none">
   <defs>
     <linearGradient id="neonLoop" x1="28" y1="15" x2="1022" y2="1434" gradientUnits="userSpaceOnUse">
@@ -31,22 +51,6 @@ export const discoverPostFireFrameSvg = `<svg xmlns="http://www.w3.org/2000/svg"
       <stop offset="1" stop-color="#F62EFF"/>
     </linearGradient>
 
-    <filter id="outerGlow" x="-25%" y="-20%" width="150%" height="140%" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="11" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.34  0 0.35 0 0 0.02  0 0 1 0 0.45  0 0 0 0.88 0" result="tinted"/>
-      <feMerge><feMergeNode in="tinted"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-
-    <filter id="softGlow" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="5" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-
-    <filter id="starGlow" x="-350%" y="-350%" width="700%" height="700%">
-      <feGaussianBlur stdDeviation="3.2" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-
     <path id="framePath" d="M72 28 H977 Q1021 28 1021 72 V1377 Q1021 1421 977 1421 H72 Q28 1421 28 1377 V72 Q28 28 72 28 Z"/>
     <clipPath id="edgeClip">
       <path fill-rule="evenodd" clip-rule="evenodd" d="M0 0H1049V1449H0V0ZM58 48Q48 48 48 58V1391Q48 1401 58 1401H991Q1001 1401 1001 1391V58Q1001 48 991 48H58Z"/>
@@ -57,14 +61,14 @@ export const discoverPostFireFrameSvg = `<svg xmlns="http://www.w3.org/2000/svg"
     <use href="#framePath" stroke="url(#neonLoop)" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 
-  <g filter="url(#outerGlow)">
+  <g>
     <use href="#framePath" stroke="#7D24FF" stroke-opacity="0.5" stroke-width="26" stroke-linejoin="round"/>
     <use href="#framePath" stroke="url(#hotLoop)" stroke-width="13" stroke-linejoin="round"/>
     <use href="#framePath" stroke="url(#coolLoop)" stroke-width="6" stroke-linejoin="round"/>
     <use href="#framePath" stroke="#FFFFFF" stroke-opacity="0.72" stroke-width="1.8" stroke-linejoin="round"/>
   </g>
 
-  <g stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow)">
+  <g stroke-linecap="round" stroke-linejoin="round">
     <path d="M49 81C56 52 79 43 111 45C149 47 177 24 213 34C248 43 272 21 309 30C345 39 364 28 394 35C431 44 455 20 492 29C531 39 551 25 588 34C625 42 646 27 687 34C726 41 751 25 793 32C833 39 855 22 893 32C935 43 975 29 1000 55" stroke="#FF2BD6" stroke-width="8" opacity="0.92"/>
     <path d="M54 68C101 50 122 68 159 48C191 31 221 61 253 44C287 26 312 58 347 40C380 24 410 55 445 39C478 24 504 53 539 39C574 24 603 55 639 39C675 23 707 53 742 38C780 22 808 52 847 37C885 23 927 49 993 45" stroke="#20E7FF" stroke-width="5" opacity="0.95"/>
     <path d="M50 139C35 180 53 218 39 254C26 288 49 318 37 354C25 390 50 418 38 455C25 495 50 524 37 563C25 602 52 630 38 670C23 710 51 741 38 779C24 819 50 849 37 888C23 927 51 957 38 997C25 1034 50 1068 37 1106C24 1147 52 1176 38 1217C25 1257 50 1292 38 1330C31 1354 35 1375 50 1398" stroke="#FF29C8" stroke-width="9" opacity="0.94"/>
@@ -75,7 +79,7 @@ export const discoverPostFireFrameSvg = `<svg xmlns="http://www.w3.org/2000/svg"
     <path d="M64 1410C104 1394 132 1420 170 1402C207 1385 236 1417 273 1399C308 1382 340 1415 376 1398C412 1381 445 1413 480 1397C517 1380 550 1413 587 1396C625 1379 654 1412 693 1395C730 1378 759 1411 797 1394C836 1377 866 1407 905 1391C939 1377 967 1394 989 1379" stroke="#08E8FF" stroke-width="5" opacity="0.95"/>
   </g>
 
-  <g fill="none" stroke-linecap="round" filter="url(#softGlow)">
+  <g fill="none" stroke-linecap="round">
     <path d="M82 48C100 29 111 51 130 31C145 16 154 34 168 22" stroke="#FFF5FF" stroke-width="3"/>
     <path d="M254 38C270 20 283 47 300 24C313 7 322 29 337 17" stroke="#00F4FF" stroke-width="4"/>
     <path d="M605 38C624 18 634 48 653 26C667 10 677 34 692 19" stroke="#FF4BDD" stroke-width="4"/>
@@ -91,7 +95,7 @@ export const discoverPostFireFrameSvg = `<svg xmlns="http://www.w3.org/2000/svg"
     <path d="M815 1404C833 1427 848 1395 867 1419C881 1435 894 1410 911 1425" stroke="#00EFFF" stroke-width="4"/>
   </g>
 
-  <g fill="#FFFFFF" stroke-linecap="round" filter="url(#starGlow)">
+  <g fill="#FFFFFF" stroke-linecap="round">
     <g transform="translate(83 53)"><path d="M0-14V14M-14 0H14" stroke="#FFFFFF" stroke-width="2.5"/><circle r="3.5"/></g>
     <g transform="translate(625 26)"><path d="M0-10V10M-10 0H10" stroke="#FF6EE6" stroke-width="2"/><circle r="2.8"/></g>
     <g transform="translate(974 79)"><path d="M0-12V12M-12 0H12" stroke="#00ECFF" stroke-width="2.2"/><circle r="3"/></g>
@@ -104,7 +108,7 @@ export const discoverPostFireFrameSvg = `<svg xmlns="http://www.w3.org/2000/svg"
     <g transform="translate(848 1410)"><path d="M0-12V12M-12 0H12" stroke="#FF61DF" stroke-width="2"/><circle r="3"/></g>
   </g>
 
-  <g filter="url(#starGlow)">
+  <g>
     <circle cx="148" cy="24" r="3.3" fill="#00EFFF"/><circle cx="372" cy="27" r="2.5" fill="#FF48D9"/>
     <circle cx="763" cy="25" r="3" fill="#B76BFF"/><circle cx="1018" cy="177" r="3.2" fill="#FF32D2"/>
     <circle cx="1022" cy="638" r="2.7" fill="#00EFFF"/><circle cx="1020" cy="1168" r="3" fill="#C65CFF"/>
