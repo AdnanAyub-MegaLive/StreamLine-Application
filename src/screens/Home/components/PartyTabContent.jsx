@@ -37,7 +37,7 @@ function toPartyItem(room, index) {
     hostAvatar: room.owner?.profileImage,
     hostFrameUrl: room.owner?.frameUrl ?? null,
     country: room.country ?? null,
-    photo: room.coverImage ?? room.thumbnailUrl ?? room.imageUrl ?? partyPhotoForIndex(index)
+    photo: room.coverImageUrl ?? partyPhotoForIndex(index)
   };
 }
 

@@ -21,7 +21,7 @@ function toLiveItem(room, index) {
     hostTag: room.title,
     viewers: room.participantCount,
     country: room.country ?? null,
-    photo: room.roomBackgroundUrl ?? room.owner?.profileImage ?? personPhotoForIndex(index)
+    photo: room.coverImageUrl ?? room.roomBackgroundUrl ?? room.owner?.profileImage ?? personPhotoForIndex(index)
   };
 }
 

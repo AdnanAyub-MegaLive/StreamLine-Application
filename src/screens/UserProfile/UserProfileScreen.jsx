@@ -60,7 +60,13 @@ export function UserProfileScreen() {
   const displayName = userName || 'User';
   const session = useAppStore(state => state.session);
   const sessionToken = session?.token;
-  const isOwnProfile = Boolean(userId) && userId === (session?.user?.displayId || session?.user?.publicId);
+  // userId is always the target's raw publicId (every caller — post
+  // authors, chat participants, search results, seats — passes that, never
+  // a Special ID) so this must check both, not just whichever of
+  // displayId/publicId happens to be "effective" right now — otherwise
+  // viewing your own profile while a Special ID is active never matches
+  // and silently falls back to someone-else's-profile asset resolution.
+  const isOwnProfile = Boolean(userId) && (userId === session?.user?.publicId || userId === session?.user?.displayId);
   // Same convention as frameUrl/badgeUrl — own profile reads gender/dob
   // straight from the session, someone else's comes from whatever the
   // caller passed through route.params (see

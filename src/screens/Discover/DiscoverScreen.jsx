@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import { BellIcon, BookmarkIcon, discoverBackgroundImage, DotsIcon, HeartIcon, MessageIcon, PlayIcon, RepostIcon, SearchIcon } from '../../assets';
 import { CreatePostError, deletePost, fetchAudioRoom, fetchPosts } from '../../api';
-import { Avatar, RoomTitleModal, SEAT_LAYOUT_OPTIONS, SeatLayoutModal, Screen, showAlert, StreamOptionModal, VerifiedName } from '../../components';
+import { Avatar, DiscoverPostFireFrame, RoomCoverModal, RoomTitleModal, SEAT_LAYOUT_OPTIONS, SeatLayoutModal, Screen, showAlert, StreamOptionModal, VerifiedName } from '../../components';
+import { useUserAssets } from '../../hooks';
 import { getCachedSeatState, scaleFont, scaleModerate } from '../../utils';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
@@ -14,6 +15,9 @@ import { DiscoverHeader } from './components/DiscoverHeader';
 
 const PAGE_WIDTH = Dimensions.get('window').width;
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
+// How far DiscoverPostFireFrame bleeds outside each post card's edges —
+// see postWrapper/frameLayer/postCard below.
+const FRAME_OUTSET = scaleModerate(16);
 
 const DISCOVER_TABS = [
   { id: 'forYou', label: 'For You' },
@@ -239,26 +243,28 @@ function StoriesRow({ theme, onGoLive }) {
 const DOUBLE_TAP_MS = 280;
 function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) {
   const navigation = useNavigation();
+  // GET /api/posts doesn't return the author's frameUrl/badgeUrl yet (see
+  // docs/discover-posts-api-spec.md), so post.author.frameUrl is always
+  // undefined today — for your OWN posts, resolve the frame from your own
+  // equipped props instead (same convention as ProfileScreen/RoomScreen),
+  // so it isn't blocked on that backend gap. Other authors' frames still
+  // wait on that field.
+  const { frameUri: authorFrameUri, badgeUri: authorBadgeUri } = useUserAssets(
+    isOwnPost
+      ? undefined
+      : {
+          userId: post.author?.publicId ?? 'unknown-user',
+          frameUrl: post.author?.publicId ? post.author?.frameUrl : null,
+          badgeUrl: post.author?.publicId ? post.author?.badgeUrl : null
+        }
+  );
   const [liked, setLiked] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
   const [likeCount, setLikeCount] = React.useState(post.likeCount ?? 0);
   const heartScale = React.useRef(new Animated.Value(1)).current;
   const bigHeartScale = React.useRef(new Animated.Value(0)).current;
   const bigHeartOpacity = React.useRef(new Animated.Value(0)).current;
-  const borderAnim = React.useRef(new Animated.Value(0)).current;
   const lastTapRef = React.useRef(0);
-  React.useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(borderAnim, { toValue: 1, duration: 4000, easing: Easing.linear, useNativeDriver: false })
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [borderAnim]);
-
-  const borderColor = borderAnim.interpolate({
-    inputRange: [0, 0.33, 0.66, 1],
-    outputRange: [theme.colors.teal700, theme.colors.secondary, theme.colors.tertiary, theme.colors.teal700]
-  });
 
   const playHeartBump = () => {
     heartScale.setValue(0.7);
@@ -317,12 +323,16 @@ function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) 
       userIsOfficial: post.author.isOfficial
     });
   };
-  return <AnimatedLinearGradient
-      colors={[hexToRgba(theme.surfaces.card, 0.6), hexToRgba(theme.surfaces.card, 0.4)]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.card, { borderColor, shadowColor: theme.colors.tertiary }]}
-    >
+  return <View style={styles.postWrapper}>
+      <View pointerEvents="none" style={styles.frameLayer}>
+        <DiscoverPostFireFrame width="100%" height="100%" />
+      </View>
+      <AnimatedLinearGradient
+        colors={[hexToRgba(theme.surfaces.card, 0.6), hexToRgba(theme.surfaces.card, 0.4)]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.postCard, { shadowColor: theme.colors.tertiary }]}
+      >
       <LinearGradient
         colors={[hexToRgba(theme.colors.neutral900, 0.5), hexToRgba(theme.colors.neutral900, 0.2)]}
         start={{ x: 0, y: 0 }}
@@ -332,11 +342,7 @@ function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) 
       />
       <View style={styles.cardHeader}>
         <Pressable onPress={handleOpenAuthorProfile} hitSlop={4}>
-          <GradientRing size={scaleModerate(42)}>
-            <View style={[styles.cardAvatarWrap, { backgroundColor: theme.surfaces.card }]}>
-              <Avatar value={post.author?.profileImage} fullName={post.author?.fullName} size={scaleModerate(36)} frameUri={post.author?.frameUrl} />
-            </View>
-          </GradientRing>
+          <Avatar value={post.author?.profileImage} fullName={post.author?.fullName} size={scaleModerate(42)} frameUri={authorFrameUri} />
         </Pressable>
         <Pressable onPress={handleOpenAuthorProfile} style={styles.cardHeaderText}>
           <VerifiedName name={post.author?.fullName || 'Unknown'} isOfficial={post.author?.isOfficial} textStyle={[styles.authorName, { color: theme.text.primary }]} />
@@ -351,16 +357,19 @@ function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) 
           </View>
         </Pressable>
         <View style={styles.cardHeaderRight}>
-          {isOwnPost ? <Pressable
-              hitSlop={8}
-              onPress={() => showAlert('Post Options', undefined, [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Edit', onPress: () => onEdit(post) },
-                { text: 'Delete', style: 'destructive', onPress: () => onDelete(post) }
-              ])}
-            >
-              <DotsIcon size={17} color={theme.text.secondary} />
-            </Pressable> : null}
+          <View style={styles.cardHeaderRightTopRow}>
+            {authorBadgeUri ? <Image source={{ uri: authorBadgeUri }} style={styles.cardAuthorBadge} resizeMode="contain" /> : null}
+            {isOwnPost ? <Pressable
+                hitSlop={8}
+                onPress={() => showAlert('Post Options', undefined, [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Edit', onPress: () => onEdit(post) },
+                  { text: 'Delete', style: 'destructive', onPress: () => onDelete(post) }
+                ])}
+              >
+                <DotsIcon size={17} color={theme.text.secondary} />
+              </Pressable> : null}
+          </View>
           {post.views ? <View style={styles.viewsPill}>
               <Text style={styles.viewsEye}>👁</Text>
               <Text style={styles.viewsText}>{post.views}</Text>
@@ -411,7 +420,8 @@ function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) 
       {post.commentCount ? <Pressable onPress={() => onOpenComments(post)}>
           <Text style={[styles.viewComments, { color: theme.text.secondary }]}>View all {formatCount(post.commentCount)} comments</Text>
         </Pressable> : null}
-    </AnimatedLinearGradient>;
+      </AnimatedLinearGradient>
+    </View>;
 }
 
 function hexToRgba(hex, alpha) {
@@ -552,8 +562,15 @@ export function DiscoverScreen() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [streamOptionsVisible, setStreamOptionsVisible] = React.useState(false);
   const [roomTitleVisible, setRoomTitleVisible] = React.useState(false);
+  const [roomCoverVisible, setRoomCoverVisible] = React.useState(false);
   const [seatLayoutVisible, setSeatLayoutVisible] = React.useState(false);
   const [pendingRoomTitle, setPendingRoomTitle] = React.useState(null);
+  const [pendingCoverImage, setPendingCoverImage] = React.useState(null);
+  // Set from the same fetchAudioRoom call handleGoLive already makes, so
+  // the cover step only appears for a room that doesn't have one yet — a
+  // returning owner whose persistent room already has a cover shouldn't be
+  // asked to pick one again every time they go live.
+  const [hasExistingRoomCover, setHasExistingRoomCover] = React.useState(false);
   const [isCheckingRoom, setIsCheckingRoom] = React.useState(false);
   const defaultRoomTitle = `${session?.user?.fullName || 'My'}'s Room`;
 
@@ -647,6 +664,7 @@ export function DiscoverScreen() {
     setIsCheckingRoom(true);
     const existingRoom = await fetchAudioRoom(sessionToken);
     setIsCheckingRoom(false);
+    setHasExistingRoomCover(Boolean(existingRoom?.coverImageUrl));
     const canResumeWithoutAsking =
       existingRoom?.status === 'LIVE' || (existingRoom?.status === 'IDLE' && Boolean(getCachedSeatState(existingRoom.roomId)));
     if (canResumeWithoutAsking) {
@@ -676,12 +694,22 @@ export function DiscoverScreen() {
   const handleConfirmRoomTitle = title => {
     setPendingRoomTitle(title);
     setRoomTitleVisible(false);
+    if (hasExistingRoomCover) {
+      setSeatLayoutVisible(true);
+    } else {
+      setRoomCoverVisible(true);
+    }
+  };
+
+  const handleConfirmRoomCover = image => {
+    setPendingCoverImage(image);
+    setRoomCoverVisible(false);
     setSeatLayoutVisible(true);
   };
 
   const handleConfirmSeatLayout = seatGroups => {
     setSeatLayoutVisible(false);
-    navigation.navigate(routes.room, { mode: 'audio', seatGroups, roomName: pendingRoomTitle });
+    navigation.navigate(routes.room, { mode: 'audio', seatGroups, roomName: pendingRoomTitle, pendingCoverImage });
   };
 
   const handleSelectTab = tabId => {
@@ -698,6 +726,7 @@ export function DiscoverScreen() {
   return <Screen transparent>
       <StreamOptionModal visible={streamOptionsVisible} onClose={() => setStreamOptionsVisible(false)} onSelectAudio={handleSelectAudio} onSelectVideo={handleSelectVideo} />
       <RoomTitleModal visible={roomTitleVisible} defaultTitle={defaultRoomTitle} onClose={() => setRoomTitleVisible(false)} onConfirm={handleConfirmRoomTitle} />
+      <RoomCoverModal visible={roomCoverVisible} onClose={() => setRoomCoverVisible(false)} onConfirm={handleConfirmRoomCover} />
       <SeatLayoutModal visible={seatLayoutVisible} onClose={() => setSeatLayoutVisible(false)} onConfirm={handleConfirmSeatLayout} />
 
       <ImageBackground source={discoverBackgroundImage} style={[styles.background, { paddingTop: insets.top }]} resizeMode="cover">
@@ -785,7 +814,10 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: scaleModerate(16),
     paddingBottom: scaleModerate(100),
-    gap: scaleModerate(14)
+    // Each card's frame bleeds FRAME_OUTSET (16dp) past its top/bottom
+    // edge — this leaves a clear breathing gap between adjacent posts'
+    // glow instead of them touching/overlapping.
+    gap: scaleModerate(44)
   },
   headerBar: {
     height: scaleModerate(54),
@@ -959,9 +991,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center'
   },
-  card: {
+  // postWrapper/frameLayer/postCard: the neon frame (DiscoverPostFireFrame)
+  // must live BEHIND the card as an absolutely-positioned sibling extended
+  // past its edges (FRAME_OUTSET), not inside it — the card needs
+  // overflow:'hidden' to clip its own content (avatar, photo, etc.), which
+  // would clip the frame's outward bleed too if the frame were a child of
+  // it. postWrapper and its own parents (the FlatList's contentContainer)
+  // must stay overflow:'visible' so that bleed isn't clipped either.
+  postWrapper: {
+    position: 'relative',
+    overflow: 'visible'
+  },
+  frameLayer: {
+    position: 'absolute',
+    top: -FRAME_OUTSET,
+    bottom: -FRAME_OUTSET,
+    left: -FRAME_OUTSET,
+    right: -FRAME_OUTSET,
+    zIndex: 0,
+    overflow: 'visible'
+  },
+  postCard: {
+    position: 'relative',
+    zIndex: 1,
     borderRadius: scaleModerate(18),
     borderWidth: scaleModerate(1.5),
+    borderColor: 'transparent',
+    overflow: 'hidden',
     padding: scaleModerate(12),
     gap: scaleModerate(8),
     shadowOffset: { width: 0, height: 4 },
@@ -982,19 +1038,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: scaleModerate(10)
   },
-  cardAvatarWrap: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
   cardHeaderText: {
     flex: 1
   },
   cardHeaderRight: {
     alignItems: 'flex-end',
     gap: scaleModerate(6)
+  },
+  cardHeaderRightTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(6)
+  },
+  cardAuthorBadge: {
+    width: scaleModerate(32),
+    height: scaleModerate(32)
   },
   authorName: {
     fontSize: scaleFont(14),

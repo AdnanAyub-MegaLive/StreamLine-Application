@@ -138,37 +138,76 @@ export function sendAudioRoomMessage(roomId, body, callback) {
   });
 }
 
-// See StreamLine-Portal/docs/mobile-audio-room-api.md's "Live seat-state
-// relay" section — seat state is intentionally NOT persisted server-side;
-// the room owner is the sole source of truth and the server only validates
-// ownership and relays. Owner-only; a non-owner call gets OWNER_REQUIRED.
-export function emitSeatUpdate(roomId, seatRows, notes) {
-  socket?.emit('audio-room:seat-update', { roomId, seatRows, notes });
-}
-
-// Viewer asks to take a specific seat. The ack only confirms the request
-// was queued (PENDING) — the actual accept/reject arrives later as an
-// `audio-room:seat-response` event once the owner responds.
-export function requestSeat(roomId, seatId, note, callback) {
+// See StreamLine-Portal/docs/mobile-audio-room-api.md's "Server-authoritative
+// live seats" — seats are now database-backed; the server is the sole
+// source of truth for occupancy/lock/note/mute/speaking, and broadcasts the
+// complete audio-room:seat-update payload after every change. Any seatRows
+// this client sends is ignored (kept only for the ack shape).
+//
+// Takes a free, unlocked seat (or moves there if already seated elsewhere —
+// the server atomically vacates the old one first). Ack data:
+// { seatId, seatState, liveKit: { token, url, canPublish: true } } — the
+// caller must reconnect LiveKit with that token before enabling its mic.
+export function takeSeat(roomId, seatId, callback) {
   if (!socket) {
     callback?.({ success: false, error: { code: 'NOT_CONNECTED' } });
     return;
   }
-  socket.emit('audio-room:seat-request', { roomId, seatId, note }, callback);
+  socket.emit('audio-room:seat-take', { roomId, seatId }, callback);
 }
 
-// Owner accepts/rejects a pending `audio-room:seat-request`. On acceptance,
-// the caller is still responsible for updating its own seatRows and letting
-// the existing seat-update broadcast effect relay the change to everyone.
-export function respondToSeatRequest(roomId, requestId, requesterId, seatId, accepted, reason) {
-  socket?.emit('audio-room:seat-response', { roomId, requestId, requesterId, seatId, accepted, reason });
+// Explicit move between two seats you already/don't yet occupy — source
+// must be your own seat, target must be free and unlocked, both in one
+// transaction. Ack data: { fromSeatId, seatId, seatState } — no fresh
+// LiveKit token needed since publish rights don't change on a same-room move.
+export function moveSeat(roomId, fromSeatId, toSeatId, callback) {
+  if (!socket) {
+    callback?.({ success: false, error: { code: 'NOT_CONNECTED' } });
+    return;
+  }
+  socket.emit('audio-room:seat-move', { roomId, fromSeatId, toSeatId }, callback);
 }
 
-// A seated (non-owner) speaker voluntarily standing up. Only the room owner
-// is allowed to broadcast seat state (see audio-room:seat-update), so this
-// just notifies the owner — their client clears the seat locally and the
-// existing seat-update broadcast effect relays it to everyone else, same
-// as any other seat change.
+// Owner-only: clears someone else's seat (they drop to listener, but stay
+// in the room — their socket connection/membership is untouched). Used
+// when shrinking the seat layout displaces a currently-occupied real seat
+// (see RoomScreen's handleChangeSeatLayout). Ack data:
+// { seatId, kickedUserId, seatState }. The kicked user's own device
+// separately receives audio-room:seat-kicked with a fresh subscribe-only
+// LiveKit token to reconnect with — this ack alone doesn't reach them.
+export function kickFromSeat(roomId, seatId, callback) {
+  if (!socket) {
+    callback?.({ success: false, error: { code: 'NOT_CONNECTED' } });
+    return;
+  }
+  socket.emit('audio-room:seat-kick', { roomId, seatId }, callback);
+}
+
+// Pushes this device's own real mic-mute/speaking state (as detected via
+// LiveKit — see useLiveKitAudio) up to the server, which broadcasts it to
+// everyone via seat-update. Only the caller's own seated row can be
+// updated this way (SPEAKER_NOT_SEATED otherwise). speaking is forced false
+// server-side while muted.
+export function updateSeatStatus(roomId, { muted, speaking }, callback) {
+  if (!socket) {
+    callback?.({ success: false, error: { code: 'NOT_CONNECTED' } });
+    return;
+  }
+  socket.emit('audio-room:seat-status', { roomId, muted, speaking }, callback);
+}
+
+// Owner-only: lock/unlock a seat and optionally set its note in one call.
+export function lockSeat(roomId, seatId, locked, note, callback) {
+  if (!socket) {
+    callback?.({ success: false, error: { code: 'NOT_CONNECTED' } });
+    return;
+  }
+  socket.emit('audio-room:seat-lock', { roomId, seatId, locked, note }, callback);
+}
+
+// Clears your own seat. Ack data now includes { seatState, liveKit } — the
+// returned LiveKit token is subscribe-only (canPublish: false); reconnect
+// with it the same as after takeSeat.
 export function leaveSeat(roomId, seatId, callback) {
   if (!socket) {
     callback?.({ success: false, error: { code: 'NOT_CONNECTED' } });
