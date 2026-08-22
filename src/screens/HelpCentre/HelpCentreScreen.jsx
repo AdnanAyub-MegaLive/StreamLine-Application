@@ -166,7 +166,7 @@ export function HelpCentreScreen() {
             <Text style={styles.ctaEmoji}>🎧</Text>
             <View style={styles.ctaTextWrap}>
               <Text style={[styles.ctaTitle, { color: theme.text.primary }]}>Still need help?</Text>
-              <Text style={[styles.ctaSubtitle, { color: theme.text.secondary }]}>Our support team is available <Text style={{ color: theme.colors.secondary, fontWeight: '800' }}>24/7</Text></Text>
+              <Text style={[styles.ctaSubtitle, { color: theme.text.secondary }]}>Our support team is available <Text style={[styles.ctaSubtitleBold, { color: theme.colors.secondary }]}>24/7</Text></Text>
             </View>
             <Pressable onPress={() => handleComingSoon('Support request')}>
               <LinearGradient colors={[theme.colors.teal700, theme.colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.ctaButton}>
@@ -414,6 +414,9 @@ const styles = StyleSheet.create({
   ctaSubtitle: {
     marginTop: scaleModerate(2),
     fontSize: scaleFont(10.5)
+  },
+  ctaSubtitleBold: {
+    fontWeight: '800'
   },
   ctaButton: {
     borderRadius: 999,

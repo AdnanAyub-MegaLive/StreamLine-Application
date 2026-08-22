@@ -10,8 +10,9 @@ export function Screen({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const backgroundColor = transparent ? 'transparent' : theme.surfaces.page;
   const content = <View style={[styles.container, {
-    backgroundColor: transparent ? 'transparent' : theme.surfaces.page
+    backgroundColor
   }, !transparent && {
     paddingTop: insets.top
   }, style]}>

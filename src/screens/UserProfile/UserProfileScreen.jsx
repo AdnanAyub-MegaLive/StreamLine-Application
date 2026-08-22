@@ -144,6 +144,7 @@ export function UserProfileScreen() {
     friends: 'Friends ✓'
   }[friendStatus.status];
   const friendButtonDisabled = friendActionBusy || friendStatus.status === 'pending_sent' || friendStatus.status === 'friends';
+  const followingTextColor = following ? '#FFFFFF' : theme.text.primary;
 
   return <Screen>
       <View style={styles.header}>
@@ -205,7 +206,7 @@ export function UserProfileScreen() {
             backgroundColor: following ? theme.colors.teal700 : theme.surfaces.card,
             borderColor: following ? theme.colors.teal700 : theme.colors.cardBorder
           }]}>
-            <Text style={[styles.chatButtonText, { color: following ? '#FFFFFF' : theme.text.primary }]}>{following ? 'Following ✓' : '+ Follow'}</Text>
+            <Text style={[styles.chatButtonText, { color: followingTextColor }]}>{following ? 'Following ✓' : '+ Follow'}</Text>
           </Pressable>
           {!profileIsOfficial ? <Pressable disabled={friendButtonDisabled} onPress={handleFriendAction} style={[styles.followButton, {
               backgroundColor: friendButtonDisabled && friendStatus.status !== 'pending_received' ? theme.colors.cardBorder : theme.colors.followOrange

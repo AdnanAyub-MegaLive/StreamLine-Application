@@ -162,8 +162,9 @@ function StreakDay({ item }) {
         <Text style={[styles.streakDayLabel, { color: theme.colors.secondary }]}>Day {item.day}</Text>
       </View>;
   }
+  const streakCircleBackground = item.done ? hexToRgba(theme.colors.vipGoldText, 0.14) : 'transparent';
   return <View style={styles.streakItem}>
-      <View style={[styles.streakCircle, styles.streakCircleOutline, { borderColor: item.done ? theme.colors.vipGoldText : theme.colors.cardBorder, backgroundColor: item.done ? hexToRgba(theme.colors.vipGoldText, 0.14) : 'transparent' }]}>
+      <View style={[styles.streakCircle, styles.streakCircleOutline, { borderColor: item.done ? theme.colors.vipGoldText : theme.colors.cardBorder, backgroundColor: streakCircleBackground }]}>
         <Text style={[styles.streakGlyph, { color: item.done ? theme.colors.vipGoldText : theme.text.secondary }]}>{item.done ? '✓' : item.day}</Text>
       </View>
       <Text style={[styles.streakDayLabel, { color: theme.text.secondary }]}>Day {item.day}</Text>
@@ -173,7 +174,8 @@ function StreakDay({ item }) {
 function TaskCard({ item }) {
   const theme = useTheme();
   const completed = item.state === 'completed';
-  return <View style={[styles.taskCard, { borderColor: theme.colors.cardBorder, backgroundColor: hexToRgba(theme.colors.neutral900, 0.88), opacity: completed ? 0.55 : 1 }]}>
+  const taskCardOpacity = completed ? 0.55 : 1;
+  return <View style={[styles.taskCard, { borderColor: theme.colors.cardBorder, backgroundColor: hexToRgba(theme.colors.neutral900, 0.88), opacity: taskCardOpacity }]}>
       <View style={[styles.taskIcon, { backgroundColor: hexToRgba(theme.colors.teal700, 0.14), borderColor: hexToRgba(theme.colors.teal700, 0.4) }]}>
         <Image source={DAILY_MISSION_ICONS[item.key]} resizeMode="contain" style={styles.taskIconImage} />
       </View>
@@ -241,7 +243,7 @@ function TopSupporterMission() {
           <Text style={[styles.topSupporterTitle, { color: theme.text.primary }]}>Become a Top Supporter</Text>
           <Text style={[styles.topSupporterDescription, { color: theme.text.secondary }]}>Send 50 gifts in total</Text>
           <View style={[styles.topSupporterTrack, { backgroundColor: hexToRgba(theme.colors.cardBorder, 0.65) }]}>
-            <LinearGradient colors={[theme.colors.secondary, theme.colors.teal700]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.topSupporterFill, { width: '50%' }]} />
+            <LinearGradient colors={[theme.colors.secondary, theme.colors.teal700]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.topSupporterFill, styles.topSupporterFillHalf]} />
           </View>
           <Text style={[styles.topSupporterProgress, { color: theme.text.secondary }]}>25 / 50</Text>
         </View>
@@ -749,6 +751,9 @@ const styles = StyleSheet.create({
   topSupporterFill: {
     height: '100%',
     borderRadius: 999
+  },
+  topSupporterFillHalf: {
+    width: '50%'
   },
   topSupporterProgress: {
     marginTop: scaleModerate(4),

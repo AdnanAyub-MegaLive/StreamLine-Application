@@ -78,6 +78,7 @@ function RoadmapColumn({ item, isLast }) {
   const theme = useTheme();
   const active = item.current;
   const nodeColor = item.unlocked ? theme.colors.teal700 : theme.colors.cardBorder;
+  const roadmapCardBackground = active ? hexToRgba(theme.colors.teal700, 0.1) : 'transparent';
 
   return <View style={styles.roadmapColumn}>
       <View style={styles.roadmapNodeRow}>
@@ -88,7 +89,7 @@ function RoadmapColumn({ item, isLast }) {
       </View>
       <Text style={[styles.roadmapStatus, { color: item.unlocked ? theme.colors.secondary : theme.text.secondary }]}>{item.unlocked ? '✓' : '🔒'}</Text>
 
-      <View style={[styles.roadmapCard, { borderColor: active ? theme.colors.teal700 : theme.colors.cardBorder, backgroundColor: active ? hexToRgba(theme.colors.teal700, 0.1) : 'transparent' }]}>
+      <View style={[styles.roadmapCard, { borderColor: active ? theme.colors.teal700 : theme.colors.cardBorder, backgroundColor: roadmapCardBackground }]}>
         <View style={styles.roadmapCoinRow}>
           <Text style={styles.roadmapCoinIcon}>🪙</Text>
           <Text style={[styles.roadmapCoinText, { color: theme.colors.vipGoldText }]}>{item.coins.toLocaleString()}</Text>
@@ -187,7 +188,7 @@ export function MyLevelScreen() {
                 <Text style={styles.progressFillText}>{CURRENT_XP.toLocaleString()} / {NEXT_LEVEL_XP.toLocaleString()} XP</Text>
               </LinearGradient>
             </View>
-            <Text style={[styles.progressText, { color: theme.text.secondary }]}>{xpToNext.toLocaleString()} XP to reach <Text style={{ color: theme.colors.teal700, fontWeight: '800' }}>Level {CURRENT_LEVEL + 1}</Text></Text>
+            <Text style={[styles.progressText, { color: theme.text.secondary }]}>{xpToNext.toLocaleString()} XP to reach <Text style={[styles.progressTextBold, { color: theme.colors.teal700 }]}>Level {CURRENT_LEVEL + 1}</Text></Text>
           </View>
         </GlassPanel>
 
@@ -240,7 +241,7 @@ export function MyLevelScreen() {
                 <Text style={[styles.nextRewardLabel, { color: theme.colors.vipGoldText }]}>3,600</Text>
               </View>
               <View style={styles.nextRewardItem}>
-                <View style={[styles.nextRewardCircle, { borderColor: theme.colors.teal700, borderStyle: 'dashed' }]}>
+                <View style={[styles.nextRewardCircle, styles.nextRewardCircleDashed, { borderColor: theme.colors.teal700 }]}>
                   <Text style={styles.nextRewardEmoji}>⚪</Text>
                 </View>
                 <Text style={[styles.nextRewardLabel, { color: theme.text.secondary }]} numberOfLines={2}>Level 26{'\n'}Frame</Text>
@@ -391,6 +392,9 @@ const styles = StyleSheet.create({
   progressText: {
     marginTop: scaleModerate(8),
     fontSize: scaleFont(11)
+  },
+  progressTextBold: {
+    fontWeight: '800'
   },
   card: {
     marginTop: scaleModerate(14),
@@ -614,6 +618,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: scaleModerate(6)
+  },
+  nextRewardCircleDashed: {
+    borderStyle: 'dashed'
   },
   nextRewardEmoji: {
     fontSize: scaleFont(18)

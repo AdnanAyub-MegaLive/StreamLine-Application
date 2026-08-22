@@ -1854,6 +1854,7 @@ export function RoomScreen() {
       socket?.off('audio-room:message', handleRoomMessage);
       backgroundNow();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAudioRoom]);
 
   React.useEffect(() => {

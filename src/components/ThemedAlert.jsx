@@ -116,7 +116,7 @@ export function ThemedAlertHost() {
             {buttons.map((button, index) => (
               <Pressable
                 key={`${button.text}-${index}`}
-                style={[styles.button, index > 0 && { borderLeftWidth: 1, borderLeftColor: theme.colors.cardBorder }]}
+                style={[styles.button, index > 0 && [styles.buttonLeftBorder, { borderLeftColor: theme.colors.cardBorder }]]}
                 onPress={() => {
                   close();
                   button.onPress?.();
@@ -189,6 +189,9 @@ const styles = StyleSheet.create({
     paddingVertical: scaleModerate(13),
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  buttonLeftBorder: {
+    borderLeftWidth: 1
   },
   buttonText: {
     fontSize: scaleFont(14.5),

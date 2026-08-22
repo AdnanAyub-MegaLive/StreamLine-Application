@@ -1,11 +1,11 @@
 import React from 'react';
-import { ActivityIndicator, Animated, Dimensions, Easing, FlatList, Image, ImageBackground, Modal, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Animated, Dimensions, FlatList, Image, ImageBackground, Modal, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
-import { BellIcon, BookmarkIcon, discoverBackgroundImage, DotsIcon, HeartIcon, MessageIcon, PlayIcon, RepostIcon, SearchIcon } from '../../assets';
+import { BookmarkIcon, discoverBackgroundImage, DotsIcon, HeartIcon, MessageIcon, PlayIcon, RepostIcon } from '../../assets';
 import { CreatePostError, deletePost, fetchAudioRoom, fetchPosts } from '../../api';
-import { Avatar, DiscoverPostFireFrame, RoomCoverModal, RoomTitleModal, SEAT_LAYOUT_OPTIONS, SeatLayoutModal, Screen, showAlert, StreamOptionModal, VerifiedName } from '../../components';
+import { Avatar, RoomCoverModal, RoomTitleModal, SEAT_LAYOUT_OPTIONS, SeatLayoutModal, Screen, showAlert, StreamOptionModal, VerifiedName } from '../../components';
 import { useUserAssets } from '../../hooks';
 import { getCachedSeatState, scaleFont, scaleModerate } from '../../utils';
 import { useAppStore } from '../../store';
@@ -15,9 +15,6 @@ import { DiscoverHeader } from './components/DiscoverHeader';
 
 const PAGE_WIDTH = Dimensions.get('window').width;
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
-// How far DiscoverPostFireFrame bleeds outside each post card's edges —
-// see postWrapper/frameLayer/postCard below.
-const FRAME_OUTSET = scaleModerate(16);
 
 const DISCOVER_TABS = [
   { id: 'forYou', label: 'For You' },
@@ -106,99 +103,6 @@ function timeAgo(isoDate) {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
-}
-
-function HeaderGlassButton({ theme, onPress, children, style }) {
-  return <Pressable onPress={onPress} style={[styles.headerButton, style]}>
-      <LinearGradient
-        colors={[hexToRgba(theme.surfaces.card, 0.6), hexToRgba(theme.surfaces.card, 0.4)]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.headerButtonGradient}
-      >
-        <LinearGradient
-          colors={[hexToRgba(theme.colors.secondary, 0.14), hexToRgba(theme.colors.tertiary, 0.14)]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerButtonTint}
-          pointerEvents="none"
-        />
-        {children}
-      </LinearGradient>
-    </Pressable>;
-}
-
-function HeaderBar({ theme, onOpenNotifications, hasUnreadNotifications, searchActive, searchQuery, onChangeSearchQuery, onOpenSearch, onCloseSearch }) {
-  const searchAnim = React.useRef(new Animated.Value(searchActive ? 1 : 0)).current;
-  const searchInputRef = React.useRef(null);
-
-  React.useEffect(() => {
-    Animated.timing(searchAnim, {
-      toValue: searchActive ? 1 : 0,
-      duration: 280,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true
-    }).start();
-    if (searchActive) {
-      // The bar is still mid-slide at this point — a hair of delay lets
-      // the animation actually be visible before the keyboard shoves the
-      // layout around, instead of both happening in the same frame.
-      const timer = setTimeout(() => searchInputRef.current?.focus(), 80);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [searchActive, searchAnim]);
-
-  const titleOpacity = searchAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
-  const titleTranslateX = searchAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -24] });
-  const searchOpacity = searchAnim;
-  const searchTranslateX = searchAnim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] });
-
-  return <View style={styles.headerBar}>
-      <Animated.View
-        pointerEvents={searchActive ? 'none' : 'auto'}
-        style={[styles.headerBarRow, { opacity: titleOpacity, transform: [{ translateX: titleTranslateX }] }]}
-      >
-        <Text style={[styles.screenTitle, { color: theme.text.primary }]}>Discover</Text>
-        <View style={styles.headerActions}>
-          <HeaderGlassButton theme={theme} onPress={onOpenSearch}>
-            <SearchIcon size={19} color={theme.text.primary} />
-          </HeaderGlassButton>
-          <HeaderGlassButton theme={theme} onPress={onOpenNotifications}>
-            <BellIcon size={19} color={theme.text.primary} />
-            {hasUnreadNotifications ? <View style={[styles.headerDot, { backgroundColor: theme.colors.liveBadge, borderColor: theme.surfaces.card }]} /> : null}
-          </HeaderGlassButton>
-        </View>
-      </Animated.View>
-
-      <Animated.View
-        pointerEvents={searchActive ? 'auto' : 'none'}
-        style={[styles.headerBarRow, styles.headerBarRowAbsolute, { opacity: searchOpacity, transform: [{ translateX: searchTranslateX }] }]}
-      >
-        <View style={styles.searchBarWrap}>
-          <LinearGradient
-            colors={[hexToRgba(theme.surfaces.card, 0.7), hexToRgba(theme.surfaces.card, 0.45)]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.searchBar}
-          >
-            <SearchIcon size={16} color={theme.text.secondary} />
-            <TextInput
-              ref={searchInputRef}
-              value={searchQuery}
-              onChangeText={onChangeSearchQuery}
-              placeholder="Search by name…"
-              placeholderTextColor={theme.text.secondary}
-              style={[styles.searchInput, { color: theme.text.primary }]}
-              returnKeyType="search"
-            />
-          </LinearGradient>
-        </View>
-        <Pressable onPress={onCloseSearch} hitSlop={10}>
-          <Text style={[styles.searchCancel, { color: theme.colors.teal700 }]}>Cancel</Text>
-        </Pressable>
-      </Animated.View>
-    </View>;
 }
 
 function GradientRing({ size, children }) {
@@ -323,16 +227,12 @@ function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) 
       userIsOfficial: post.author.isOfficial
     });
   };
-  return <View style={styles.postWrapper}>
-      <View pointerEvents="none" style={styles.frameLayer}>
-        <DiscoverPostFireFrame width="100%" height="100%" />
-      </View>
-      <AnimatedLinearGradient
-        colors={[hexToRgba(theme.surfaces.card, 0.6), hexToRgba(theme.surfaces.card, 0.4)]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.postCard, { shadowColor: theme.colors.tertiary }]}
-      >
+  return <AnimatedLinearGradient
+      colors={[hexToRgba(theme.surfaces.card, 0.6), hexToRgba(theme.surfaces.card, 0.4)]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.card, { shadowColor: theme.colors.tertiary }]}
+    >
       <LinearGradient
         colors={[hexToRgba(theme.colors.neutral900, 0.5), hexToRgba(theme.colors.neutral900, 0.2)]}
         start={{ x: 0, y: 0 }}
@@ -420,8 +320,7 @@ function PostCard({ post, theme, onOpenComments, isOwnPost, onEdit, onDelete }) 
       {post.commentCount ? <Pressable onPress={() => onOpenComments(post)}>
           <Text style={[styles.viewComments, { color: theme.text.secondary }]}>View all {formatCount(post.commentCount)} comments</Text>
         </Pressable> : null}
-      </AnimatedLinearGradient>
-    </View>;
+    </AnimatedLinearGradient>;
 }
 
 function hexToRgba(hex, alpha) {
@@ -814,10 +713,7 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: scaleModerate(16),
     paddingBottom: scaleModerate(100),
-    // Each card's frame bleeds FRAME_OUTSET (16dp) past its top/bottom
-    // edge — this leaves a clear breathing gap between adjacent posts'
-    // glow instead of them touching/overlapping.
-    gap: scaleModerate(44)
+    gap: scaleModerate(14)
   },
   headerBar: {
     height: scaleModerate(54),
@@ -991,29 +887,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center'
   },
-  // postWrapper/frameLayer/postCard: the neon frame (DiscoverPostFireFrame)
-  // must live BEHIND the card as an absolutely-positioned sibling extended
-  // past its edges (FRAME_OUTSET), not inside it — the card needs
-  // overflow:'hidden' to clip its own content (avatar, photo, etc.), which
-  // would clip the frame's outward bleed too if the frame were a child of
-  // it. postWrapper and its own parents (the FlatList's contentContainer)
-  // must stay overflow:'visible' so that bleed isn't clipped either.
-  postWrapper: {
-    position: 'relative',
-    overflow: 'visible'
-  },
-  frameLayer: {
-    position: 'absolute',
-    top: -FRAME_OUTSET,
-    bottom: -FRAME_OUTSET,
-    left: -FRAME_OUTSET,
-    right: -FRAME_OUTSET,
-    zIndex: 0,
-    overflow: 'visible'
-  },
-  postCard: {
-    position: 'relative',
-    zIndex: 1,
+  card: {
     borderRadius: scaleModerate(18),
     borderWidth: scaleModerate(1.5),
     borderColor: 'transparent',

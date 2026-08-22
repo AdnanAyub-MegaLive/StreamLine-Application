@@ -89,7 +89,7 @@ export function Avatar({ value, fullName, size = 48, style, frameUri }) {
         style={[
           circleStyle,
           { backgroundColor: avatarTheme.background },
-          !frameUri && { borderColor: avatarTheme.accent, borderWidth: 1 }
+          !frameUri && [styles.hairlineBorder, { borderColor: avatarTheme.accent }]
         ]}
       >
         <Text style={{ fontSize: Math.round(size * 0.5) }}>{preset.emoji}</Text>
@@ -105,7 +105,7 @@ export function Avatar({ value, fullName, size = 48, style, frameUri }) {
     );
   } else {
     content = (
-      <View style={[circleStyle, { backgroundColor: theme.state.soft }, !frameUri && { borderColor: theme.colors.cardBorder, borderWidth: 1 }]}>
+      <View style={[circleStyle, { backgroundColor: theme.state.soft }, !frameUri && [styles.hairlineBorder, { borderColor: theme.colors.cardBorder }]]}>
         <Text style={[styles.initial, { color: theme.colors.teal700, fontSize: scaleFont(Math.round(size * 0.4)) }]}>
           {getInitial(fullName)}
         </Text>
@@ -151,6 +151,9 @@ const styles = StyleSheet.create({
   },
   frameImage: {
     position: 'absolute'
+  },
+  hairlineBorder: {
+    borderWidth: 1
   }
 });
 

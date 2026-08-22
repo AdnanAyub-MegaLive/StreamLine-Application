@@ -143,3 +143,6 @@ docs/
 
 # Optional eslint cache
 .eslintcache
+
+# Local scratch assets (previews, verify shots, transparent video experiments)
+Flages/

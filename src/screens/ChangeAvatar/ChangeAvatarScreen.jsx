@@ -115,9 +115,8 @@ export function ChangeAvatarScreen() {
                 }}
                 style={[styles.avatarOption, {
                   backgroundColor: avatarTheme.background,
-                  borderColor: selected ? avatarTheme.accent : theme.colors.cardBorder,
-                  borderWidth: selected ? 2 : 1
-                }]}
+                  borderColor: selected ? avatarTheme.accent : theme.colors.cardBorder
+                }, selected ? styles.avatarOptionSelected : styles.avatarOptionUnselected]}
               >
                 <Text style={styles.avatarOptionEmoji}>{preset.emoji}</Text>
               </Pressable>
@@ -195,6 +194,12 @@ const styles = StyleSheet.create({
     borderRadius: scaleModerate(32),
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  avatarOptionSelected: {
+    borderWidth: 2
+  },
+  avatarOptionUnselected: {
+    borderWidth: 1
   },
   avatarOptionEmoji: {
     fontSize: scaleFont(28)

@@ -49,9 +49,10 @@ function formatTxTime(isoString) {
 
 function ActionButton({ action, onPress }) {
   const theme = useTheme();
+  const backgroundColor = action.primary ? hexToRgba(action.color, 0.12) : 'transparent';
   return <Pressable onPress={onPress} style={[styles.actionButton, {
       borderColor: action.primary ? action.color : theme.colors.cardBorder,
-      backgroundColor: action.primary ? hexToRgba(action.color, 0.12) : 'transparent'
+      backgroundColor
     }]}>
       <View style={[styles.actionIcon, { borderColor: action.color }]}>
         <WalletActionIcon name={action.key} size={scaleModerate(22)} color={action.color} />
@@ -80,6 +81,7 @@ function CoinPackageCard({ item, onPress }) {
 function TransactionRow({ item }) {
   const theme = useTheme();
   const isIn = item.direction === 'CREDIT';
+  const amountColor = isIn ? '#2ECC71' : theme.text.primary;
   const amountValue = item.coins ?? item.diamonds ?? item.amount;
   const unit = item.coins ? '🪙' : item.diamonds ? '💎' : null;
   const category = getTransactionCategory(item);
@@ -91,7 +93,7 @@ function TransactionRow({ item }) {
         <Text style={[styles.txSubtitle, { color: theme.text.secondary }]}>{item.description}</Text>
       </View>
       <View style={styles.txAmountWrap}>
-        <Text style={[styles.txAmount, { color: isIn ? '#2ECC71' : theme.text.primary }]}>{isIn ? '+' : '- '}{Number(amountValue).toLocaleString()}{unit ? ` ${unit}` : ''}</Text>
+        <Text style={[styles.txAmount, { color: amountColor }]}>{isIn ? '+' : '- '}{Number(amountValue).toLocaleString()}{unit ? ` ${unit}` : ''}</Text>
         <Text style={[styles.txTime, { color: theme.text.secondary }]}>{formatTxTime(item.createdAt)}</Text>
       </View>
     </View>;
@@ -294,9 +296,9 @@ function TransactionHistoryTab({ transactions, onBack }) {
           <Pressable style={[styles.filterModalCard, { backgroundColor: theme.surfaces.card, borderColor: theme.colors.cardBorder }]} onPress={() => {}}>
             <View style={styles.filterModalHeader}><Text style={[styles.filterModalTitle, { color: theme.text.primary }]}>Filter Transactions</Text><Pressable onPress={() => { setCategoryFilter('all'); setDateFilter('all'); }}><Text style={[styles.filterReset, { color: theme.colors.tertiary }]}>Reset</Text></Pressable></View>
             <Text style={[styles.filterSectionTitle, { color: theme.text.secondary }]}>Category</Text>
-            <View style={styles.filterOptions}>{[{ id: 'all', label: 'All' }, { id: 'purchase', label: 'Purchase' }, { id: 'withdraw', label: 'Withdraw' }, { id: 'send', label: 'Send' }, { id: 'admin_added', label: 'Add' }].map(option => <Pressable key={option.id} onPress={() => setCategoryFilter(option.id)} style={[styles.filterChip, { borderColor: categoryFilter === option.id ? theme.colors.tertiary : theme.colors.cardBorder, backgroundColor: categoryFilter === option.id ? hexToRgba(theme.colors.tertiary, 0.18) : 'transparent' }]}><Text style={[styles.filterChipText, { color: categoryFilter === option.id ? theme.colors.tertiary : theme.text.primary }]}>{option.label}</Text></Pressable>)}</View>
+            <View style={styles.filterOptions}>{[{ id: 'all', label: 'All' }, { id: 'purchase', label: 'Purchase' }, { id: 'withdraw', label: 'Withdraw' }, { id: 'send', label: 'Send' }, { id: 'admin_added', label: 'Add' }].map(option => { const active = categoryFilter === option.id; const chipBackground = active ? hexToRgba(theme.colors.tertiary, 0.18) : 'transparent'; return <Pressable key={option.id} onPress={() => setCategoryFilter(option.id)} style={[styles.filterChip, { borderColor: active ? theme.colors.tertiary : theme.colors.cardBorder, backgroundColor: chipBackground }]}><Text style={[styles.filterChipText, { color: active ? theme.colors.tertiary : theme.text.primary }]}>{option.label}</Text></Pressable>; })}</View>
             <Text style={[styles.filterSectionTitle, { color: theme.text.secondary }]}>Date</Text>
-            <View style={styles.filterOptions}>{[{ id: 'all', label: 'Any date' }, { id: 'today', label: 'Today' }, { id: 'week', label: 'Last 7 days' }, { id: 'month', label: 'Last 30 days' }].map(option => <Pressable key={option.id} onPress={() => setDateFilter(option.id)} style={[styles.filterChip, { borderColor: dateFilter === option.id ? theme.colors.teal700 : theme.colors.cardBorder, backgroundColor: dateFilter === option.id ? hexToRgba(theme.colors.teal700, 0.18) : 'transparent' }]}><Text style={[styles.filterChipText, { color: dateFilter === option.id ? theme.colors.teal700 : theme.text.primary }]}>{option.label}</Text></Pressable>)}</View>
+            <View style={styles.filterOptions}>{[{ id: 'all', label: 'Any date' }, { id: 'today', label: 'Today' }, { id: 'week', label: 'Last 7 days' }, { id: 'month', label: 'Last 30 days' }].map(option => { const active = dateFilter === option.id; const chipBackground = active ? hexToRgba(theme.colors.teal700, 0.18) : 'transparent'; return <Pressable key={option.id} onPress={() => setDateFilter(option.id)} style={[styles.filterChip, { borderColor: active ? theme.colors.teal700 : theme.colors.cardBorder, backgroundColor: chipBackground }]}><Text style={[styles.filterChipText, { color: active ? theme.colors.teal700 : theme.text.primary }]}>{option.label}</Text></Pressable>; })}</View>
             <Pressable onPress={() => setFilterVisible(false)} style={[styles.filterApplyButton, { backgroundColor: theme.colors.tertiary }]}><Text style={styles.filterApplyText}>Apply Filters</Text></Pressable>
           </Pressable>
         </Pressable>

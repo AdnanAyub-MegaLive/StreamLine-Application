@@ -121,7 +121,7 @@ export function GiftPickerModal({ visible, onClose, onConfirmSend, recipientName
               <Pressable
                 disabled={sending}
                 onPress={() => onConfirmSend(selectedGift, quantity)}
-                style={[styles.confirmButton, { backgroundColor: theme.colors.teal700, opacity: sending ? 0.7 : 1 }]}
+                style={[styles.confirmButton, { backgroundColor: theme.colors.teal700 }, sending && styles.confirmButtonSending]}
               >
                 {sending ? <ActivityIndicator color={theme.cta.primary.text} /> : <Text style={[styles.confirmText, { color: theme.cta.primary.text }]}>Send Gift</Text>}
               </Pressable>
@@ -308,6 +308,9 @@ const styles = StyleSheet.create({
     borderRadius: scaleModerate(24),
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  confirmButtonSending: {
+    opacity: 0.7
   },
   confirmText: {
     fontSize: scaleFont(14),

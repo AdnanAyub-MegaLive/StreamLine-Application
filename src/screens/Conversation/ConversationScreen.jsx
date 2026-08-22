@@ -123,7 +123,7 @@ export function ConversationScreen() {
             style={[styles.input, { color: theme.text.primary }]}
             multiline
           />
-          <Pressable onPress={handleSend} disabled={!draft.trim() || sending} style={[styles.sendButton, { backgroundColor: theme.colors.teal700, opacity: draft.trim() ? 1 : 0.5 }]}>
+          <Pressable onPress={handleSend} disabled={!draft.trim() || sending} style={[styles.sendButton, { backgroundColor: theme.colors.teal700 }, !draft.trim() && styles.sendButtonDisabled]}>
             <Text style={[styles.sendButtonText, { color: theme.cta.primary.text }]}>Send</Text>
           </Pressable>
         </View>
@@ -205,6 +205,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: scaleModerate(16),
     paddingVertical: scaleModerate(9)
+  },
+  sendButtonDisabled: {
+    opacity: 0.5
   },
   sendButtonText: {
     fontSize: scaleFont(13),

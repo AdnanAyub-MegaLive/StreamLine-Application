@@ -66,16 +66,15 @@ function VipBadgeIcon({ index, size }) {
   const centerX = VIP_BADGE_SPRITE_CELL_WIDTH * (index + 0.5);
   const centerY = VIP_BADGE_SPRITE_SIZE.height * VIP_BADGE_CIRCLE.centerYRatio;
   const scale = size / diameter;
-  return <View style={[styles.vipFeatureIcon, { width: size, height: size, borderRadius: size / 2, overflow: 'hidden' }]}>
+  return <View style={[styles.vipFeatureIcon, styles.vipFeatureIconClip, { width: size, height: size, borderRadius: size / 2 }]}>
       <Image
         source={vipBadgesIconsImage}
-        style={{
+        style={[styles.vipBadgeSpriteImage, {
           width: VIP_BADGE_SPRITE_SIZE.width * scale,
           height: VIP_BADGE_SPRITE_SIZE.height * scale,
-          position: 'absolute',
           left: -(centerX - diameter / 2) * scale,
           top: -(centerY - diameter / 2) * scale
-        }}
+        }]}
       />
     </View>;
 }
@@ -229,7 +228,7 @@ export function ProfileScreen() {
 
           <View style={styles.vipTextWrap}>
             <Text style={[styles.vipTitle, { color: theme.text.primary }]}>
-              <Text style={{ color: theme.colors.secondary, textShadowColor: theme.colors.secondary, textShadowRadius: 8, textShadowOffset: { width: 0, height: 0 } }}>👑 </Text>
+              <Text style={[styles.vipCrownGlow, { color: theme.colors.secondary, textShadowColor: theme.colors.secondary }]}>👑 </Text>
               <Text style={{ color: theme.colors.tertiary }}>Premium</Text> VIP
             </Text>
             <Text style={[styles.vipSubtitle, { color: theme.text.secondary }]}>Unlock exclusive perks & badges</Text>
@@ -504,6 +503,16 @@ const styles = StyleSheet.create({
   vipFeatureIcon: {
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  vipFeatureIconClip: {
+    overflow: 'hidden'
+  },
+  vipCrownGlow: {
+    textShadowRadius: 8,
+    textShadowOffset: { width: 0, height: 0 }
+  },
+  vipBadgeSpriteImage: {
+    position: 'absolute'
   },
   vipFeatureEmoji: {
     fontSize: scaleFont(16)

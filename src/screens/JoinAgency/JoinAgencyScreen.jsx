@@ -18,7 +18,7 @@ function AgencyRow({ agency, busy, onJoin, theme }) {
           {typeof agency.hostCount === 'number' ? `${agency.hostCount} hosts` : agency.id}
         </Text>
       </View>
-      <Pressable disabled={busy} onPress={onJoin} style={[styles.joinButton, { backgroundColor: theme.colors.teal700, opacity: busy ? 0.7 : 1 }]}>
+      <Pressable disabled={busy} onPress={onJoin} style={[styles.joinButton, { backgroundColor: theme.colors.teal700 }, busy && styles.joinButtonBusy]}>
         {busy ? <ActivityIndicator size="small" color={theme.cta.primary.text} /> : <Text style={[styles.joinButtonText, { color: theme.cta.primary.text }]}>Join</Text>}
       </Pressable>
     </View>;
@@ -240,6 +240,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: scaleModerate(16),
     paddingVertical: scaleModerate(9)
+  },
+  joinButtonBusy: {
+    opacity: 0.7
   },
   joinButtonText: {
     fontSize: scaleFont(12.5),

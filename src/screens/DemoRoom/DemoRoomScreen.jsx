@@ -166,6 +166,7 @@ function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmpt
   const avatarInnerSize = circleSize - 4;
   const ringSize = circleSize + 4;
   const micBadgeSize = Math.max(scaleModerate(16), Math.round(circleSize * 0.36));
+  const avatarInnerBackground = seat.isMe && myFrameUri ? 'transparent' : theme.surfaces.card;
 
   if (!seat.occupied) {
     return (
@@ -202,7 +203,7 @@ function Seat({ seat, theme, columnStyle, circleSize = scaleModerate(56), onEmpt
           // is showing — that background circle is smaller than the
           // frame, so it was visibly peeking out around/behind the
           // frame's edges instead of just the photo + frame artwork.
-          backgroundColor: seat.isMe && myFrameUri ? 'transparent' : theme.surfaces.card
+          backgroundColor: avatarInnerBackground
         }]}>
           <Avatar value={seat.avatarUri || `${AVATAR_PLACEHOLDER}?seed=${seat.name}`} fullName={seat.name} size={avatarInnerSize} />
         </View>
