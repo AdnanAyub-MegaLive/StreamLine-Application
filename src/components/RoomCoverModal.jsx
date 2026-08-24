@@ -3,6 +3,7 @@ import { Image, Modal, Pressable, StyleSheet, Text } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { useTheme } from '../theme';
 import { scaleFont, scaleModerate } from '../utils';
+import { ensurePermissionOrPrompt } from './permissionAlert';
 
 // Shown once, right after RoomTitleModal, only when the owner's persistent
 // room has no coverImageUrl yet (see DiscoverScreen's handleConfirmRoomTitle)
@@ -23,6 +24,9 @@ export function RoomCoverModal({ visible, onClose, onConfirm }) {
   }, [visible]);
 
   const handlePickPhoto = async () => {
+    if (!(await ensurePermissionOrPrompt('gallery'))) {
+      return;
+    }
     const response = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 1, quality: 0.8 });
     if (response.didCancel) {
       return;

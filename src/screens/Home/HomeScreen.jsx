@@ -18,16 +18,22 @@ function LogoMark() {
     </View>;
 }
 
-function HeaderBar() {
+function HeaderBar({ activeTab }) {
   const theme = useTheme();
   const navigation = useNavigation();
+  // The Party page's search used to open UserSearch (User ID only) — no
+  // way to find a room at all. Room search only makes sense from the Party
+  // tab; Live/Games keep searching for users, same as before.
+  const handleOpenSearch = () => {
+    navigation.navigate(activeTab === 'party' ? routes.roomSearch : routes.userSearch);
+  };
   return <View style={styles.headerBar}>
       <View style={styles.logoRow}>
         <LogoMark />
         <Text style={[styles.headerTitle, { color: theme.colors.teal700 }]}>STREAMLINE</Text>
       </View>
       <View style={styles.headerActions}>
-        <Pressable onPress={() => navigation.navigate(routes.userSearch)} hitSlop={10}>
+        <Pressable onPress={handleOpenSearch} hitSlop={10}>
           <SearchIcon size={22} color={theme.text.secondary} />
         </Pressable>
         <Pressable onPress={() => navigation.navigate(routes.rankings)} hitSlop={10}>
@@ -96,7 +102,7 @@ export function HomeScreen() {
         bar, but here it meant HeaderBar (search/title/trophy) rendered
         underneath the status bar itself, invisible behind its icons. */}
         <View style={{ height: insets.top }} />
-        <HeaderBar />
+        <HeaderBar activeTab={activeTab} />
 
         <View style={styles.header}>
           <TabPill label="Party" active={activeTab === 'party'} onPress={() => scrollToTab('party')} />

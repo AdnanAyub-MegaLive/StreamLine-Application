@@ -145,6 +145,7 @@ export function UserProfileScreen() {
   }[friendStatus.status];
   const friendButtonDisabled = friendActionBusy || friendStatus.status === 'pending_sent' || friendStatus.status === 'friends';
   const followingTextColor = following ? '#FFFFFF' : theme.text.primary;
+  const profileDisplayId = isOwnProfile ? session?.user?.displayId || userId : userId;
 
   return <Screen>
       <View style={styles.header}>
@@ -167,7 +168,7 @@ export function UserProfileScreen() {
             {profileIsOfficial ? <VerifiedTick size={16} /> : null}
             {badgeUri ? <Image source={{ uri: badgeUri }} style={styles.profileBadge} resizeMode="contain" /> : null}
           </View>
-          {userId ? <Text style={[styles.idText, { color: theme.text.secondary }]}>ID: {userId}</Text> : null}
+          {userId ? <Text style={[styles.idText, { color: theme.text.secondary }]}>ID: {profileDisplayId}</Text> : null}
 
           <View style={styles.chipRow}>
             <Chip label="⚡ 1" background={theme.colors.teal50} color={theme.colors.teal700} />

@@ -130,7 +130,7 @@ function PartyBanner({ onBannerScrolling }) {
   // math (indexRef/activeIndex, the paging snap points) during a manual
   // swipe, making banners land in the wrong spot. A precomputed number has
   // no such lag.
-  const bannerImageHeight = bannerWidth / 2.4;
+  const bannerImageHeight = (bannerWidth / 2.4) * 0.9;
   // The fixed agency banner always leads the carousel; after it, admin-
   // uploaded image banners take priority, falling back to the bundled
   // text promos only when none exist yet — so the section is never just

@@ -12,6 +12,8 @@ import {
 } from '../utils';
 import { PrimaryButton } from './PrimaryButton';
 import { LocationRequiredScreen } from './LocationRequiredScreen';
+import { useAppStore } from '../store';
+import { disconnectSessionSocket } from '../services/socket';
 
 // How often to re-check while blocked on "location services off" — flipping
 // the quick-settings location tile doesn't reliably background the app on
@@ -63,6 +65,7 @@ export function PermissionsGate({ children }) {
   const [status, setStatus] = React.useState('checking');
   const [permissionState, setPermissionState] = React.useState({});
   const [isRequesting, setIsRequesting] = React.useState(false);
+  const clearSession = useAppStore(state => state.clearSession);
 
   // Requests are done ONE AT A TIME, in sequence — Android can only show a
   // single runtime-permission dialog at once. Firing request() for all 5
@@ -88,11 +91,18 @@ export function PermissionsGate({ children }) {
       const result = await getCurrentLocationOrError();
       setStatus(result.errorCode === 'POSITION_UNAVAILABLE' ? 'locationOff' : 'granted');
     } else {
+      // A permission missing at launch, or revoked mid-session (caught by
+      // the AppState 'active' re-check below), forces a real logout rather
+      // than just showing the gate over the existing session — granting
+      // the permission afterward lands back on login, not silently
+      // resuming whatever was open before.
+      disconnectSessionSocket();
+      clearSession();
       setStatus('denied');
     }
 
     return nextState;
-  }, []);
+  }, [clearSession]);
 
   const requestAll = React.useCallback(async () => {
     setIsRequesting(true);

@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { PERMISSIONS, RESULTS, check, checkNotifications, request, requestNotifications } from 'react-native-permissions';
+import { checkLocationPermission, requestLocationPermission } from './location';
 
 // Camera, microphone, and gallery (photo library) go through the generic
 // PERMISSIONS map. Notifications use their own dedicated API in this
@@ -46,4 +47,26 @@ export async function requestDevicePermission(key) {
 
   const result = await request(permission);
   return GRANTED_RESULTS.includes(result);
+}
+
+// Single entry point for "am I actually allowed to do this right now" —
+// call this immediately before any feature that needs a device permission
+// (picking from the gallery, using the camera/mic, reading location),
+// rather than assuming PermissionsGate's launch-time grant still holds.
+// PermissionsGate already blocks the whole app until every permission is
+// granted, and re-checks on every foreground resume — but a user can still
+// revoke one specific permission from OS Settings while a feature-specific
+// screen is already open and focused, before the next AppState 'active'
+// event ever fires. Checks first (no OS prompt if already granted), then
+// requests only if needed. Never shows any UI itself — callers decide how
+// to react (e.g. an alert offering Linking.openSettings()) so this stays
+// free of any component-layer imports.
+export async function ensurePermission(key) {
+  if (key === 'location') {
+    return (await checkLocationPermission()) || requestLocationPermission();
+  }
+  if (await checkDevicePermission(key)) {
+    return true;
+  }
+  return requestDevicePermission(key);
 }

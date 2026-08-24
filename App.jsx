@@ -8,6 +8,7 @@ import { AppNavigator, consumePendingRoomNavigation, navigateToRoom, navigationR
 import { LocationRequiredModalHost, PermissionsGate, ThemedAlertHost, VideoBackground } from './src/components';
 import { useSessionGuard } from './src/hooks';
 import { registerLiveRoomNotificationTapHandler } from './src/utils';
+import { ActiveRoomSessionProvider } from './src/providers/ActiveRoomSessionProvider';
 const queryClient = new QueryClient();
 const navigationTheme = {
   ...DefaultTheme,
@@ -69,7 +70,9 @@ function App() {
   return <ThemeProvider>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <AppContent />
+          <ActiveRoomSessionProvider>
+            <AppContent />
+          </ActiveRoomSessionProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
     </ThemeProvider>;

@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { useNavigation } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import Video from 'react-native-video';
-import { PrimaryButton, Screen, showAlert } from '../../components';
+import { ensurePermissionOrPrompt, PrimaryButton, Screen, showAlert } from '../../components';
 import { useTheme } from '../../theme';
 import { scaleFont, scaleModerate } from '../../utils';
 
@@ -29,6 +29,9 @@ export function CreateReelScreen() {
   const [posting, setPosting] = React.useState(false);
 
   const handlePickVideo = async () => {
+    if (!(await ensurePermissionOrPrompt('gallery'))) {
+      return;
+    }
     const response = await launchImageLibrary({ mediaType: 'video', selectionLimit: 1 });
     if (response.didCancel) {
       return;

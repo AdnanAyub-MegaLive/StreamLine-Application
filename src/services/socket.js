@@ -13,10 +13,10 @@ export function connectSessionSocket(sessionToken, handlers) {
     },
     transports: ['websocket']
   });
-  socket.on('session:status', payload => handlers.onStatus(payload.data));
-  socket.on('account:banned', payload => handlers.onBanned(payload.data));
-  socket.on('account:unbanned', payload => handlers.onUnbanned(payload.data));
-  socket.on('session:force-logout', payload => handlers.onForceLogout(payload.data));
+  socket.on('session:status', payload => handlers.onStatus(payload?.data));
+  socket.on('account:banned', payload => handlers.onBanned(payload?.data));
+  socket.on('account:unbanned', payload => handlers.onUnbanned(payload?.data));
+  socket.on('session:force-logout', payload => handlers.onForceLogout(payload?.data));
   // See docs/mobile-special-id.md — optional handlers so existing callers
   // that don't care about Special IDs keep working unchanged.
   socket.on('special-id:assigned', payload => handlers.onSpecialIdAssigned?.(payload.data));
@@ -59,15 +59,15 @@ export function connectSessionSocket(sessionToken, handlers) {
   // See StreamLine-Portal/docs/mobile-messaging-api.md — messages/reads/
   // notifications are unwrapped events (no {success, data} envelope),
   // unlike the events above.
-  socket.on('message:new', payload => handlers.onMessageNew?.(payload));
-  socket.on('conversation:read', payload => handlers.onConversationRead?.(payload));
-  socket.on('notification:new', payload => handlers.onNotificationNew?.(payload));
+  socket.on('message:new', payload => payload && handlers.onMessageNew?.(payload));
+  socket.on('conversation:read', payload => payload && handlers.onConversationRead?.(payload));
+  socket.on('notification:new', payload => payload && handlers.onNotificationNew?.(payload));
   // See docs/friends-api-spec.md — unwrapped, same as the messaging events.
-  socket.on('friend:request', payload => handlers.onFriendRequest?.(payload));
-  socket.on('friend:accepted', payload => handlers.onFriendAccepted?.(payload));
-  socket.on('friend:declined', payload => handlers.onFriendDeclined?.(payload));
-  socket.on('props:granted', payload => handlers.onPropsGranted?.(payload));
-  socket.on('props:updated', payload => handlers.onPropsUpdated?.(payload));
+  socket.on('friend:request', payload => payload && handlers.onFriendRequest?.(payload));
+  socket.on('friend:accepted', payload => payload && handlers.onFriendAccepted?.(payload));
+  socket.on('friend:declined', payload => payload && handlers.onFriendDeclined?.(payload));
+  socket.on('props:granted', payload => payload && handlers.onPropsGranted?.(payload));
+  socket.on('props:updated', payload => payload && handlers.onPropsUpdated?.(payload));
   socket.on('connect_error', error => {
     const data = error.data;
     if (error.message === 'ACCOUNT_BANNED') {

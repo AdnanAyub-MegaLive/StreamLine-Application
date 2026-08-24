@@ -1,9 +1,20 @@
 import { Linking, PermissionsAndroid, Platform } from 'react-native';
 import Geolocation from '@react-native-community/geolocation';
 import { createMMKV } from 'react-native-mmkv';
+// BUGFIX: no locationProvider means this library defaults to Google Play
+// Services' Fused Location Provider on Android — fine on a OnePlus with an
+// up-to-date, well-integrated Play Services install, but on a lot of
+// budget/regional devices (reported: an Infinix) that provider is broken,
+// outdated, or effectively unreachable, so getCurrentPosition fails
+// immediately no matter what — not a signal/timeout issue at all, which is
+// why it happened even with the device's location toggle on and survived
+// the retry/accuracy fix in getCurrentLocationOrError below. 'android'
+// forces Android's own native LocationManager (GPS/network providers
+// directly), which every Android device has regardless of Play Services.
 Geolocation.setRNConfiguration({
   skipPermissionRequests: false,
-  authorizationLevel: 'whenInUse'
+  authorizationLevel: 'whenInUse',
+  locationProvider: 'android'
 });
 const locationStorage = createMMKV({
   id: 'streamline-location'
@@ -59,14 +70,7 @@ const GEOLOCATION_ERROR_CODES = {
   3: 'TIMEOUT'
 };
 
-// Like getCurrentLocation, but reports *why* it failed instead of just
-// null, so callers (login/signup) can show an accurate message instead of
-// always claiming location is off. maximumAge lets a fix from the last
-// minute (e.g. one taken moments ago on a previous attempt) resolve
-// instantly instead of waiting on a fresh GPS read every single time —
-// the 12s timeout is the ceiling only for when no recent fix exists at
-// all.
-export function getCurrentLocationOrError() {
+function requestPosition(options) {
   return new Promise(resolve => {
     Geolocation.getCurrentPosition(
       position => {
@@ -78,13 +82,38 @@ export function getCurrentLocationOrError() {
         resolve({ location });
       },
       error => resolve({ errorCode: GEOLOCATION_ERROR_CODES[error?.code] ?? 'POSITION_UNAVAILABLE' }),
-      {
-        enableHighAccuracy: false,
-        timeout: 12000,
-        maximumAge: 60000
-      }
+      options
     );
   });
+}
+
+// Like getCurrentLocation, but reports *why* it failed instead of just
+// null, so callers (login/signup) can show an accurate message instead of
+// always claiming location is off. maximumAge lets a fix from the last
+// minute (e.g. one taken moments ago on a previous attempt) resolve
+// instantly instead of waiting on a fresh GPS read every single time —
+// the 12s timeout is the ceiling only for when no recent fix exists at
+// all.
+//
+// BUGFIX: this used to try enableHighAccuracy:false (network/WiFi/cell-based
+// positioning) FIRST and only fall back to GPS if that attempt failed
+// outright. The real problem turned out to be worse than "fails on weak
+// devices" — on at least one device (Infinix, in Pakistan) the network fix
+// doesn't fail, it *succeeds* with a wrong answer (resolved to the US),
+// almost certainly an IP/cell-network-based estimate landing on some
+// default/generic location when real WiFi-scan data isn't available. Since
+// it "succeeded", the GPS fallback never even ran, and the wrong fix got
+// cached and reused everywhere via getCachedLocation(). GPS is slower to
+// get a first fix but is the only one of the two that can't just be wrong
+// about which country you're in, so it goes first now — network-based is
+// only the fallback, for when GPS itself can't get a fix at all (indoors,
+// no clear sky).
+export async function getCurrentLocationOrError() {
+  const precise = await requestPosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 });
+  if (precise.location) {
+    return precise;
+  }
+  return requestPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
 }
 
 // Back-compat for callers that only ever cared about success/failure (e.g.

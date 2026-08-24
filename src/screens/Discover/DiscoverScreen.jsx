@@ -4,7 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import { BookmarkIcon, discoverBackgroundImage, DotsIcon, HeartIcon, MessageIcon, PlayIcon, RepostIcon } from '../../assets';
-import { CreatePostError, deletePost, fetchAudioRoom, fetchPosts } from '../../api';
+import { CreatePostError, deletePost, fetchAudioRoom, fetchPosts, searchAudioRooms } from '../../api';
 import { Avatar, RoomCoverModal, RoomTitleModal, SEAT_LAYOUT_OPTIONS, SeatLayoutModal, Screen, showAlert, StreamOptionModal, VerifiedName } from '../../components';
 import { useUserAssets } from '../../hooks';
 import { getCachedSeatState, scaleFont, scaleModerate } from '../../utils';
@@ -142,6 +142,29 @@ function StoriesRow({ theme, onGoLive }) {
       <GoLiveStoryCard theme={theme} onPress={onGoLive} />
       {DUMMY_STORIES.map(story => <StoryCard key={story.id} story={story} theme={theme} />)}
     </ScrollView>;
+}
+
+// Matches rooms by Room ID or Room Name even when empty/idle (owner
+// offline) — deliberately separate from the Party tab's trending list,
+// which only ever shows currently-occupied rooms. See
+// docs/audio-room-persistent-lifecycle-spec.md.
+function RoomSearchResults({ rooms, theme, onOpenRoom }) {
+  return <View style={styles.roomResultsWrap}>
+      <Text style={[styles.roomResultsHeading, { color: theme.text.secondary }]}>Rooms</Text>
+      {rooms.map(room => <Pressable
+          key={room.roomId}
+          onPress={() => onOpenRoom(room)}
+          style={[styles.roomResultRow, { borderColor: theme.colors.cardBorder, backgroundColor: theme.surfaces.card }]}
+        >
+          <Avatar value={room.owner?.profileImage} fullName={room.owner?.name} size={scaleModerate(40)} />
+          <View style={styles.roomResultText}>
+            <Text style={[styles.roomResultTitle, { color: theme.text.primary }]} numberOfLines={1}>{room.title}</Text>
+            <Text style={[styles.roomResultMeta, { color: theme.text.secondary }]} numberOfLines={1}>
+              RID: {room.roomId} · {room.participantCount ?? 0} live
+            </Text>
+          </View>
+        </Pressable>)}
+    </View>;
 }
 
 const DOUBLE_TAP_MS = 280;
@@ -459,6 +482,7 @@ export function DiscoverScreen() {
   const [previewIndex, setPreviewIndex] = React.useState(null);
   const [searchActive, setSearchActive] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [roomResults, setRoomResults] = React.useState([]);
   const [streamOptionsVisible, setStreamOptionsVisible] = React.useState(false);
   const [roomTitleVisible, setRoomTitleVisible] = React.useState(false);
   const [roomCoverVisible, setRoomCoverVisible] = React.useState(false);
@@ -538,6 +562,41 @@ export function DiscoverScreen() {
   const handleCloseSearch = () => {
     setSearchActive(false);
     setSearchQuery('');
+    setRoomResults([]);
+  };
+
+  // Separate from the local post/reel filtering below — rooms aren't
+  // pre-loaded client-side (an empty/idle room with the owner offline
+  // wouldn't be in any already-fetched list), so this hits the dedicated
+  // search endpoint instead. Debounced so every keystroke doesn't fire a
+  // request. See docs/audio-room-persistent-lifecycle-spec.md.
+  React.useEffect(() => {
+    const query = searchQuery.trim();
+    if (!query || !sessionToken) {
+      setRoomResults([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      searchAudioRooms(sessionToken, query).then(rooms => {
+        if (!cancelled) {
+          setRoomResults(rooms);
+        }
+      });
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery, sessionToken]);
+
+  const handleOpenRoomResult = room => {
+    navigation.navigate(routes.room, {
+      roomId: room.roomId,
+      roomName: room.title,
+      mode: 'audio',
+      asViewer: true
+    });
   };
 
   const searchQueryLower = searchQuery.trim().toLowerCase();
@@ -676,6 +735,7 @@ export function DiscoverScreen() {
                 ListHeaderComponent={<>
                   <StoriesRow theme={theme} onGoLive={handleGoLive} />
                   {postsLoadError ? <Text style={[styles.connectionNotice, { color: theme.text.secondary }]}>Couldn't connect to the server — showing sample posts.</Text> : null}
+                  {searchQueryLower && roomResults.length ? <RoomSearchResults rooms={roomResults} theme={theme} onOpenRoom={handleOpenRoomResult} /> : null}
                 </>}
               />}
           </View>
@@ -700,6 +760,35 @@ export function DiscoverScreen() {
 const styles = StyleSheet.create({
   background: {
     flex: 1
+  },
+  roomResultsWrap: {
+    paddingHorizontal: scaleModerate(16),
+    marginBottom: scaleModerate(12),
+    gap: scaleModerate(8)
+  },
+  roomResultsHeading: {
+    fontSize: scaleFont(12),
+    fontWeight: '700',
+    letterSpacing: 0.4
+  },
+  roomResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleModerate(10),
+    borderRadius: scaleModerate(14),
+    borderWidth: 1,
+    padding: scaleModerate(10)
+  },
+  roomResultText: {
+    flex: 1
+  },
+  roomResultTitle: {
+    fontSize: scaleFont(13),
+    fontWeight: '700'
+  },
+  roomResultMeta: {
+    fontSize: scaleFont(10.5),
+    marginTop: scaleModerate(2)
   },
   centerWrap: {
     flex: 1,

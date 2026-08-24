@@ -7,6 +7,7 @@ import { clearCachedSeatState, dismissLiveRoomNotification, getStableDeviceId } 
 import { useAppStore } from '../store';
 import { navigationRef } from '../navigation/navigationRef';
 import { routes } from '../navigation/routes';
+import { useActiveRoomSession } from '../providers/ActiveRoomSessionProvider';
 
 // Fallback interval only — the socket connection in src/services/socket.ts
 // delivers ban/unban/force-logout events instantly. This just covers the
@@ -18,6 +19,7 @@ export function useSessionGuard() {
   const clearSession = useAppStore(state => state.clearSession);
   const setBanInfo = useAppStore(state => state.setBanInfo);
   const updateSessionUser = useAppStore(state => state.updateSessionUser);
+  const { liveKitAudio, getActiveRoomId, setActiveRoomId } = useActiveRoomSession();
   React.useEffect(() => {
     const publicId = session?.user.publicId;
     const sessionToken = session?.token;
@@ -27,6 +29,9 @@ export function useSessionGuard() {
     const knownSessionVersion = session.user.sessionVersion ?? 0;
     const deviceId = getStableDeviceId();
     const handleBanned = status => {
+      if (!status) {
+        return;
+      }
       setBanInfo({
         reason: status.banReason,
         expiresAt: status.banExpiresAt
@@ -62,26 +67,7 @@ export function useSessionGuard() {
         });
       }
     };
-    // session:force-logout is ALWAYS an admin-triggered action on this
-    // backend — confirmed against StreamLine-Portal's login route and
-    // database-actions.js: logging in never bumps sessionVersion, only
-    // these three admin actions do (forceLogoutUser, resetUserPassword,
-    // deleteUserAccount). There is no "logged in on another device" case
-    // to distinguish here; every force-logout came from an administrator,
-    // so the message says that plainly instead of hedging with "or
-    // accessed elsewhere", which described something that can't actually
-    // happen on this backend.
-    //
-    // `reason` is a fixed classification code ("PASSWORD_RESET",
-    // "ACCOUNT_DELETED", or absent for a plain admin Force Logout) used to
-    // pick which pre-written explanation to show. `adminReason` is the
-    // admin's own free-text explanation, appended when present — as of
-    // this writing StreamLine-Portal doesn't send `reason` at all for a
-    // plain Force Logout, and doesn't send `adminReason` for any of the
-    // three actions yet (see docs/force-logout-reason-spec.md for the
-    // one-line fix needed per action). This picks both up automatically
-    // the moment the backend starts sending them — no app change needed
-    // then.
+   
     const FORCE_LOGOUT_MESSAGES = {
       PASSWORD_RESET: 'Your password was reset by an administrator. Please log in again with your new password.',
       ACCOUNT_DELETED: 'Your account has been deleted.'
@@ -109,6 +95,9 @@ export function useSessionGuard() {
       }
     };
     const handleStatus = status => {
+      if (!status) {
+        return;
+      }
       if (status.isBanned) {
         handleBanned(status);
         return;
@@ -176,10 +165,22 @@ export function useSessionGuard() {
     // src/services/socket.js for why this still reaches us. Clears the
     // "still live" notification and the local seat cache so re-opening the
     // room never shows stale/ended state.
+    //
+    // BUGFIX: a room kept in the background (see RoomScreen's "Keep" choice
+    // and ActiveRoomSessionProvider) stays genuinely connected to LiveKit
+    // with no RoomScreen mounted to react to socket events itself — without
+    // this, a backgrounded room that gets terminated/blocked/deleted (or
+    // ended by its owner) left the LiveKit connection dangling forever,
+    // since nothing else was listening once its own room-screen listeners
+    // were torn down.
     const handleAudioRoomEnded = data => {
       dismissLiveRoomNotification();
       if (data?.roomId) {
         clearCachedSeatState(data.roomId);
+        if (getActiveRoomId() === data.roomId) {
+          liveKitAudio.disconnect();
+          setActiveRoomId(null);
+        }
       }
     };
     // device:banned/unbanned broadcast to ALL of the user's devices, so
@@ -234,5 +235,5 @@ export function useSessionGuard() {
       subscription.remove();
       disconnectSessionSocket();
     };
-  }, [session?.user.publicId, session?.token, session?.user.sessionVersion, clearSession, setBanInfo, updateSessionUser]);
+  }, [session?.user.publicId, session?.token, session?.user.sessionVersion, clearSession, setBanInfo, updateSessionUser, liveKitAudio, getActiveRoomId, setActiveRoomId]);
 }

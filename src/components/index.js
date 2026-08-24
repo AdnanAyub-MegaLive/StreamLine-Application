@@ -22,3 +22,4 @@ export * from './VerifiedTick';
 export * from './VerifiedName';
 export * from './locationErrorAlert';
 export * from './RegionFilterRow';
+export * from './permissionAlert';

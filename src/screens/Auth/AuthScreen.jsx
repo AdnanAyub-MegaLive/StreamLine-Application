@@ -140,12 +140,8 @@ export function AuthScreen() {
   // there preserves today's behavior (new number → verify → sign-up
   // details) instead of guessing wrong and blocking a real signup.
   const handlePhoneContinue = async () => {
-    if (!termsAccepted || isCheckingPhone) {
-      return;
-    }
     const trimmedPhone = phone.trim();
-    if (trimmedPhone.length === 0) {
-      navigation.navigate(routes.phoneAuth);
+    if (!termsAccepted || isCheckingPhone || trimmedPhone.length === 0) {
       return;
     }
     setIsCheckingPhone(true);
@@ -215,7 +211,7 @@ export function AuthScreen() {
           {activeTab === 'phone' ? <View style={styles.tabContent}>
               <FormField label="Phone Number" placeholder="Enter your phone number" value={phone} onChangeText={setPhone} icon="phone" keyboardType="phone-pad" />
 
-              <PrimaryButton label={isCheckingPhone ? 'Checking...' : 'Continue'} onPress={handlePhoneContinue} disabled={!termsAccepted || isCheckingPhone} style={styles.actionButton} />
+              <PrimaryButton label={isCheckingPhone ? 'Checking...' : 'Continue'} onPress={handlePhoneContinue} disabled={!termsAccepted || isCheckingPhone || phone.trim().length === 0} style={styles.actionButton} />
             </View> : <View style={styles.tabContent}>
               <FormField label="Username" placeholder="Enter your registered phone number" value={username} onChangeText={setUsername} icon="user" keyboardType="phone-pad" />
 

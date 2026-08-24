@@ -5,7 +5,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import { updateProfile, UpdateProfileError } from '../../api';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
-import { AVATAR_PRESETS, Avatar, getAvatarPresetId, getAvatarPresetValue, PrimaryButton, Screen, showAlert } from '../../components';
+import { AVATAR_PRESETS, Avatar, ensurePermissionOrPrompt, getAvatarPresetId, getAvatarPresetValue, PrimaryButton, Screen, showAlert } from '../../components';
 import { useAssignedFrame } from '../../hooks';
 import { scaleFont, scaleModerate } from '../../utils';
 
@@ -32,6 +32,9 @@ export function ChangeAvatarScreen() {
   const selectedValue = photoUri ?? getAvatarPresetValue(selectedAvatarId);
 
   const handlePickPhoto = async () => {
+    if (!(await ensurePermissionOrPrompt('gallery'))) {
+      return;
+    }
     const response = await launchImageLibrary({
       mediaType: 'photo',
       selectionLimit: 1,

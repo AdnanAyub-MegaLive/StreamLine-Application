@@ -9,7 +9,6 @@ import { useTheme } from '../../theme';
 import { FormField, PrimaryButton, Screen, showAlert, showLocationErrorAlert, TermsCheckbox } from '../../components';
 import { routes } from '../../navigation';
 import {
-  getCachedLocation,
   getCurrentLocation,
   getDeviceCountryName,
   reverseGeocodeCountry,
@@ -52,12 +51,27 @@ export function SignupDetailsScreen() {
     // location permission is granted, override it with the real country
     // from GPS coordinates, but only if the user hasn't already typed their
     // own value into the field in the meantime.
+    // BUGFIX: this used to prefer getCachedLocation() over a fresh fix —
+    // fine when the cache holds a real GPS fix, but a bad low-accuracy
+    // network-based fix (see getCurrentLocationOrError's fix in
+    // src/utils/location.js — one of these "succeeded" with the wrong
+    // country instead of failing) could get cached once and then keep
+    // silently overriding the real country forever afterward, on every
+    // future signup, since it would never be re-fetched. Country accuracy
+    // matters more here than the speed the cache was meant to save, so
+    // this always gets a fresh fix instead.
+    // Temporary diagnostic — remove once confirmed fixed on-device. Logs
+    // every stage so it's possible to tell WHICH step actually failed
+    // instead of guessing.
     const applyGpsCountry = async () => {
-      const location = getCachedLocation() ?? (await getCurrentLocation());
+      const location = await getCurrentLocation();
+      console.log('[SignupCountry] resolved location', location);
       if (!location) {
+        console.log('[SignupCountry] no location at all — keeping locale guess');
         return;
       }
       const country = await reverseGeocodeCountry(location);
+      console.log('[SignupCountry] reverse-geocoded country', country);
       if (country && !hasEditedCountryRef.current) {
         setSignup(current => ({ ...current, country }));
       }

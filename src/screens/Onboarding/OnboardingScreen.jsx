@@ -6,7 +6,7 @@ import { FemaleIcon, MaleIcon } from '../../assets';
 import { updateProfile, UpdateProfileError } from '../../api';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
-import { AVATAR_PRESETS, getAvatarPresetValue, Screen, showAlert } from '../../components';
+import { AVATAR_PRESETS, ensurePermissionOrPrompt, getAvatarPresetValue, Screen, showAlert } from '../../components';
 import { routes } from '../../navigation';
 import { scaleFont, scaleModerate } from '../../utils';
 
@@ -194,29 +194,39 @@ export function OnboardingScreen() {
   const [deviceAvatarUri, setDeviceAvatarUri] = React.useState(null);
   const [isSaving, setIsSaving] = React.useState(false);
   const handleChooseDeviceAvatar = async () => {
+    if (!(await ensurePermissionOrPrompt('gallery'))) {
+      return;
+    }
+    // BUGFIX: this used to pick with includeBase64: false and store only
+    // the local file:// URI — good enough for the preview, but handleNext
+    // below always saved the preset avatar instead, discarding whatever
+    // was picked here entirely (its own comment claimed there was no way
+    // to persist a real photo yet). That's wrong — ChangeAvatarScreen
+    // already proves the backend accepts a plain data: base64 URI as
+    // profileImage, same as any other image URI. Matching that exact
+    // pattern here so a picked photo is actually usable, not just shown.
     const response = await launchImageLibrary({
       mediaType: 'photo',
       selectionLimit: 1,
-      includeBase64: false,
-      quality: 0.8
+      includeBase64: true,
+      maxWidth: 256,
+      maxHeight: 256,
+      quality: 0.7
     });
     if (response.didCancel) {
       return;
     }
-    const pickedUri = response.assets?.[0]?.uri;
-    if (!pickedUri) {
+    const asset = response.assets?.[0];
+    if (!asset?.base64) {
       showAlert('Photo not selected', 'Please choose a photo from your device.');
       return;
     }
-    setDeviceAvatarUri(pickedUri);
+    setDeviceAvatarUri(`data:${asset.type ?? 'image/jpeg'};base64,${asset.base64}`);
   };
-  // Real device photos aren't persisted yet — no CDN/upload storage exists
-  // on the backend, so a local file URI can't be turned into something
-  // other devices/screens could ever fetch. The picker above stays as a
-  // local-only preview until that lands; only the bundled preset avatar (a
-  // plain string the database can store today) and gender are actually
-  // saved here. Gender is one-time — EditProfile locks it once set, so this
-  // is the only real chance to get it right.
+  // A picked device photo (deviceAvatarUri) always wins over the preset
+  // selection when present — same "photo overrides preset" convention as
+  // ChangeAvatarScreen's selectedValue. Gender is one-time — EditProfile
+  // locks it once set, so this is the only real chance to get it right.
   const handleNext = async () => {
     if (isSaving || !session?.token) {
       completeOnboarding();
@@ -226,7 +236,7 @@ export function OnboardingScreen() {
     setIsSaving(true);
     try {
       const updatedUser = await updateProfile(session.token, {
-        profileImage: getAvatarPresetValue(selectedAvatar),
+        profileImage: deviceAvatarUri ?? getAvatarPresetValue(selectedAvatar),
         gender: selectedGender === 'boy' ? 'male' : 'female'
       });
       setSession({ ...session, user: { ...session.user, ...updatedUser } });

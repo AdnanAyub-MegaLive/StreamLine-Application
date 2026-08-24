@@ -3,7 +3,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { createPost, CreatePostError, updatePost } from '../../api';
-import { PrimaryButton, Screen, showAlert } from '../../components';
+import { ensurePermissionOrPrompt, PrimaryButton, Screen, showAlert } from '../../components';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { scaleFont, scaleModerate } from '../../utils';
@@ -35,6 +35,9 @@ export function CreatePostScreen() {
   const [posting, setPosting] = React.useState(false);
 
   const handlePickPhoto = async () => {
+    if (!(await ensurePermissionOrPrompt('gallery'))) {
+      return;
+    }
     const response = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 1, quality: 0.8 });
     if (response.didCancel) {
       return;

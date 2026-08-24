@@ -24,9 +24,10 @@ import Svg, { Path } from 'react-native-svg';
 import Video from 'react-native-video';
 import { useTheme } from '../../theme';
 import { LockIcon, roomBackgroundImage } from '../../assets';
-import { Avatar, EmojiPickerModal, GiftPickerModal, SeatLayoutModal, showAlert } from '../../components';
+import { Avatar, EmojiPickerModal, ensurePermissionOrPrompt, GiftPickerModal, SeatLayoutModal, showAlert } from '../../components';
 import { AudioRoomError, endAudioRoom as endAudioRoomRecord, fetchAssetDataUri, fixLocalhostOrigin, GiftSendError, sendGift, startAudioRoom, updateAudioRoom, uploadAudioRoomCover } from '../../api';
-import { assetIdentity, useAssignedFrame, useAssignedRoomBackground, useLiveKitAudio } from '../../hooks';
+import { assetIdentity, useAssignedFrame, useAssignedRoomBackground } from '../../hooks';
+import { useActiveRoomSession } from '../../providers/ActiveRoomSessionProvider';
 import {
   getSessionSocket,
   joinAudioRoom,
@@ -982,7 +983,7 @@ export function RoomScreen() {
       // way every OTHER participant also ever finds out about this change.
       // isMicMuted here only controls this device's own mic button look.
       if (isAudioRoom && roomId && isBackgroundedRef.current) {
-        showLiveRoomNotification({ roomId, roomName, mode, seatGroups, micMuted: next }).catch(() => {});
+        showLiveRoomNotification({ roomId, roomName, mode, seatGroups, micMuted: next, isOwner: isOwnerRef.current }).catch(() => {});
       }
       return next;
     });
@@ -1152,6 +1153,9 @@ export function RoomScreen() {
     if (!roomId || !session?.token) {
       return;
     }
+    if (!(await ensurePermissionOrPrompt('gallery'))) {
+      return;
+    }
     const response = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 1, quality: 0.8 });
     if (response.didCancel) {
       return;
@@ -1256,7 +1260,7 @@ export function RoomScreen() {
     }
   };
   const isAudioRoom = mode === 'audio' && (Boolean(seatRows) || isViewerEntry);
-  const liveKitAudio = useLiveKitAudio();
+  const { liveKitAudio, getActiveRoomId, setActiveRoomId: setBackgroundedRoomId } = useActiveRoomSession();
   // BUGFIX: this used to also require hasMicAccess before connecting at
   // all, so plain listeners (the majority of any room) never joined the
   // LiveKit session and could never hear anyone — connecting is required
@@ -1339,18 +1343,31 @@ export function RoomScreen() {
     liveKitAudio.on(RoomEvent.LocalTrackPublished, handleTrackPublished);
     liveKitAudio.on(RoomEvent.TrackMuted, handleTrackMuted);
     liveKitAudio.on(RoomEvent.TrackUnmuted, handleTrackUnmuted);
-    console.log('[LiveKit] connecting', { roomId, hasMicAccess });
-    liveKitAudio.connect(session.token, roomId, { publish: hasMicAccess }).then(room => {
-      if (cancelled) {
-        liveKitAudio.disconnect();
-        return;
-      }
-      if (!room) {
-        console.log('[LiveKit] connect returned no room (see useLiveKitAudio warning above)');
-        return;
-      }
-      console.log('[LiveKit] connected', { identity: room.localParticipant?.identity });
-    });
+    // Reattaching to a session already kept alive by a prior "Keep" choice
+    // for THIS SAME room — the connection is still live in
+    // ActiveRoomSessionProvider, so calling connect() again would create a
+    // second, duplicate connection. Listeners above still need registering
+    // fresh (the previous RoomScreen instance's own listeners were already
+    // torn down by its own cleanup .off() calls below), but no new connect.
+    if (getActiveRoomId() === roomId) {
+      console.log('[LiveKit] reattaching to already-connected room', { roomId });
+    } else {
+      console.log('[LiveKit] connecting', { roomId, hasMicAccess });
+      liveKitAudio.connect(session.token, roomId, { publish: hasMicAccess }).then(room => {
+        if (cancelled) {
+          if (!keepInBackgroundRef.current) {
+            liveKitAudio.disconnect();
+          }
+          return;
+        }
+        if (!room) {
+          console.log('[LiveKit] connect returned no room (see useLiveKitAudio warning above)');
+          return;
+        }
+        console.log('[LiveKit] connected', { identity: room.localParticipant?.identity });
+        setBackgroundedRoomId(roomId);
+      });
+    }
     return () => {
       cancelled = true;
       liveKitAudio.off(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakersChanged);
@@ -1358,20 +1375,48 @@ export function RoomScreen() {
       liveKitAudio.off(RoomEvent.LocalTrackPublished, handleTrackPublished);
       liveKitAudio.off(RoomEvent.TrackMuted, handleTrackMuted);
       liveKitAudio.off(RoomEvent.TrackUnmuted, handleTrackUnmuted);
-      liveKitAudio.disconnect();
+      // "Keep" leaves the real connection alive in the app-level provider
+      // (see ActiveRoomSessionProvider) instead of tearing it down here —
+      // backgroundedRoomId stays set so a later reopen of this same room
+      // reattaches above instead of reconnecting from scratch.
+      if (!keepInBackgroundRef.current) {
+        liveKitAudio.disconnect();
+        setBackgroundedRoomId(null);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hasMicAccess deliberately excluded, see comment above
-  }, [isAudioRoom, roomId, session?.token, liveKitAudio]);
+  }, [isAudioRoom, roomId, session?.token, liveKitAudio, getActiveRoomId, setBackgroundedRoomId]);
   const [joiningDisabled, setJoiningDisabled] = React.useState(false);
   const [isRoomBlocked, setIsRoomBlocked] = React.useState(false);
-  const [hostEndedRoom, setHostEndedRoom] = React.useState(false);
   const [roomBlockedReason, setRoomBlockedReason] = React.useState(null);
   const startedAtRef = React.useRef(null);
   const roomEndedRef = React.useRef(false);
+  const leavePromptActiveRef = React.useRef(false);
+  // Set right before dispatching the "Keep" choice below — read by
+  // backgroundNow() (see the socket-listener effect further down) so it
+  // skips leaveAudioRoom entirely instead of releasing the seat/dropping
+  // out of the live participant count. NOTE: this only preserves socket-
+  // level room presence — it does not yet keep the actual LiveKit audio
+  // connection alive across the screen unmounting (useLiveKitAudio's state
+  // is component-local, so its connection still tears down on unmount;
+  // fully keeping audio playing in the background needs a bigger change,
+  // not implemented here).
+  const keepInBackgroundRef = React.useRef(false);
+  // Set by exitRoom() — read by backgroundNow() (see the socket-listener
+  // effect further down) to skip its default "assume this is just an
+  // implicit background, leave + notify the owner" behavior entirely. That
+  // default path was written for real, non-deliberate app-backgrounding
+  // (AppState going to background while still viewing the room) — it must
+  // never run again after a deliberate "Exit Room" choice, which already
+  // did everything needed (leaveAudioRoom, clearCachedSeatState) itself.
+  // Without this, choosing Exit Room as the owner still showed the "still
+  // live" notification, exactly as if Keep had been chosen instead.
+  const explicitExitRef = React.useRef(false);
   const viewerCountRef = React.useRef(viewerCount);
   const isFirstParticipantSyncRef = React.useRef(true);
   const handleToggleMicRef = React.useRef(null);
   const endAudioRoomRef = React.useRef(null);
+  const exitRoomRef = React.useRef(null);
   // Allows tapping an empty seat even while already seated — see
   // handleTakeSeat/applySeatAssignment, which move the person rather than
   // requiring them to explicitly leave their old seat first.
@@ -1397,68 +1442,84 @@ export function RoomScreen() {
     endAudioRoomRecord(session.token).catch(() => {});
   }, [isAudioRoom, isOwner, roomId, session?.token]);
   const handleClosePress = () => {
-    if (!isAudioRoom) {
-      navigation.goBack();
-      return;
-    }
-    if (!isOwner) {
-      if (roomId) {
-        leaveAudioRoom(roomId);
-        // BUGFIX: this only ever backgrounds cleanly, not a full close —
-        // getCachedSeatState is meant to survive backgrounding a room you
-        // actually still occupy, not a room you've fully left. Without
-        // this, a later fresh visit to the same roomId (as a plain
-        // listener this time) silently restored the OLD mySeatId here,
-        // making the mic button appear despite never taking a seat this
-        // visit.
-        clearCachedSeatState(roomId);
-      }
-      navigation.goBack();
-      return;
-    }
-    // The owner's Keep/End Room choice is handled uniformly by the
-    // beforeRemove listener below — covers this X button, the hardware
-    // back button, and the iOS swipe-back gesture with one prompt instead
-    // of three separate implementations.
+    // The Keep in Background/Exit Room/Cancel choice is handled uniformly
+    // by the beforeRemove listener below — covers this X button, the
+    // hardware back button, and the iOS swipe-back gesture with one prompt
+    // instead of three separate implementations.
     navigation.goBack();
   };
 
-  // "Keep" (room stays live, running in the background — the existing
+  // Releases only THIS user's own presence/seat and leaves the socket room
+  // — never ends the room for anyone else. Distinct from endAudioRoom
+  // (owner-only, ends the room for everyone) — that stays reachable via the
+  // existing "still live" notification's End action, not from this leave
+  // flow. Safe to call from either the owner or a plain listener/speaker.
+  const exitRoom = React.useCallback(() => {
+    if (!isAudioRoom || roomEndedRef.current || !roomId) {
+      return;
+    }
+    keepInBackgroundRef.current = false;
+    explicitExitRef.current = true;
+    dismissLiveRoomNotification().catch(() => {});
+    leaveAudioRoom(roomId);
+    // BUGFIX: this only ever backgrounds cleanly, not a full close —
+    // getCachedSeatState is meant to survive backgrounding a room you
+    // actually still occupy, not a room you've fully left. Without this, a
+    // later fresh visit to the same roomId silently restored the OLD
+    // mySeatId here, making the mic button appear despite never taking a
+    // seat this visit.
+    clearCachedSeatState(roomId);
+  }, [isAudioRoom, roomId]);
+
+  // "Keep in Background" (room/connection stays live — the existing
   // backgroundNow()/"still live" notification flow already does exactly
-  // this on unmount, no extra call needed) vs "End Room" (endAudioRoom),
-  // asked once, uniformly, for the owner leaving the screen by ANY route —
-  // the X button above, Android's hardware back button, or iOS's
-  // swipe-back gesture. preventDefault() blocks the navigation until the
-  // owner picks one; the exact original action is then replayed via
-  // navigation.dispatch so back/swipe/X all behave identically.
+  // this on unmount, no extra call needed) vs "Exit Room" (exitRoom) vs
+  // "Cancel" (do nothing), asked once, uniformly, for ANY user leaving the
+  // screen by ANY route — the X button above, Android's hardware back
+  // button, or iOS's swipe-back gesture. preventDefault() blocks the
+  // navigation until a choice is made; the exact original action is then
+  // replayed via navigation.dispatch so back/swipe/X all behave
+  // identically. leavePromptActiveRef guards against a second dialog
+  // stacking on top if multiple back events fire before the first is
+  // resolved (e.g. a rapid double press of hardware back).
   React.useEffect(() => {
-    if (!isAudioRoom || !isOwner) {
+    if (!isAudioRoom) {
       return undefined;
     }
     const unsubscribe = navigation.addListener('beforeRemove', event => {
-      if (roomEndedRef.current) {
-        // Already ending/ended via some other path (admin action, End Room
-        // confirmed once already, etc.) — let it proceed normally.
+      if (roomEndedRef.current || leavePromptActiveRef.current) {
         return;
       }
       event.preventDefault();
-      showAlert('Leave Room', 'Keep this room running in the background, or end it for everyone?', [
+      leavePromptActiveRef.current = true;
+      const resolve = action => {
+        leavePromptActiveRef.current = false;
+        action?.();
+        navigation.dispatch(event.data.action);
+      };
+      showAlert('Leave Room', 'Keep this room running in the background, or exit completely?', [
         {
-          text: 'Keep Running',
-          onPress: () => navigation.dispatch(event.data.action)
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => {
+            leavePromptActiveRef.current = false;
+          }
         },
         {
-          text: 'End Room',
+          text: 'Keep',
+          onPress: () => resolve(() => {
+            keepInBackgroundRef.current = true;
+          })
+        },
+        {
+          text: 'Exit Room',
           style: 'destructive',
-          onPress: () => {
-            endAudioRoom();
-            navigation.dispatch(event.data.action);
-          }
+          onPress: () => resolve(exitRoom)
         }
       ]);
     });
     return unsubscribe;
-  }, [navigation, isAudioRoom, isOwner, endAudioRoom]);
+  }, [navigation, isAudioRoom, exitRoom]);
 
   React.useEffect(() => {
     if (!isAudioRoom || !session?.token) {
@@ -1471,7 +1532,28 @@ export function RoomScreen() {
     let retryTimer = null;
     let activeRoomId = roomId;
     const backgroundNow = () => {
-      if (roomEndedRef.current || !activeRoomId) {
+      if (roomEndedRef.current || explicitExitRef.current || !activeRoomId) {
+        return;
+      }
+      if (keepInBackgroundRef.current) {
+        // "Keep" was explicitly chosen — stay joined server-side (seat,
+        // mic state, and participant count all untouched) instead of the
+        // normal background path below, which actually leaves the socket
+        // room. Shows the "still live" notification for BOTH the owner and
+        // a plain listener/speaker — anyone who deliberately chose to keep
+        // their connection alive needs an easy way back in, not just the
+        // owner. isOwner is included so the notification's secondary
+        // action reads/behaves correctly per role (End vs Exit — see
+        // liveRoomNotifications.js).
+        isBackgroundedRef.current = true;
+        showLiveRoomNotification({
+          roomId: activeRoomId,
+          roomName,
+          mode,
+          seatGroups,
+          micMuted: isMicMutedRef.current,
+          isOwner: isOwnerRef.current
+        }).catch(() => {});
         return;
       }
       leaveAudioRoom(activeRoomId);
@@ -1482,7 +1564,8 @@ export function RoomScreen() {
           roomName,
           mode,
           seatGroups,
-          micMuted: isMicMutedRef.current
+          micMuted: isMicMutedRef.current,
+          isOwner: true
         }).catch(() => {});
       } else {
         // Only the owner gets a "still live" notification to resume from
@@ -1509,17 +1592,22 @@ export function RoomScreen() {
       setRoomBlockedReason(data?.reason || null);
       setIsRoomBlocked(true);
     };
+    // BUGFIX: this used to force every remaining participant out with a
+    // "Room Ended" alert the instant the owner's socket left — that made
+    // sense back when leaving always meant the room was over, but the room
+    // is now persistent and the owner can be absent while others keep
+    // using it (see docs/audio-room-persistent-lifecycle-spec.md). The
+    // server already emits audio-room:owner-left on ANY owner departure,
+    // including a normal Exit Room / background, not just a real
+    // termination — so this must stay purely informational now: drop a
+    // system chat line, but never force-leave or navigate anyone out.
+    // Genuine room termination still ends the session correctly via the
+    // separate audio-room:blocked/terminated/deleted handlers below.
     const handleOwnerLeftRoom = () => {
       if (isOwnerRef.current || roomEndedRef.current) {
         return;
       }
-      roomEndedRef.current = true;
-      if (activeRoomId) {
-        leaveAudioRoom(activeRoomId);
-        clearCachedSeatState(activeRoomId);
-      }
-      dismissLiveRoomNotification().catch(() => {});
-      setHostEndedRoom(true);
+      setMessages(current => [...current, { id: `owner-left-${Date.now()}`, type: 'system', text: 'The host has left the room.' }]);
     };
     // Fires only on the device of whoever the owner just kicked from their
     // seat (see socket.js's kickFromSeat / handleChangeSeatLayout) — they
@@ -1570,24 +1658,21 @@ export function RoomScreen() {
         }
         if (result.data?.owner?.publicId) {
           const owner = result.data.owner;
-          // BUGFIX: this used to always be owner.publicId — the server's
-          // join ack never sends the owner's Special ID (see
-          // docs/room-owner-special-id-spec.md), only their raw publicId.
           // For OUR OWN room, session.user.displayId already resolves the
-          // real Special ID (same source ProfileScreen uses) — use that
-          // instead of the wrong hardcoded publicId, which was silently
-          // overriding it even for the owner's own "Your ID" display (see
-          // the identity panel render below). For someone else's room,
-          // there's genuinely no Special ID data yet — leave this null so
-          // "Host ID" simply doesn't render, rather than showing their raw
-          // ID mislabeled as if it were the real one. Read result.data —
-          // not the isOwner state — since setIsOwner above hasn't
-          // committed yet within this same callback.
+          // real Special ID (same source ProfileScreen uses). For someone
+          // else's room, the join ack may include the owner's Special ID
+          // directly (owner.specialId, once the server sends it — see
+          // docs/room-owner-special-id-spec.md); until then fall back to
+          // their raw publicId so "Host ID" always shows SOME id rather
+          // than nothing. Read result.data — not the isOwner state — since
+          // setIsOwner above hasn't committed yet within this same callback.
           setRoomOwner({
             id: owner.publicId,
             name: owner.name,
             profileImage: owner.profileImage,
-            displayId: result.data?.isOwner ? session?.user?.displayId || owner.publicId : null,
+            displayId: result.data?.isOwner
+              ? session?.user?.displayId || owner.publicId
+              : owner.specialId || owner.publicId,
             frameUrl: owner.frameUrl,
             badgeUrl: owner.badgeUrl,
             isOfficial: owner.isOfficial,
@@ -1874,9 +1959,14 @@ export function RoomScreen() {
     return () => clearTimeout(timer);
   }, [viewerCount, isAudioRoom, isOwner, roomId, roomName, session?.token]);
   React.useEffect(() => {
-    if (!isAudioRoom || !roomId || !isOwner) {
+    if (!isAudioRoom || !roomId) {
       return undefined;
     }
+    // The OS backgrounding the whole app (physical Home/task-switch) while
+    // RoomScreen is still mounted never unmounts it, so the connection/seat
+    // stay intact automatically regardless of role — this only manages the
+    // "still live, tap to return" notification for either an owner or a
+    // plain listener/speaker, same as the "Keep" path in the leave dialog.
     const subscription = AppState.addEventListener('change', nextState => {
       if (roomEndedRef.current) {
         return;
@@ -1886,28 +1976,53 @@ export function RoomScreen() {
         dismissLiveRoomNotification().catch(() => {});
       } else {
         isBackgroundedRef.current = true;
-        showLiveRoomNotification({ roomId, roomName, mode, seatGroups, micMuted: isMicMutedRef.current }).catch(() => {});
+        showLiveRoomNotification({ roomId, roomName, mode, seatGroups, micMuted: isMicMutedRef.current, isOwner: isOwnerRef.current }).catch(() => {});
       }
     });
     return () => subscription.remove();
-  }, [isAudioRoom, roomId, roomName, mode, seatGroups, isOwner]);
+  }, [isAudioRoom, roomId, roomName, mode, seatGroups]);
 
   handleToggleMicRef.current = handleToggleMic;
   endAudioRoomRef.current = endAudioRoom;
+  exitRoomRef.current = exitRoom;
 
 
+  // BUGFIX: this used to unregister unconditionally on every unmount,
+  // including a normal "Keep" — the moment the owner backgrounded the room,
+  // the notification's mute/end buttons silently stopped doing anything at
+  // all (liveRoomActionHandlers went back to null), even though the room
+  // and its LiveKit connection were still genuinely alive. The closures
+  // captured here stay valid after unmount — they only touch
+  // handleToggleMicRef/endAudioRoomRef (refs, not tied to this component's
+  // lifecycle) and the now-app-level liveKitAudio connection — so it's
+  // safe to keep them registered while backgrounded and only actually tear
+  // down on a real exit.
   React.useEffect(() => {
-    if (!isAudioRoom || !roomId || !isOwner) {
+    if (!isAudioRoom || !roomId) {
       return undefined;
     }
-    return registerLiveRoomActionHandler({
+    // The notification's secondary action means something different per
+    // role — owner really ends the room for everyone; anyone else just
+    // exits their own session, same as picking "Exit Room" from the leave
+    // dialog. No navigation call here: this can fire from a notification
+    // tap while the room screen isn't even the focused screen, so calling
+    // navigation.goBack() would wrongly pop whatever's actually on top.
+    const unsubscribe = registerLiveRoomActionHandler({
       onToggleMic: () => handleToggleMicRef.current(),
       onEndRoom: () => {
-        endAudioRoomRef.current();
-        navigation.goBack();
+        if (isOwnerRef.current) {
+          endAudioRoomRef.current();
+        } else {
+          exitRoomRef.current();
+        }
       }
     });
-  }, [isAudioRoom, roomId, isOwner, navigation]);
+    return () => {
+      if (!keepInBackgroundRef.current) {
+        unsubscribe();
+      }
+    };
+  }, [isAudioRoom, roomId]);
 
   React.useEffect(() => {
     if (isRoomBlocked) {
@@ -1920,12 +2035,6 @@ export function RoomScreen() {
       );
     }
   }, [isRoomBlocked, roomBlockedReason, navigation]);
-
-  React.useEffect(() => {
-    if (hostEndedRoom) {
-      showAlert('Room Ended', 'The host has ended this room.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
-    }
-  }, [hostEndedRoom, navigation]);
 
   React.useEffect(() => {
     if (hasWelcomedRef.current) {
@@ -2023,6 +2132,11 @@ export function RoomScreen() {
   // opacity alone against the card-colored surface behind them (custom
   // uploads at 0.5, the bundled default at its original 0.35).
   const backgroundImageStyle = hasCustomBackground ? styles.customBackgroundImage : styles.backgroundImage;
+  // Always rendered (opacity toggled, not conditionally mounted) so this
+  // slot's space stays reserved — otherwise headerRight's height changes
+  // when the icon appears/disappears, pushing the seat grid below it up or
+  // down every time speaker mute is toggled.
+  const speakerIconOpacity = isSpeakerMuted ? 1 : 0;
 
   return (
     <ImageBackground
@@ -2044,7 +2158,22 @@ export function RoomScreen() {
         <View style={styles.header}>
           <View style={styles.identityCenterWrap} pointerEvents="box-none">
             <View style={styles.identityPanel}>
-              <View style={[styles.identityAvatarOuter, { width: ownerCircleSize, height: ownerCircleSize }]}>
+              <Pressable
+                onPress={() => {
+                  if (!roomOwner?.id) {
+                    return;
+                  }
+                  navigation.navigate(routes.userProfile, {
+                    userId: roomOwner.id,
+                    userName: roomOwner.name ?? ownerName,
+                    userAvatar: roomOwner.profileImage,
+                    userFrameUrl: roomOwner.frameUrl ?? null,
+                    userBadgeUrl: roomOwner.badgeUrl ?? null,
+                    userIsOfficial: roomOwner.isOfficial ?? false
+                  });
+                }}
+                style={[styles.identityAvatarOuter, { width: ownerCircleSize, height: ownerCircleSize }]}
+              >
                 <View style={[styles.identityAvatarWrap, { width: ownerCircleSize, height: ownerCircleSize, borderRadius: ownerCircleSize / 2, backgroundColor: identityAvatarBackground }]}>
                   <Avatar
                     value={roomOwner?.profileImage || `${AVATAR_PLACEHOLDER}?seed=${roomOwner?.id ?? ownerAvatarSeed}`}
@@ -2079,9 +2208,9 @@ export function RoomScreen() {
                 >
                   <MicIcon size={Math.round(ownerMicBadgeSize * 0.6)} muted={ownerMicMuted} color={theme.cta.primary.text} />
                 </View>
-              </View>
+              </Pressable>
               <View style={styles.identityText}>
-                <Text style={[styles.roomName, { color: theme.text.primary }]} numberOfLines={1}>
+                <Text style={[styles.roomName, { color: theme.text.primary }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>
                   {roomName}
                 </Text>
                 {/* ownerDisplayId (this DEVICE's own session ID) is only a
@@ -2093,8 +2222,13 @@ export function RoomScreen() {
                 viewer should see nothing until the real host data loads,
                 never their own ID standing in for it. */}
                 {(isOwner ? (roomOwner?.displayId ?? ownerDisplayId) : roomOwner?.displayId) ? (
-                  <Text style={[styles.roomIdText, { color: theme.text.secondary }]} numberOfLines={1}>
-                    {isOwner ? 'Your ID' : 'Host ID'}: {isOwner ? (roomOwner?.displayId ?? ownerDisplayId) : roomOwner?.displayId}
+                  <Text style={[styles.roomIdText, { color: theme.text.secondary }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+                    ID: {isOwner ? (roomOwner?.displayId ?? ownerDisplayId) : roomOwner?.displayId}
+                  </Text>
+                ) : null}
+                {roomId ? (
+                  <Text style={[styles.roomIdText, { color: theme.text.secondary }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+                    RID: {roomId}
                   </Text>
                 ) : null}
               </View>
@@ -2102,18 +2236,21 @@ export function RoomScreen() {
           </View>
 
           <View style={styles.headerRight}>
-            {isSpeakerMuted ? (
-              <View style={[styles.iconButton, { backgroundColor: theme.colors.giftAccent }]}>
-                <SpeakerIcon size={16} muted color={theme.cta.primary.text} />
+            <View style={styles.headerRightTopRow}>
+              <View style={styles.viewersPanel}>
+                <View style={[styles.liveDot, { backgroundColor: theme.colors.liveBadge }]} />
+                <Text style={[styles.viewersCount, { color: theme.colors.teal700 }]}>{viewerCount}</Text>
               </View>
-            ) : null}
-            <View style={styles.viewersPanel}>
-              <View style={[styles.liveDot, { backgroundColor: theme.colors.liveBadge }]} />
-              <Text style={[styles.viewersCount, { color: theme.colors.teal700 }]}>{viewerCount}</Text>
+              <Pressable onPress={handleClosePress} style={styles.iconButton}>
+                <CloseIcon color={theme.text.primary} />
+              </Pressable>
             </View>
-            <Pressable onPress={handleClosePress} style={styles.iconButton}>
-              <CloseIcon color={theme.text.primary} />
-            </Pressable>
+            <View
+              style={[styles.iconButton, { backgroundColor: theme.colors.giftAccent, opacity: speakerIconOpacity }]}
+              pointerEvents="none"
+            >
+              <SpeakerIcon size={16} muted color={theme.cta.primary.text} />
+            </View>
           </View>
         </View>
 
@@ -2292,9 +2429,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
-    // Near-full opacity — just enough softening for seat/text legibility;
-    // much lower than this blends the photo into the white surface behind
-    // it and reads as a milky/whitish wash over the whole room.
     opacity: 0.9
   },
   foreground: {
@@ -2412,14 +2546,19 @@ const styles = StyleSheet.create({
     flexShrink: 1
   },
   roomName: {
-    fontSize: scaleFont(13),
+    fontSize: scaleFont(11),
     fontWeight: '700'
   },
   roomIdText: {
-    fontSize: scaleFont(10),
+    fontSize: scaleFont(9),
     fontWeight: '500'
   },
   headerRight: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: scaleModerate(8)
+  },
+  headerRightTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: scaleModerate(8)
@@ -2452,11 +2591,7 @@ const styles = StyleSheet.create({
   },
   seatRows: {
     paddingHorizontal: scaleModerate(20),
-    // Extra breathing room below the owner's identity island — its avatar
-    // is now sized to match the seat circles (see ownerCircleSize), so it
-    // can be noticeably taller than the old fixed 34px, and needs more
-    // clearance before the seat grid starts.
-    marginTop: scaleModerate(34),
+    marginTop: scaleModerate(5),
     gap: scaleModerate(5)
   },
   loadingText: {

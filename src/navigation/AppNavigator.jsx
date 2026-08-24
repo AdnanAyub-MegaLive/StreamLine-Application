@@ -25,6 +25,7 @@ import { ComingSoonScreen } from '../screens/ComingSoon';
 import { InAppBrowserScreen } from '../screens/InAppBrowser';
 import { ConversationScreen } from '../screens/Conversation';
 import { UserSearchScreen } from '../screens/UserSearch';
+import { RoomSearchScreen } from '../screens/RoomSearch';
 import { FriendRequestsScreen } from '../screens/FriendRequests';
 import { ConnectionsScreen } from '../screens/Connections';
 import { StoreScreen } from '../screens/Store';
@@ -71,6 +72,7 @@ export function AppNavigator() {
       <Stack.Screen name="InAppBrowser" component={InAppBrowserScreen} />
       <Stack.Screen name="Conversation" component={ConversationScreen} />
       <Stack.Screen name="UserSearch" component={UserSearchScreen} />
+      <Stack.Screen name="RoomSearch" component={RoomSearchScreen} />
       <Stack.Screen name="FriendRequests" component={FriendRequestsScreen} />
       <Stack.Screen name="Connections" component={ConnectionsScreen} />
       <Stack.Screen name="Store" component={StoreScreen} />

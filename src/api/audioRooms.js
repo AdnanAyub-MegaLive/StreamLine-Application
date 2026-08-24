@@ -92,3 +92,23 @@ export async function fetchDiscoverRooms(sessionToken) {
     return [];
   }
 }
+
+// See docs/audio-room-persistent-lifecycle-spec.md — unlike
+// fetchDiscoverRooms, this also finds empty/idle rooms (owner offline, 0
+// participants) by Room ID or Room Name, so a room can be found and joined
+// even when it wouldn't show up in the passive trending feed.
+export async function searchAudioRooms(sessionToken, query) {
+  const q = query?.trim();
+  if (!q) {
+    return [];
+  }
+  try {
+    const response = await apiClient.get('/api/audio-rooms/search', {
+      params: { q },
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+    return response.data.data.rooms ?? [];
+  } catch {
+    return [];
+  }
+}
