@@ -159,6 +159,7 @@ export function StoreScreen() {
     try {
       await purchaseStoreAsset(sessionToken, asset.id);
       await reload();
+      showAlert('Purchase Successful', `You've bought ${asset.name}.`);
     } catch (error) {
       showAlert('Purchase Failed', error?.message || 'Unable to buy this item. Please try again.');
     } finally {

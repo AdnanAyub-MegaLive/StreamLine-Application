@@ -7,7 +7,7 @@ import { BookmarkIcon, discoverBackgroundImage, DotsIcon, HeartIcon, MessageIcon
 import { CreatePostError, deletePost, fetchAudioRoom, fetchPosts, searchAudioRooms } from '../../api';
 import { Avatar, RoomCoverModal, RoomTitleModal, SEAT_LAYOUT_OPTIONS, SeatLayoutModal, Screen, showAlert, StreamOptionModal, VerifiedName } from '../../components';
 import { useUserAssets } from '../../hooks';
-import { getCachedSeatState, scaleFont, scaleModerate } from '../../utils';
+import { scaleFont, scaleModerate } from '../../utils';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme';
 import { routes } from '../../navigation/routes';
@@ -148,22 +148,32 @@ function StoriesRow({ theme, onGoLive }) {
 // offline) — deliberately separate from the Party tab's trending list,
 // which only ever shows currently-occupied rooms. See
 // docs/audio-room-persistent-lifecycle-spec.md.
+// BUGFIX: this used to render Avatar with no frameUri at all — the owner's
+// equipped frame was simply never resolved, even though it's already
+// available as room.owner.frameUrl from the search endpoint. Split out
+// into its own component (was inline in a .map()) specifically so
+// useUserAssets can be called correctly — hooks can't be called inside a
+// loop/callback.
+function RoomSearchResultRow({ room, theme, onOpenRoom }) {
+  const { frameUri } = useUserAssets({ userId: room.owner?.id, frameUrl: room.owner?.frameUrl });
+  return <Pressable
+      onPress={() => onOpenRoom(room)}
+      style={[styles.roomResultRow, { borderColor: theme.colors.cardBorder, backgroundColor: theme.surfaces.card }]}
+    >
+      <Avatar value={room.owner?.profileImage} fullName={room.owner?.name} size={scaleModerate(40)} frameUri={frameUri} />
+      <View style={styles.roomResultText}>
+        <Text style={[styles.roomResultTitle, { color: theme.text.primary }]} numberOfLines={1}>{room.title}</Text>
+        <Text style={[styles.roomResultMeta, { color: theme.text.secondary }]} numberOfLines={1}>
+          RID: {room.roomId} · {room.participantCount ?? 0} live
+        </Text>
+      </View>
+    </Pressable>;
+}
+
 function RoomSearchResults({ rooms, theme, onOpenRoom }) {
   return <View style={styles.roomResultsWrap}>
       <Text style={[styles.roomResultsHeading, { color: theme.text.secondary }]}>Rooms</Text>
-      {rooms.map(room => <Pressable
-          key={room.roomId}
-          onPress={() => onOpenRoom(room)}
-          style={[styles.roomResultRow, { borderColor: theme.colors.cardBorder, backgroundColor: theme.surfaces.card }]}
-        >
-          <Avatar value={room.owner?.profileImage} fullName={room.owner?.name} size={scaleModerate(40)} />
-          <View style={styles.roomResultText}>
-            <Text style={[styles.roomResultTitle, { color: theme.text.primary }]} numberOfLines={1}>{room.title}</Text>
-            <Text style={[styles.roomResultMeta, { color: theme.text.secondary }]} numberOfLines={1}>
-              RID: {room.roomId} · {room.participantCount ?? 0} live
-            </Text>
-          </View>
-        </Pressable>)}
+      {rooms.map(room => <RoomSearchResultRow key={room.roomId} room={room} theme={theme} onOpenRoom={onOpenRoom} />)}
     </View>;
 }
 
@@ -623,8 +633,19 @@ export function DiscoverScreen() {
     const existingRoom = await fetchAudioRoom(sessionToken);
     setIsCheckingRoom(false);
     setHasExistingRoomCover(Boolean(existingRoom?.coverImageUrl));
-    const canResumeWithoutAsking =
-      existingRoom?.status === 'LIVE' || (existingRoom?.status === 'IDLE' && Boolean(getCachedSeatState(existingRoom.roomId)));
+    // BUGFIX: this used to only resume straight in if the room was
+    // currently LIVE, or IDLE with a local device cache of the seat
+    // layout — meaning a persistent room (created once, per
+    // docs/audio-room-persistent-lifecycle-spec.md) still re-ran the full
+    // Title → Cover → Seat Layout wizard every single time on a fresh
+    // install, a cleared cache, or a different device, even though the
+    // room itself already exists with a title/cover already set. A
+    // persistent room existing at all (any non-terminated, non-blocked
+    // status) is now enough to resume directly — changing the room's name
+    // or seat layout afterward belongs in RoomScreen's own More menu
+    // (already built — SeatLayoutModal/showSeatLayoutOption), not this
+    // one-time setup flow repeating itself.
+    const canResumeWithoutAsking = Boolean(existingRoom?.roomId) && existingRoom.status !== 'TERMINATED' && !existingRoom.isBlocked;
     if (canResumeWithoutAsking) {
       const occupiedSeats = Math.max(0, (existingRoom.participantCount ?? 1) - 1);
       const fallbackLayout =

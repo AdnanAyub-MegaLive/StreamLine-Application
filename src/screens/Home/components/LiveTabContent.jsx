@@ -1,31 +1,20 @@
 import React from 'react';
 import { FlatList, ImageBackground, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../../theme';
 import { routes } from '../../../navigation/routes';
-import { fetchDiscoverRooms } from '../../../api';
-import { useAppStore } from '../../../store';
 import { RegionFilterRow } from '../../../components';
-import { matchesRegionFilter } from '../../../data/regions';
 import { scaleFont, scaleModerate } from '../../../utils';
 
-// GET /api/audio-rooms/discover is the same public listing endpoint the
-// Party tab already uses (see PartyTabContent's toPartyItem) — reused here
-// instead of the old hardcoded-empty liveRooms array, so this tab shows
-// real live rooms too instead of always falling back to demo data.
-function toLiveItem(room, index) {
-  return {
-    id: room.roomId,
-    hostName: room.owner?.name ?? 'Unknown host',
-    hostTag: room.title,
-    viewers: room.participantCount,
-    country: room.country ?? null,
-    photo: room.coverImageUrl ?? room.roomBackgroundUrl ?? room.owner?.profileImage ?? personPhotoForIndex(index)
-  };
-}
-
-
+// BUGFIX: this used to call fetchDiscoverRooms — GET /api/audio-rooms/
+// discover, the exact same public listing PartyTabContent uses — meaning
+// every room created via Party (the only room-creation flow that actually
+// exists today; "Go Live" → video is still a Coming Soon stub) showed up
+// here too, duplicated. Party and Live are supposed to be separate
+// sections; there is no real Live (video) room backend yet, so this goes
+// back to demo-only until one exists, instead of silently reusing Party's
+// audio rooms as if they were something else.
 function personPhotoForIndex(index) {
   return `https://i.pravatar.cc/400?img=${(index % 70) + 1}`;
 }
@@ -122,38 +111,16 @@ function LiveEmptyState() {
 
 export function LiveTabContent({ onFilterRowScrolling }) {
   const theme = useTheme();
-  const sessionToken = useAppStore(store => store.session?.token);
-  const regionFilter = useAppStore(store => store.regionFilter);
-  const [liveRooms, setLiveRooms] = React.useState([]);
   const [refreshing, setRefreshing] = React.useState(false);
 
-  const loadLiveRooms = React.useCallback(async () => {
-    if (!sessionToken) {
-      return;
-    }
-    const rooms = await fetchDiscoverRooms(sessionToken);
-    setLiveRooms(rooms.map(toLiveItem));
-  }, [sessionToken]);
-
-  // Refetch every time the Live tab is focused, same as the Party tab, so a
-  // room started since the last visit shows up without a full app restart.
-  useFocusEffect(
-    React.useCallback(() => {
-      loadLiveRooms();
-    }, [loadLiveRooms])
-  );
-
+  // No real Live (video) room backend exists yet — see the comment above
+  // this component. Demo data only, until one does.
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadLiveRooms().catch(() => {});
     setRefreshing(false);
   };
 
-  // Falls back to DEMO_LIVE_ROOMS above whenever the real list is empty —
-  // see the comment on that constant. Demo rooms have no country, so they
-  // only show up while the "All" region filter is active.
-  const filteredLiveRooms = liveRooms.filter(item => matchesRegionFilter(item.country, regionFilter));
-  const data = filteredLiveRooms.length ? filteredLiveRooms : liveRooms.length ? [] : DEMO_LIVE_ROOMS;
+  const data = DEMO_LIVE_ROOMS;
   return <FlatList
       data={data}
       keyExtractor={item => item.id}

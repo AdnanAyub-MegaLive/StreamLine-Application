@@ -1809,6 +1809,16 @@ export function RoomScreen() {
         return;
       }
       applyServerSeatState(data);
+      // BUGFIX: liveParticipantCount was previously only ever seeded (join
+      // ack) and incremented (audio-room:entrance) — nothing anywhere ever
+      // decremented it when someone actually left, since the server didn't
+      // include the updated count in this broadcast. Silently drifted
+      // upward the longer a room stayed active. No-op until the backend
+      // adds this field (see docs/audio-room-duplicate-entrance-spec.md) —
+      // safe to ship ahead of that.
+      if (typeof data.participantCount === 'number') {
+        setLiveParticipantCount(data.participantCount);
+      }
     };
 
     const pushRideIfAny = data => {
